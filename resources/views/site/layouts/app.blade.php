@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@yield('title', 'Home') · Bynnas Trade</title>
+    <meta name="description" content="@yield('meta', 'Bynnas Trade — private B2B wholesale gadget distribution from China import to shop delivery.')">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('css/site.css') }}">
+    @stack('head')
+</head>
+<body class="site-body" x-data="{ navOpen: false }">
+    <header class="site-nav">
+        <a class="site-brand" href="{{ route('site.home') }}">
+            <span class="site-brand-mark">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3 21 8.5v7L12 21 3 15.5v-7L12 3Z" fill="#fff"/></svg>
+            </span>
+            Bynnas Trade
+        </a>
+
+        <button class="site-nav-toggle" type="button" @click="navOpen = !navOpen" aria-label="Menu">Menu</button>
+
+        <nav class="site-nav-links" :class="navOpen && 'open'">
+            <a href="{{ route('site.home') }}" class="{{ request()->routeIs('site.home') ? 'is-active' : '' }}">Home</a>
+            <a href="{{ route('site.about') }}" class="{{ request()->routeIs('site.about') ? 'is-active' : '' }}">About</a>
+            <a href="{{ route('site.contact') }}" class="{{ request()->routeIs('site.contact') ? 'is-active' : '' }}">Contact</a>
+            <a href="{{ route('site.partner') }}" class="{{ request()->routeIs('site.partner') ? 'is-active' : '' }}">Become a Partner</a>
+            <a class="site-cta" href="{{ route('portal.login') }}" style="padding:10px 16px">Shop login</a>
+        </nav>
+    </header>
+
+    @yield('content')
+
+    <footer class="site-footer">
+        <div class="site-wrap site-footer-grid">
+            <div>
+                <strong style="color:#fff;font-family:var(--font-display)">Bynnas Trade</strong>
+                <div style="margin-top:6px">China import → warehouse → shops · Bangladesh wholesale</div>
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <a href="{{ route('site.about') }}">About</a>
+                <a href="{{ route('site.contact') }}">Contact</a>
+                <a href="{{ route('site.partner') }}">Partner</a>
+                <a href="{{ route('login') }}">Admin</a>
+                <a href="{{ route('field.login') }}">Field</a>
+            </div>
+        </div>
+    </footer>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+    @stack('scripts')
+</body>
+</html>

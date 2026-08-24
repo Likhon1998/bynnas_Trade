@@ -15,8 +15,8 @@
             </span>
             <strong style="font-size:18px">Bynnas Trade</strong>
         </div>
-        <h1 style="margin:12px 0 6px;font-size:24px;letter-spacing:-0.03em">Private B2B portal</h1>
-        <p class="muted" style="margin:0 0 22px">Sign in with the credentials issued by Super Admin. Shop owners and salesmen only see the records assigned to them.</p>
+        <h1 style="margin:12px 0 6px;font-size:24px;letter-spacing:-0.03em">Admin portal</h1>
+        <p class="muted" style="margin:0 0 22px">Sign in with credentials issued by Super Admin. Access is role-scoped and audited.</p>
 
         @if ($errors->any())
             <div style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px">
@@ -29,7 +29,10 @@
             <label class="label">Work email</label>
             <input class="input" style="width:100%;margin-bottom:12px" type="email" name="email" value="{{ old('email', 'admin@bynnastrade.com') }}" required autocomplete="username">
             <label class="label">Password</label>
-            <input class="input" style="width:100%;margin-bottom:16px" type="password" name="password" value="12345678" required autocomplete="current-password">
+            <input class="input" style="width:100%;margin-bottom:12px" type="password" name="password" required autocomplete="current-password">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px">
+                <input type="checkbox" name="remember" value="1"> Remember me
+            </label>
             <button class="btn btn-primary" style="width:100%;justify-content:center;height:44px" type="submit">Continue to dashboard</button>
         </form>
     </div>
