@@ -42,4 +42,17 @@ class OrderPolicy
         return $user->can('orders.cancel')
             && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_APPROVED], true);
     }
+
+    public function delete(User $user, Order $order): bool
+    {
+        if (! $order->canDeleteBeforeApproval()) {
+            return false;
+        }
+
+        if ($user->portal === User::PORTAL_SHOP) {
+            return $order->isAccessibleBy($user);
+        }
+
+        return $user->can('orders.cancel') || $user->can('orders.edit');
+    }
 }

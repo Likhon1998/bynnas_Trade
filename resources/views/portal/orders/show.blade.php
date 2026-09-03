@@ -3,8 +3,22 @@
 @section('content')
     <div class="toolbar">
         <div class="page-kicker"><strong>{{ $order->number }}</strong> / {{ $order->statusLabel() }}</div>
-        <a class="btn btn-ghost" href="{{ route('portal.orders') }}">Back</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            @if ($order->canPartnerEdit())
+                <a class="btn btn-primary" href="{{ route('portal.orders.edit', $order) }}">Edit order</a>
+                <form method="post" action="{{ route('portal.orders.destroy', $order) }}" onsubmit="return confirm('Delete this order before approval?')">
+                    @csrf
+                    @method('DELETE')
+                    <button class="btn btn-ghost" type="submit" style="color:#b91c1c;border-color:#fecaca">Delete order</button>
+                </form>
+            @endif
+            <a class="btn btn-ghost" href="{{ route('portal.orders') }}">Back</a>
+        </div>
     </div>
+
+    @if (session('success'))
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>
+    @endif
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total</div><div style="font-weight:800">{{ \App\Support\DemoData::taka($order->total) }}</div></div>
@@ -13,7 +27,12 @@
     </div>
 
     @if ($order->isPendingAudit())
-        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff7ed;color:#9a3412">Waiting for Super Admin audit. Stock is not reserved yet.</div>
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff7ed;color:#9a3412">
+            Waiting for Super Admin audit. Stock is not reserved yet.
+            @if ($order->canPartnerEdit())
+                You can still <a class="link" href="{{ route('portal.orders.edit', $order) }}">edit</a> or delete this order before approval.
+            @endif
+        </div>
     @elseif ($order->stock_reserved)
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">Approved — stock reserved. Warehouse fulfilment comes next.</div>
     @elseif ($order->status === \App\Models\Order::STATUS_REJECTED)
@@ -37,5 +56,8 @@
                 </tbody>
             </table>
         </div>
+        @if ($order->notes)
+            <div style="padding:14px;border-top:1px solid var(--line)"><span class="muted">Notes:</span> {{ $order->notes }}</div>
+        @endif
     </div>
 @endsection

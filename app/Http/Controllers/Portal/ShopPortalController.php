@@ -110,6 +110,69 @@ class ShopPortalController extends Controller
             ->with('success', 'Order '.$order->number.' submitted for Super Admin audit.');
     }
 
+    public function editOrder(Request $request, Order $order)
+    {
+        /** @var Shop $shop */
+        $shop = $request->attributes->get('shop');
+        abort_unless($order->shop_id === $shop->id, 404);
+        abort_unless($order->canPartnerEdit(), 403, 'This order can no longer be edited.');
+
+        $shop->load('priceGroup');
+        $order->load('items');
+
+        $products = Product::query()
+            ->with('prices')
+            ->where('status', Product::STATUS_ACTIVE)
+            ->where('is_published', true)
+            ->orderBy('name')
+            ->get();
+
+        $quantities = $order->items->mapWithKeys(
+            fn ($item) => [(int) $item->product_id => (int) $item->quantity]
+        )->all();
+
+        return view('portal.orders.edit', compact('shop', 'products', 'order', 'quantities'));
+    }
+
+    public function updateOrder(Request $request, Order $order)
+    {
+        /** @var Shop $shop */
+        $shop = $request->attributes->get('shop');
+        abort_unless($order->shop_id === $shop->id, 404);
+
+        $data = $request->validate([
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'items' => ['required', 'array'],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'items.*.quantity' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $order = $this->orders->updatePendingFromShopPortal(
+            $request->user(),
+            $shop,
+            $order,
+            $data['items'],
+            $data['notes'] ?? null,
+        );
+
+        return redirect()->route('portal.orders.show', $order)
+            ->with('success', 'Order '.$order->number.' updated. Still waiting for Super Admin audit.');
+    }
+
+    public function destroyOrder(Request $request, Order $order)
+    {
+        /** @var Shop $shop */
+        $shop = $request->attributes->get('shop');
+        abort_unless($order->shop_id === $shop->id, 404);
+        abort_unless($order->canDeleteBeforeApproval(), 403, 'This order can no longer be deleted.');
+
+        $number = $order->number;
+        $this->orders->deleteBeforeApproval($order, $request->user());
+
+        return redirect()->route('portal.orders')
+            ->with('success', 'Order '.$number.' deleted before approval.');
+    }
+
     public function orders(Request $request)
     {
         /** @var Shop $shop */

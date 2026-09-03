@@ -20,6 +20,7 @@
                         <th>Total</th>
                         <th>Submitted</th>
                         <th>Status</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -30,9 +31,21 @@
                             <td style="font-weight:700">{{ \App\Support\DemoData::taka($order->total) }}</td>
                             <td class="muted">{{ $order->submitted_at?->format('d M Y H:i') }}</td>
                             <td><x-badge :status="$order->statusLabel()" /></td>
+                            <td>
+                                @if ($order->canPartnerEdit())
+                                    <div style="display:flex;gap:6px;justify-content:flex-end">
+                                        <a class="btn btn-ghost" style="padding:6px 10px" href="{{ route('portal.orders.edit', $order) }}">Edit</a>
+                                        <form method="post" action="{{ route('portal.orders.destroy', $order) }}" onsubmit="return confirm('Delete this order before approval?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="btn btn-ghost" type="submit" style="padding:6px 10px;color:#b91c1c;border-color:#fecaca">Delete</button>
+                                        </form>
+                                    </div>
+                                @endif
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="muted" style="padding:24px;text-align:center">No orders yet.</td></tr>
+                        <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">No orders yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>

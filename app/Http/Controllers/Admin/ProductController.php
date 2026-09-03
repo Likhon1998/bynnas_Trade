@@ -54,7 +54,12 @@ class ProductController extends Controller
         $data = $this->validated($request);
         $groupPrices = $request->input('group_prices', []);
 
-        $product = $this->products->create($data, $request->user(), $groupPrices);
+        $product = $this->products->create(
+            $data,
+            $request->user(),
+            $groupPrices,
+            $request->file('image'),
+        );
 
         return redirect()->route('products.index')->with('success', "Product {$product->sku} created.");
     }
@@ -77,6 +82,7 @@ class ProductController extends Controller
             $this->validated($request, $product),
             $request->user(),
             $request->input('group_prices', []),
+            $request->file('image'),
         );
 
         return redirect()->route('products.index')->with('success', 'Product updated.');
@@ -93,6 +99,7 @@ class ProductController extends Controller
             'model' => ['nullable', 'string', 'max:120'],
             'variant' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             'landed_cost' => ['nullable', 'numeric', 'min:0'],
             'wholesale_price' => ['required', 'numeric', 'min:0'],

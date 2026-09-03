@@ -89,6 +89,15 @@
                     <button class="btn btn-ghost" type="submit" style="color:#b91c1c;border-color:#fecaca">Reject order</button>
                 </form>
             </div>
+
+            @can('delete', $order)
+                <form method="post" action="{{ route('orders.destroy', $order) }}" style="margin-top:14px;padding-top:14px;border-top:1px dashed #fcd34d;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap" onsubmit="return confirm('Delete this order before approval?')">
+                    @csrf
+                    @method('DELETE')
+                    <div class="muted" style="font-size:12px">Or delete this order entirely before approval.</div>
+                    <button class="btn btn-ghost" type="submit" style="color:#b91c1c;border-color:#fecaca">Delete order</button>
+                </form>
+            @endcan
         </div>
     @endif
 

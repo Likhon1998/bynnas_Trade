@@ -19,6 +19,7 @@
                 @foreach ($products as $product)
                     @php $price = $product->priceForGroup($visit->shop?->priceGroup); @endphp
                     <div class="qty-row">
+                        <x-product-thumb :product="$product" :size="44" />
                         <div style="min-width:0;flex:1">
                             <div style="font-weight:600;font-size:13px">{{ $product->name }}</div>
                             <div class="muted" style="font-size:11px">{{ $product->sku }} · {{ \App\Support\DemoData::taka($price) }}</div>
@@ -30,7 +31,7 @@
             </div>
             <div class="field" style="margin:12px 0">
                 <label class="label">Order notes</label>
-                <textarea class="input" name="notes" rows="2" placeholder="Optional"></textarea>
+                <textarea class="textarea" name="notes" rows="2" placeholder="Optional"></textarea>
             </div>
             <button class="btn btn-primary btn-block" type="submit">Submit for Super Admin audit</button>
         </form>

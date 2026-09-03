@@ -91,6 +91,16 @@
     <textarea class="textarea" name="description" rows="3">{{ old('description', $product?->description) }}</textarea>
 </div>
 <div class="form-span">
+    <label class="label">Product picture</label>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        @if ($product?->imageUrl())
+            <x-product-thumb :product="$product" :size="72" />
+        @endif
+        <input class="input" style="width:min(360px,100%)" type="file" name="image" accept="image/jpeg,image/png,image/webp">
+    </div>
+    <p class="muted" style="margin:8px 0 0">JPG, PNG or WebP · max 4 MB. Shown to shop partners and field salesmen.</p>
+</div>
+<div class="form-span">
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600">
         <input type="hidden" name="is_published" value="0">
         <input type="checkbox" name="is_published" value="1" @checked(old('is_published', $product?->is_published ?? true))>

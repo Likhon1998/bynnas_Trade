@@ -13,6 +13,53 @@
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fef2f2;color:#b91c1c">{{ $errors->first() }}</div>
     @endif
 
+    @php
+        $pipeline = [
+            ['key' => 'awaiting_pick', 'label' => 'Awaiting pick', 'at' => null],
+            ['key' => 'picking', 'label' => 'Picking', 'at' => $fulfilment->picking_started_at],
+            ['key' => 'picked', 'label' => 'Picked', 'at' => $fulfilment->picked_at],
+            ['key' => 'packed', 'label' => 'Packed', 'at' => $fulfilment->packed_at],
+            ['key' => 'dispatched', 'label' => 'Dispatched', 'at' => $fulfilment->dispatched_at],
+            ['key' => 'delivered', 'label' => 'Delivered', 'at' => $fulfilment->delivered_at],
+        ];
+        $keys = array_column($pipeline, 'key');
+        $currentIndex = array_search($fulfilment->status, $keys, true);
+        if ($currentIndex === false) {
+            $currentIndex = 0;
+        }
+    @endphp
+
+    <div class="card pipeline-card">
+        <div class="pipeline-head">
+            <div>
+                <div style="font-weight:800">Position tracker</div>
+                <div class="muted" style="font-size:12px;margin-top:2px">Current: <strong>{{ $fulfilment->statusLabel() }}</strong> · step {{ $currentIndex + 1 }} of {{ count($pipeline) }}</div>
+            </div>
+            @if ($fulfilment->delivery)
+                <a class="btn btn-ghost" href="{{ route('deliveries.show', $fulfilment->delivery) }}">Delivery {{ $fulfilment->delivery->number }}</a>
+            @endif
+        </div>
+        <div class="pipeline-track">
+            @foreach ($pipeline as $i => $step)
+                <div class="pipeline-step {{ $i < $currentIndex ? 'done' : '' }} {{ $i === $currentIndex ? 'current' : '' }}">
+                    <div class="pipeline-dot">{{ $i + 1 }}</div>
+                    <div class="pipeline-meta">
+                        <div class="pipeline-label">{{ $step['label'] }}</div>
+                        <div class="pipeline-at">
+                            @if ($i < $currentIndex)
+                                Done{{ $step['at'] ? ' · '.$step['at']->format('d M H:i') : '' }}
+                            @elseif ($i === $currentIndex)
+                                Here now{{ $step['at'] ? ' · '.$step['at']->format('d M H:i') : '' }}
+                            @else
+                                Waiting
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Shop</div><div style="font-weight:700">{{ $fulfilment->order?->shop?->name }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Warehouse</div><div style="font-weight:700">{{ $fulfilment->warehouse?->name }}</div></div>

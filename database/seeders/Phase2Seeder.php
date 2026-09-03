@@ -50,11 +50,11 @@ class Phase2Seeder extends Seeder
         $productService = app(ProductService::class);
 
         $catalog = [
-            ['sku' => 'BT-EB-01', 'name' => 'Bluetooth Earbuds', 'category' => 'Audio', 'stock' => 1245, 'wholesale' => 1250, 'landed' => 780, 'pref' => 1180],
-            ['sku' => 'PW-BK-20', 'name' => 'Power Bank 20,000 mAh', 'category' => 'Power', 'stock' => 860, 'wholesale' => 1850, 'landed' => 1120, 'pref' => 1750],
-            ['sku' => 'SM-WT-09', 'name' => 'Smart Watch Series 9', 'category' => 'Wearables', 'stock' => 214, 'wholesale' => 4200, 'landed' => 2650, 'pref' => 3990],
-            ['sku' => 'CG-CH-33', 'name' => 'USB-C Fast Charger 33W', 'category' => 'Accessories', 'stock' => 2104, 'wholesale' => 450, 'landed' => 210, 'pref' => 420],
-            ['sku' => 'SP-BT-12', 'name' => 'Portable Bluetooth Speaker', 'category' => 'Audio', 'stock' => 532, 'wholesale' => 2650, 'landed' => 1580, 'pref' => 2490],
+            ['sku' => 'BT-EB-01', 'name' => 'Bluetooth Earbuds', 'category' => 'Audio', 'stock' => 1245, 'wholesale' => 1250, 'landed' => 780, 'pref' => 1180, 'image' => 'products/bt-eb-01.jpg'],
+            ['sku' => 'PW-BK-20', 'name' => 'Power Bank 20,000 mAh', 'category' => 'Power', 'stock' => 860, 'wholesale' => 1850, 'landed' => 1120, 'pref' => 1750, 'image' => 'products/pw-bk-20.jpg'],
+            ['sku' => 'SM-WT-09', 'name' => 'Smart Watch Series 9', 'category' => 'Wearables', 'stock' => 214, 'wholesale' => 4200, 'landed' => 2650, 'pref' => 3990, 'image' => 'products/sm-wt-09.jpg'],
+            ['sku' => 'CG-CH-33', 'name' => 'USB-C Fast Charger 33W', 'category' => 'Accessories', 'stock' => 2104, 'wholesale' => 450, 'landed' => 210, 'pref' => 420, 'image' => 'products/cg-ch-33.jpg'],
+            ['sku' => 'SP-BT-12', 'name' => 'Portable Bluetooth Speaker', 'category' => 'Audio', 'stock' => 532, 'wholesale' => 2650, 'landed' => 1580, 'pref' => 2490, 'image' => 'products/sp-bt-12.jpg'],
         ];
 
         foreach ($catalog as $row) {
@@ -79,6 +79,10 @@ class Phase2Seeder extends Seeder
                 'status' => 'active',
                 'is_published' => true,
             ];
+
+            if (! empty($row['image']) && is_file(storage_path('app/public/'.$row['image']))) {
+                $payload['image_path'] = $row['image'];
+            }
 
             if ($product) {
                 $productService->update($product, $payload, $admin, [

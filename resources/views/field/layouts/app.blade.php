@@ -6,17 +6,18 @@
     <title>@yield('title', 'Field') · Bynnas Trade</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    @include('partials.favicon')
     <style>
         :root { --field-nav: 64px; }
         body { background: #f3f4f6; }
         .field-shell { min-height: 100vh; max-width: 480px; margin: 0 auto; padding-bottom: calc(var(--field-nav) + 16px); background: #f8fafc; }
-        .field-top { position: sticky; top: 0; z-index: 20; background: #0f172a; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+        .field-top { position: sticky; top: 0; z-index: 20; background: #120f1c; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
         .field-top h1 { font-size: 16px; margin: 0; font-weight: 700; }
         .field-top .muted { color: #94a3b8; font-size: 12px; }
         .field-body { padding: 14px 14px 0; }
         .field-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; height: var(--field-nav); background: #fff; border-top: 1px solid #e5e7eb; display: grid; grid-template-columns: repeat(4, 1fr); z-index: 30; }
         .field-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-decoration: none; color: #64748b; font-size: 11px; font-weight: 600; }
-        .field-nav a.active { color: #ff3b30; }
+        .field-nav a.active { color: #a855f7; }
         .field-nav i { width: 18px; height: 18px; }
         .stat-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
         .stat-card { background: #fff; border-radius: 12px; padding: 12px; border: 1px solid #e5e7eb; }
@@ -41,7 +42,10 @@
                 <div class="muted">{{ auth()->user()->name ?? '' }} · {{ $salesmanProfile->employee_code ?? '' }}</div>
             </div>
             <form action="{{ route('field.logout') }}" method="post">@csrf
-                <button type="submit" style="background:none;border:0;color:#94a3b8;cursor:pointer" title="Sign out"><i data-lucide="log-out"></i></button>
+                <button type="submit" class="logout-btn" style="color:#94a3b8" title="Sign out">
+                    <i data-lucide="log-out" style="width:16px;height:16px"></i>
+                    <span>Sign out</span>
+                </button>
             </form>
         </div>
         <div class="field-body">

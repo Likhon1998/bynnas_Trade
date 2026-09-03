@@ -21,6 +21,7 @@
             <table class="data">
                 <thead>
                     <tr>
+                        <th>Picture</th>
                         <th>SKU</th>
                         <th>Product</th>
                         <th>Category</th>
@@ -31,6 +32,7 @@
                 <tbody>
                     @forelse ($products as $product)
                         <tr>
+                            <td><x-product-thumb :product="$product" :size="56" /></td>
                             <td style="font-weight:700">{{ $product->sku }}</td>
                             <td>{{ $product->name }}</td>
                             <td>{{ $product->category?->name ?: '—' }}</td>
@@ -38,7 +40,7 @@
                             <td style="font-weight:800">{{ \App\Support\DemoData::taka($product->priceForGroup($shop->priceGroup)) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="muted" style="padding:24px;text-align:center">No products available.</td></tr>
+                        <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">No products available.</td></tr>
                     @endforelse
                 </tbody>
             </table>

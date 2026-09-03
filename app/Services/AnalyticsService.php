@@ -69,7 +69,7 @@ class AnalyticsService
                     'value' => $salesThis,
                     'delta' => $this->deltaLabel($salesThis, $salesPrev),
                     'up' => $salesThis >= $salesPrev,
-                    'color' => '#ff3b30',
+                    'color' => '#a855f7',
                 ],
                 [
                     'title' => 'Total Orders',

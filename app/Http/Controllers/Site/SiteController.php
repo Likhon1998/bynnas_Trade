@@ -40,7 +40,7 @@ class SiteController extends Controller
             $notifications->notifyAdmins(
                 'New contact message',
                 $msg->name.' · '.($msg->subject ?: 'General enquiry'),
-                route('partner-inquiries.index'),
+                '/admin/partner-leads',
                 'contact',
                 'info',
             );
@@ -74,7 +74,7 @@ class SiteController extends Controller
             $notifications->notifyAdmins(
                 'New partner application',
                 $inquiry->business_name.' · '.$inquiry->city,
-                route('partner-inquiries.index'),
+                '/admin/partner-leads',
                 'partners',
                 'info',
             );

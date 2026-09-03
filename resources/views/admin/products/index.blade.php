@@ -43,7 +43,12 @@
                     @forelse ($products as $product)
                         <tr>
                             <td style="font-weight:700">{{ $product->sku }}</td>
-                            <td>{{ $product->name }}</td>
+                            <td>
+                                <div class="product-cell">
+                                    <x-product-thumb :product="$product" :size="44" />
+                                    <div>{{ $product->name }}</div>
+                                </div>
+                            </td>
                             <td>{{ $product->category?->name ?: '—' }}</td>
                             <td>{{ number_format($product->stock_on_hand) }}</td>
                             <td style="font-weight:700">{{ number_format($product->availableStock()) }}</td>

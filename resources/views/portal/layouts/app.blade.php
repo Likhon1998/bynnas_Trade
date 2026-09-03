@@ -6,6 +6,7 @@
     <title>@yield('title', 'Shop Portal') · Bynnas Trade</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    @include('partials.favicon')
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@0.469.0"></script>
 </head>
@@ -13,10 +14,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <a href="{{ route('portal.dashboard') }}" class="sidebar-brand">
-                <span class="brand-mark">
-                    <svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3 21 8.5v7L12 21 3 15.5v-7L12 3Z" fill="#fff"/></svg>
-                </span>
-                B2B Portal
+                <x-brand-logo :size="44" show-wordmark wordmark="B2B Portal" />
             </a>
             <div class="nav-scroll">
                 <a href="{{ route('portal.dashboard') }}" class="nav-item {{ request()->routeIs('portal.dashboard') ? 'active' : '' }}">
@@ -39,7 +37,10 @@
                     <div style="font-size:12px;color:#8b93a7">{{ auth()->user()->name }}</div>
                 </div>
                 <form action="{{ route('portal.logout') }}" method="post" style="margin-left:auto">@csrf
-                    <button type="submit" style="background:none;border:0;color:#8b93a7;cursor:pointer;padding:0"><i data-lucide="log-out" style="width:16px;height:16px"></i></button>
+                    <button type="submit" class="logout-btn" title="Sign out">
+                        <i data-lucide="log-out" style="width:16px;height:16px"></i>
+                        <span>Sign out</span>
+                    </button>
                 </form>
             </div>
         </aside>

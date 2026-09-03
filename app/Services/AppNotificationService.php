@@ -35,7 +35,7 @@ class AppNotificationService
         $this->notifyAdmins(
             "Order {$order->number} awaiting audit",
             ($order->shop?->name ?: 'Shop').' · ৳ '.number_format((float) $order->total, 2).' · '.str_replace('_', ' ', $order->source),
-            route('orders.show', $order),
+            '/admin/orders?audit_queue=1&view='.$order->id,
             'orders',
             'warning',
         );
@@ -46,7 +46,7 @@ class AppNotificationService
         $this->notifyAdmins(
             "Payment {$payment->number} pending verification",
             ($payment->shop?->name ?: 'Shop').' · ৳ '.number_format((float) $payment->amount, 2),
-            route('payments.index', ['status' => 'pending']),
+            '/admin/payments?status=pending',
             'payments',
             'info',
         );
@@ -57,7 +57,7 @@ class AppNotificationService
         $this->notifyAdmins(
             "Return {$return->number} submitted",
             ($return->shop?->name ?: 'Shop').' · '.$return->reasonTypeLabel().' · ৳ '.number_format((float) $return->total, 2),
-            route('returns.show', $return),
+            '/admin/returns/'.$return->id,
             'returns',
             'warning',
         );
@@ -72,7 +72,7 @@ class AppNotificationService
             $this->notifyAdmins(
                 "{$pendingOrders} order(s) awaiting Super Admin audit",
                 'Open the audit queue to approve and reserve stock.',
-                route('orders.index', ['audit_queue' => 1]),
+                '/admin/orders?audit_queue=1',
                 'orders',
                 'warning',
             );
@@ -84,7 +84,7 @@ class AppNotificationService
             $this->notifyAdmins(
                 "{$pendingPayments} payment(s) pending verification",
                 'Verify collections to update credit and commissions.',
-                route('payments.index', ['status' => 'pending']),
+                '/admin/payments?status=pending',
                 'payments',
                 'info',
             );
@@ -96,7 +96,7 @@ class AppNotificationService
             $this->notifyAdmins(
                 "{$pendingReturns} return(s) awaiting review",
                 'Approve to issue credit and optional restock.',
-                route('returns.index', ['status' => 'pending']),
+                '/admin/returns?status=pending',
                 'returns',
                 'warning',
             );
@@ -106,7 +106,7 @@ class AppNotificationService
         $this->notifyAdmins(
             'Phase 9 analytics & reports are live',
             'Dashboard KPIs, report packs and this notification centre now read from live data.',
-            route('analytics.index'),
+            '/admin/analytics',
             'system',
             'info',
         );

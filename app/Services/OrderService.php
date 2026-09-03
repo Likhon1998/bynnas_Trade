@@ -71,6 +71,126 @@ class OrderService
     }
 
     /**
+     * Partners may change quantities / notes only while the order awaits Super Admin audit.
+     *
+     * @param  list<array{product_id:int, quantity:int}>  $lines
+     */
+    public function updatePendingFromShopPortal(User $shopUser, Shop $shop, Order $order, array $lines, ?string $notes = null): Order
+    {
+        if (! $shop->users()->where('users.id', $shopUser->id)->exists()) {
+            throw ValidationException::withMessages([
+                'shop' => 'You are not linked to this shop.',
+            ]);
+        }
+
+        if ($order->shop_id !== $shop->id) {
+            throw ValidationException::withMessages([
+                'order' => 'This order does not belong to your shop.',
+            ]);
+        }
+
+        if (! $order->canPartnerEdit()) {
+            throw ValidationException::withMessages([
+                'order' => 'Only orders waiting for Super Admin approval can be edited.',
+            ]);
+        }
+
+        if ($shop->status !== Shop::STATUS_ACTIVE) {
+            throw ValidationException::withMessages([
+                'shop' => 'Orders can only be edited while the shop is active.',
+            ]);
+        }
+
+        $lines = collect($lines)
+            ->filter(fn ($line) => (int) ($line['quantity'] ?? 0) > 0)
+            ->values();
+
+        if ($lines->isEmpty()) {
+            throw ValidationException::withMessages([
+                'items' => 'Add at least one product with quantity.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($shop, $order, $lines, $shopUser, $notes) {
+            $order = Order::query()->lockForUpdate()->with('items')->findOrFail($order->id);
+
+            if (! $order->canPartnerEdit() || $order->shop_id !== $shop->id) {
+                throw ValidationException::withMessages([
+                    'order' => 'Only orders waiting for Super Admin approval can be edited.',
+                ]);
+            }
+
+            $shop->loadMissing('priceGroup');
+            $old = [
+                'total' => (float) $order->total,
+                'item_count' => (int) $order->item_count,
+                'notes' => $order->notes,
+            ];
+
+            $order->items()->delete();
+
+            $subtotal = 0;
+            $itemCount = 0;
+
+            foreach ($lines as $line) {
+                $product = Product::query()->findOrFail($line['product_id']);
+
+                if ($product->status !== Product::STATUS_ACTIVE || ! $product->is_published) {
+                    throw ValidationException::withMessages([
+                        'items' => "Product {$product->sku} is not available.",
+                    ]);
+                }
+
+                $qty = (int) $line['quantity'];
+                $unit = $product->priceForGroup($shop->priceGroup);
+                $lineTotal = round($unit * $qty, 2);
+
+                OrderItem::query()->create([
+                    'order_id' => $order->id,
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_sku' => $product->sku,
+                    'quantity' => $qty,
+                    'unit_price' => $unit,
+                    'line_total' => $lineTotal,
+                ]);
+
+                $subtotal += $lineTotal;
+                $itemCount += $qty;
+            }
+
+            $order->update([
+                'notes' => $notes,
+                'subtotal' => $subtotal,
+                'discount_total' => 0,
+                'total' => $subtotal,
+                'item_count' => $itemCount,
+                'status' => Order::STATUS_PENDING_AUDIT,
+                'submitted_at' => now(),
+            ]);
+
+            $this->recordHistory($order, Order::STATUS_PENDING_AUDIT, Order::STATUS_PENDING_AUDIT, 'edited_before_audit', $notes, [
+                'old_total' => $old['total'],
+                'new_total' => $subtotal,
+                'old_item_count' => $old['item_count'],
+                'new_item_count' => $itemCount,
+            ], $shopUser);
+
+            $this->auditLogger->log(
+                'orders',
+                'edited_before_audit',
+                "Order {$order->number} edited by shop partner before audit",
+                $order,
+                $old,
+                ['total' => $subtotal, 'item_count' => $itemCount, 'notes' => $notes],
+                $shopUser,
+            );
+
+            return $order->fresh(['items', 'shop', 'salesman']);
+        });
+    }
+
+    /**
      * @param  list<array{product_id:int, quantity:int}>  $lines
      */
     public function createFromAdmin(User $admin, Shop $shop, array $lines, ?string $notes = null, ?int $salesmanId = null): Order
@@ -234,6 +354,46 @@ class OrderService
             );
 
             return $order->fresh(['items', 'shop', 'salesman', 'auditor', 'statusHistories.user']);
+        });
+    }
+
+    public function deleteBeforeApproval(Order $order, User $actor): void
+    {
+        if (! $order->canDeleteBeforeApproval()) {
+            throw ValidationException::withMessages([
+                'order' => 'Only orders waiting for Super Admin audit can be deleted.',
+            ]);
+        }
+
+        DB::transaction(function () use ($order, $actor) {
+            $order = Order::query()->lockForUpdate()->with(['items', 'shop'])->findOrFail($order->id);
+
+            if (! $order->canDeleteBeforeApproval()) {
+                throw ValidationException::withMessages([
+                    'order' => 'Only orders waiting for Super Admin audit can be deleted.',
+                ]);
+            }
+
+            $number = $order->number;
+            $from = $order->status;
+
+            $this->recordHistory($order, $from, $from, 'deleted_before_audit', 'Order deleted before approval', [
+                'number' => $number,
+                'total' => (float) $order->total,
+            ], $actor);
+
+            $this->auditLogger->log(
+                'orders',
+                'deleted',
+                "Order {$number} deleted before approval",
+                $order,
+                ['status' => $from, 'total' => (float) $order->total],
+                null,
+                $actor,
+            );
+
+            $order->items()->delete();
+            $order->delete();
         });
     }
 

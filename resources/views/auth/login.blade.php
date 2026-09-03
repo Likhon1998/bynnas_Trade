@@ -6,15 +6,11 @@
     <title>Sign in · Bynnas Trade</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    @include('partials.favicon')
 </head>
-<body style="min-height:100vh;display:grid;place-items:center;background:linear-gradient(180deg,#161a27 0%,#1c2130 60%,#f4f6fb 60%)">
+<body style="min-height:100vh;display:grid;place-items:center;background:linear-gradient(180deg,#120f1c 0%,#1a1528 58%,#f6f4fb 58%)">
     <div class="card" style="width:min(440px,92vw);padding:32px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-            <span class="brand-mark">
-                <svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3 21 8.5v7L12 21 3 15.5v-7L12 3Z" fill="#fff"/></svg>
-            </span>
-            <strong style="font-size:18px">Bynnas Trade</strong>
-        </div>
+        <x-brand-logo :size="52" show-wordmark />
         <h1 style="margin:12px 0 6px;font-size:24px;letter-spacing:-0.03em">Admin portal</h1>
         <p class="muted" style="margin:0 0 22px">Sign in with credentials issued by Super Admin. Access is role-scoped and audited.</p>
 

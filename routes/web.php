@@ -61,6 +61,9 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::get('/orders', [ShopPortalController::class, 'orders'])->name('orders');
         Route::get('/orders/create', [ShopPortalController::class, 'createOrder'])->name('orders.create');
         Route::post('/orders', [ShopPortalController::class, 'storeOrder'])->name('orders.store');
+        Route::get('/orders/{order}/edit', [ShopPortalController::class, 'editOrder'])->name('orders.edit');
+        Route::put('/orders/{order}', [ShopPortalController::class, 'updateOrder'])->name('orders.update');
+        Route::delete('/orders/{order}', [ShopPortalController::class, 'destroyOrder'])->name('orders.destroy');
         Route::get('/orders/{order}', [ShopPortalController::class, 'showOrder'])->name('orders.show');
         Route::get('/profile', [ShopPortalController::class, 'profile'])->name('profile');
     });
@@ -159,10 +162,12 @@ Route::prefix('admin')->group(function () {
         Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/create', [OrderController::class, 'create'])->name('orders.create');
         Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+        Route::get('/orders/{order}/preview', [OrderController::class, 'preview'])->name('orders.preview');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
         Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
         Route::post('/orders/{order}/reject', [OrderController::class, 'reject'])->name('orders.reject');
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+        Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
 
         // Phase 5 — Warehouses, inventory, fulfilment, delivery
         Route::get('/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
@@ -175,11 +180,13 @@ Route::prefix('admin')->group(function () {
         Route::get('/inventory/ledger', [InventoryController::class, 'ledger'])->name('inventory.ledger');
 
         Route::get('/fulfilment', [FulfilmentController::class, 'index'])->name('fulfilment.index');
+        Route::get('/fulfilment/{fulfilment}/workspace', [FulfilmentController::class, 'workspace'])->name('fulfilment.workspace');
         Route::get('/fulfilment/{fulfilment}', [FulfilmentController::class, 'show'])->name('fulfilment.show');
         Route::post('/fulfilment/{fulfilment}/start-pick', [FulfilmentController::class, 'startPick'])->name('fulfilment.start-pick');
         Route::post('/fulfilment/{fulfilment}/complete-pick', [FulfilmentController::class, 'completePick'])->name('fulfilment.complete-pick');
         Route::post('/fulfilment/{fulfilment}/pack', [FulfilmentController::class, 'pack'])->name('fulfilment.pack');
         Route::post('/fulfilment/{fulfilment}/dispatch', [FulfilmentController::class, 'dispatch'])->name('fulfilment.dispatch');
+        Route::post('/fulfilment/{fulfilment}/deliver', [FulfilmentController::class, 'markDelivered'])->name('fulfilment.deliver');
 
         Route::get('/deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
         Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])->name('deliveries.show');

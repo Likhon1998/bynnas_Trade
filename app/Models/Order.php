@@ -145,6 +145,16 @@ class Order extends Model
         return $this->status === self::STATUS_PENDING_AUDIT;
     }
 
+    public function canPartnerEdit(): bool
+    {
+        return $this->isPendingAudit() && ! $this->stock_reserved;
+    }
+
+    public function canDeleteBeforeApproval(): bool
+    {
+        return $this->isPendingAudit() && ! $this->stock_reserved;
+    }
+
     public function isApproved(): bool
     {
         return $this->status === self::STATUS_APPROVED;

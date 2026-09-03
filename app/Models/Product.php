@@ -59,6 +59,19 @@ class Product extends Model
         return max(0, (int) $this->stock_on_hand - (int) $this->reserved_stock);
     }
 
+    public function imageUrl(): ?string
+    {
+        if (! $this->image_path) {
+            return null;
+        }
+
+        if (str_starts_with($this->image_path, 'http://') || str_starts_with($this->image_path, 'https://')) {
+            return $this->image_path;
+        }
+
+        return asset('storage/'.$this->image_path);
+    }
+
     public function priceForGroup(?PriceGroup $group = null): float
     {
         if ($group) {

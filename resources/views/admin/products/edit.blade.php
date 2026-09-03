@@ -3,7 +3,7 @@
 @section('content')
     <x-page-header title="Edit Product" subtitle="{{ $product->sku }}" />
     <div class="card" style="padding:22px;max-width:960px">
-        <form class="form-grid" action="{{ route('products.update', $product) }}" method="post">
+        <form class="form-grid" action="{{ route('products.update', $product) }}" method="post" enctype="multipart/form-data">
             @csrf
             @method('PUT')
             @include('admin.products._form', ['product' => $product])

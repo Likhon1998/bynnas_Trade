@@ -17,7 +17,7 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Supplier</div><div style="font-weight:700">{{ $shipment->supplier?->name ?: '—' }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Goods value</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($shipment->goods_value_bdt) }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Extra costs</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($shipment->extraCostsTotal()) }}</div></div>
-        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total landed</div><div style="font-weight:800;color:#ff3b30">{{ \App\Support\DemoData::taka($shipment->total_landed_cost) }}</div></div>
+        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total landed</div><div style="font-weight:800;color:#a855f7">{{ \App\Support\DemoData::taka($shipment->total_landed_cost) }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">ETA</div><div style="font-weight:700">{{ $shipment->eta_at?->format('d M Y') ?: '—' }}</div></div>
     </div>
 

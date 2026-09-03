@@ -84,7 +84,7 @@
         <div class="qa-grid">
             @foreach ([
                 ['Add Shop', 'store', '#dbeafe', '#2563eb', route('shops.create')],
-                ['Create Order', 'shopping-bag', '#ffe4e6', '#e11d48', route('orders.create')],
+                ['Create Order', 'shopping-bag', '#f3e8ff', '#7c3aed', route('orders.create')],
                 ['Add Product', 'package-plus', '#dcfce7', '#16a34a', route('products.create')],
                 ['Add Shipment', 'ship', '#e0f2fe', '#0284c7', route('shipments.create')],
                 ['Receive Stock', 'package-check', '#ccfbf1', '#0f766e', route('inventory.receive')],

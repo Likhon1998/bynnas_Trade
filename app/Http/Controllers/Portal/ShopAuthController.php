@@ -67,6 +67,11 @@ class ShopAuthController extends Controller
 
     public function logout(Request $request)
     {
+        $user = Auth::user();
+        if ($user) {
+            $this->auditLogger->log('auth', 'shop_logout', "Shop user {$user->email} signed out", $user, null, null, $user);
+        }
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -6,8 +6,9 @@
     <title>Field login · Bynnas Trade</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    @include('partials.favicon')
     <style>
-        body { background: linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #334155 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        body { background: linear-gradient(160deg, #120f1c 0%, #1a1528 45%, #2a2140 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .login-card { width: 100%; max-width: 400px; background: #fff; border-radius: 16px; padding: 28px 24px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
         .login-card h1 { margin: 0 0 4px; font-size: 22px; }
         .login-card .sub { color: #64748b; margin-bottom: 20px; font-size: 13px; }
@@ -15,8 +16,8 @@
 </head>
 <body>
     <div class="login-card">
-        <div style="font-size:12px;font-weight:700;color:#ff3b30;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Bynnas Trade</div>
-        <h1>Field salesman</h1>
+        <x-brand-logo :size="48" show-wordmark />
+        <h1 style="margin-top:16px">Field salesman</h1>
         <div class="sub">Mobile order collection · check in at shops</div>
 
         @if ($errors->any())
