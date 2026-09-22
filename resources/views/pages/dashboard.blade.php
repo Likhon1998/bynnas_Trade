@@ -16,7 +16,7 @@
     <div class="grid-5" style="margin-bottom:16px">
         @php
             $stats = [
-                ['title' => 'Total Sales (This Month)', 'value' => '৳ 12,45,000', 'delta' => '18.5% vs last month', 'up' => true, 'color' => '#a855f7', 'points' => '0,28 20,22 40,24 60,12 80,16 100,8 120,14'],
+                ['title' => 'Total Sales (This Month)', 'value' => '৳ 12,45,000', 'delta' => '18.5% vs last month', 'up' => true, 'color' => '#6D28D9', 'points' => '0,28 20,22 40,24 60,12 80,16 100,8 120,14'],
                 ['title' => 'Total Orders', 'value' => '1,248', 'delta' => '12.4% vs last month', 'up' => true, 'color' => '#3b82f6', 'points' => '0,24 20,20 40,18 60,16 80,10 100,12 120,6'],
                 ['title' => 'Total Shops', 'value' => '832', 'delta' => '8.1% vs last month', 'up' => true, 'color' => '#8b5cf6', 'points' => '0,26 20,24 40,20 60,18 80,14 100,15 120,10'],
                 ['title' => 'Outstanding Amount', 'value' => '৳ 8,75,320', 'delta' => '6.3% vs last month', 'up' => false, 'color' => '#f97316', 'points' => '0,10 20,12 40,16 60,14 80,20 100,18 120,24'],
@@ -81,7 +81,7 @@
             @php
                 $actions = [
                     ['Add Shop', 'store', '#dbeafe', '#2563eb', route('shops.create')],
-                    ['Add Salesman', 'user-plus', '#f3e8ff', '#7c3aed', route('salesmen.create')],
+                    ['Add Salesman', 'user-plus', '#f3e8ff', '#6D28D9', route('salesmen.create')],
                     ['Create Order', 'shopping-bag', '#ffe4e6', '#e11d48', route('orders.create')],
                     ['Add Product', 'package-plus', '#dcfce7', '#16a34a', route('products.create')],
                     ['Add Shipment', 'ship', '#e0f2fe', '#0284c7', route('shipments.create')],
@@ -175,7 +175,7 @@
                 <div class="section-title" style="margin-bottom:12px">Recent Activities</div>
                 @foreach ($activities as $activity)
                     <div style="display:flex;gap:10px;padding:8px 0">
-                        <div class="qa-ico" style="background:#f3e8ff;color:#7c3aed;width:32px;height:32px">
+                        <div class="qa-ico" style="background:#f3e8ff;color:#6D28D9;width:32px;height:32px">
                             <i data-lucide="activity" style="width:14px;height:14px"></i>
                         </div>
                         <div>

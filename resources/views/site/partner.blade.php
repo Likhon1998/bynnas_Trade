@@ -31,11 +31,48 @@
                         <label>City<input name="city" value="{{ old('city') }}"></label>
                     </div>
                     <label>Business type
-                        <select name="business_type">
-                            <option value="retailer" @selected(old('business_type', 'retailer') === 'retailer')>Retailer</option>
-                            <option value="distributor" @selected(old('business_type') === 'distributor')>Distributor</option>
-                            <option value="other" @selected(old('business_type') === 'other')>Other</option>
-                        </select>
+                        <div
+                            class="site-select"
+                            x-data="{
+                                open: false,
+                                value: @js(old('business_type', 'retailer')),
+                                options: [
+                                    { value: 'retailer', label: 'Retailer' },
+                                    { value: 'distributor', label: 'Distributor' },
+                                    { value: 'other', label: 'Other' },
+                                ],
+                                get label() {
+                                    return this.options.find(o => o.value === this.value)?.label || 'Select';
+                                },
+                                choose(v) {
+                                    this.value = v;
+                                    this.open = false;
+                                }
+                            }"
+                            @keydown.escape.window="open = false"
+                            @click.outside="open = false"
+                        >
+                            <input type="hidden" name="business_type" :value="value">
+                            <button type="button" class="site-select-trigger" @click="open = !open" :aria-expanded="open">
+                                <span x-text="label"></span>
+                                <svg class="site-select-chevron" :class="open && 'is-open'" width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                                </svg>
+                            </button>
+                            <ul class="site-select-menu" x-show="open" x-cloak x-transition.opacity.duration.150ms>
+                                <template x-for="opt in options" :key="opt.value">
+                                    <li>
+                                        <button
+                                            type="button"
+                                            class="site-select-option"
+                                            :class="value === opt.value && 'is-active'"
+                                            @click="choose(opt.value)"
+                                            x-text="opt.label"
+                                        ></button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
                     </label>
                     <label>About your shop / volumes<textarea name="message" rows="4" placeholder="Categories you sell, monthly purchase estimate, existing locations">{{ old('message') }}</textarea></label>
                     <button class="site-cta" type="submit">Submit application</button>

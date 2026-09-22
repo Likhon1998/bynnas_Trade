@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
     @include('partials.favicon')
 </head>
-<body style="min-height:100vh;display:grid;place-items:center;background:linear-gradient(180deg,#120f1c 0%,#1a1528 58%,#f6f4fb 58%)">
+<body style="min-height:100vh;display:grid;place-items:center;background:linear-gradient(180deg,var(--c30) 0%,var(--c30-elevated) 52%,var(--c60) 52%)">
     <div class="card" style="width:min(440px,92vw);padding:32px">
         <x-brand-logo :size="52" show-wordmark />
         <h1 style="margin:12px 0 6px;font-size:24px;letter-spacing:-0.03em">Admin portal</h1>

@@ -1,17 +1,30 @@
 :root {
-    --brand: #a855f7;
-    --brand-dark: #7c3aed;
-    --brand-magenta: #e600ff;
-    --brand-blue: #2563eb;
-    --brand-gradient: linear-gradient(135deg, #e600ff 0%, #7c3aed 50%, #2563eb 100%);
-    --navy: #120f1c;
-    --navy-2: #1a1528;
-    --navy-3: #2a2140;
-    --page: #f6f4fb;
-    --text: #1c1830;
-    --muted: #6b6680;
-    --line: #e8e4f2;
-    --shadow: 0 1px 2px rgba(28, 24, 48, 0.04), 0 8px 24px rgba(28, 24, 48, 0.05);
+    /* 60–30–10 premium system */
+    --c60: #F3F2F7;              /* dominant canvas */
+    --c30: #16141F;              /* structure / ink */
+    --c30-soft: #FFFFFF;         /* elevated panels on light */
+    --c30-elevated: #1E1B2A;     /* elevated on dark */
+    --c30-muted: #6B6680;        /* secondary text */
+    --c30-line: #E4E1EC;         /* hairlines on light */
+    --c10: #6D28D9;              /* accent — CTAs, active, focus */
+    --c10-deep: #5B21B6;
+    --c10-soft: #EDE9FE;
+    --c10-glow: rgba(109, 40, 217, 0.28);
+
+    /* Legacy aliases (map to the system) */
+    --brand: var(--c10);
+    --brand-dark: var(--c10-deep);
+    --brand-magenta: #7C3AED;
+    --brand-blue: #5B21B6;
+    --brand-gradient: linear-gradient(135deg, #7C3AED 0%, #6D28D9 55%, #5B21B6 100%);
+    --navy: var(--c30);
+    --navy-2: var(--c30-elevated);
+    --navy-3: #2A2640;
+    --page: var(--c60);
+    --text: var(--c30);
+    --muted: var(--c30-muted);
+    --line: var(--c30-line);
+    --shadow: 0 1px 2px rgba(22, 20, 31, 0.04), 0 10px 28px rgba(22, 20, 31, 0.06);
 }
 
 * { box-sizing: border-box; }
@@ -142,10 +155,10 @@ button, input, select, textarea { font-family: inherit; }
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    background: var(--brand-gradient);
+    background: var(--c10);
     display: grid;
     place-items: center;
-    box-shadow: 0 8px 16px rgba(126, 34, 206, 0.32);
+    box-shadow: 0 8px 16px var(--c10-glow);
 }
 
 .brand-logo {
@@ -216,9 +229,9 @@ button, input, select, textarea { font-family: inherit; }
 
 .nav-item:hover { background: var(--navy-3); color: #fff; }
 .nav-item.active {
-    background: var(--brand-gradient);
+    background: var(--c10);
     color: #fff;
-    box-shadow: 0 6px 14px rgba(126, 34, 206, 0.24);
+    box-shadow: 0 8px 18px var(--c10-glow);
 }
 
 .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
@@ -260,7 +273,7 @@ button, input, select, textarea { font-family: inherit; }
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #e600ff, #2563eb);
+    background: var(--c10);
     color: #fff;
     display: grid;
     place-items: center;
@@ -278,7 +291,7 @@ button, input, select, textarea { font-family: inherit; }
 
 .topbar {
     height: 72px;
-    background: #fff;
+    background: var(--c30-soft);
     border-bottom: 1px solid var(--line);
     display: flex;
     align-items: center;
@@ -312,7 +325,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 .notif-item:hover {
-    background: #f8f5ff;
+    background: var(--c10-soft);
 }
 
 .logout-btn {
@@ -408,10 +421,10 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 .card {
-    background: #fff;
+    background: var(--c30-soft);
     border-radius: 14px;
     box-shadow: var(--shadow);
-    border: 1px solid #eef1f7;
+    border: 1px solid var(--line);
 }
 
 .stat-card { padding: 16px 16px 8px; overflow: hidden; }
@@ -486,12 +499,12 @@ button, input, select, textarea { font-family: inherit; }
     transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 a.pager-btn:hover {
-    background: #f3e8ff;
+    background: var(--c10-soft);
     border-color: #ddd6fe;
-    color: var(--brand-dark);
+    color: var(--c10-deep);
 }
 .pager-item.is-active .pager-btn {
-    background: var(--brand-gradient);
+    background: var(--c10);
     border-color: transparent;
     color: #fff;
     cursor: default;
@@ -521,10 +534,10 @@ a.pager-btn:hover {
     cursor: pointer;
 }
 
-.btn-primary { background: var(--brand-gradient); color: #fff; }
-.btn-primary:hover { filter: brightness(1.06); }
-.btn-ghost { background: #fff; color: var(--text); border: 1px solid var(--line); }
-.btn-soft { background: #f3e8ff; color: var(--brand-dark); }
+.btn-primary { background: var(--c10); color: #fff; }
+.btn-primary:hover { background: var(--c10-deep); }
+.btn-ghost { background: var(--c30-soft); color: var(--text); border: 1px solid var(--line); }
+.btn-soft { background: var(--c10-soft); color: var(--c10-deep); }
 
 .badge {
     display: inline-flex;
@@ -651,7 +664,7 @@ textarea.input {
     color: #334155;
     text-align: center;
 }
-.qa:hover { background: #f3e8ff; color: var(--brand-dark); }
+.qa:hover { background: var(--c10-soft); color: var(--c10-deep); }
 .qa-ico {
     width: 40px;
     height: 40px;
@@ -1067,7 +1080,7 @@ textarea.input {
     display: block;
     object-fit: cover;
     border-radius: 12px;
-    background: #f3e8ff;
+    background: var(--c10-soft);
     border: 1px solid var(--line);
     flex-shrink: 0;
 }
@@ -1077,8 +1090,8 @@ textarea.input {
     place-items: center;
     font-weight: 800;
     font-size: 14px;
-    color: var(--brand-dark);
-    background: linear-gradient(135deg, #f3e8ff, #e0e7ff);
+    color: var(--c10-deep);
+    background: var(--c10-soft);
 }
 
 .product-cell {

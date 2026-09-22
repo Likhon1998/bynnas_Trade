@@ -17,7 +17,7 @@
         .field-body { padding: 14px 14px 0; }
         .field-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; height: var(--field-nav); background: #fff; border-top: 1px solid #e5e7eb; display: grid; grid-template-columns: repeat(4, 1fr); z-index: 30; }
         .field-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-decoration: none; color: #64748b; font-size: 11px; font-weight: 600; }
-        .field-nav a.active { color: #a855f7; }
+        .field-nav a.active { color: #6D28D9; }
         .field-nav i { width: 18px; height: 18px; }
         .stat-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
         .stat-card { background: #fff; border-radius: 12px; padding: 12px; border: 1px solid #e5e7eb; }

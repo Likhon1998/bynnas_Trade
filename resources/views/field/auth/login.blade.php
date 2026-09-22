@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
     @include('partials.favicon')
     <style>
-        body { background: linear-gradient(160deg, #120f1c 0%, #1a1528 45%, #2a2140 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .login-card { width: 100%; max-width: 400px; background: #fff; border-radius: 16px; padding: 28px 24px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
-        .login-card h1 { margin: 0 0 4px; font-size: 22px; }
-        .login-card .sub { color: #64748b; margin-bottom: 20px; font-size: 13px; }
+        body { background: linear-gradient(160deg, var(--c30) 0%, var(--c30-elevated) 55%, #2A2640 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { width: 100%; max-width: 400px; background: var(--c30-soft); border-radius: 16px; padding: 28px 24px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+        .login-card h1 { margin: 0 0 4px; font-size: 22px; color: var(--text); }
+        .login-card .sub { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
     </style>
 </head>
 <body>

@@ -80,7 +80,7 @@
                             <td>
                                 <div style="display:flex;align-items:center;gap:8px">
                                     <div style="flex:1;height:8px;background:#eef2f7;border-radius:99px;min-width:60px">
-                                        <div style="height:8px;width:{{ $pct }}%;background:#a855f7;border-radius:99px"></div>
+                                        <div style="height:8px;width:{{ $pct }}%;background:#6D28D9;border-radius:99px"></div>
                                     </div>
                                     <span style="font-size:12px;font-weight:700">{{ $row->achievementPercent() }}%</span>
                                 </div>

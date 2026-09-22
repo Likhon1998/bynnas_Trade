@@ -84,13 +84,13 @@
         <div class="qa-grid">
             @foreach ([
                 ['Add Shop', 'store', '#dbeafe', '#2563eb', route('shops.create')],
-                ['Create Order', 'shopping-bag', '#f3e8ff', '#7c3aed', route('orders.create')],
+                ['Create Order', 'shopping-bag', '#f3e8ff', '#6D28D9', route('orders.create')],
                 ['Add Product', 'package-plus', '#dcfce7', '#16a34a', route('products.create')],
                 ['Add Shipment', 'ship', '#e0f2fe', '#0284c7', route('shipments.create')],
                 ['Receive Stock', 'package-check', '#ccfbf1', '#0f766e', route('inventory.receive')],
                 ['Generate Report', 'file-bar-chart', '#f1f5f9', '#334155', route('reports.index')],
                 ['Targets', 'target', '#fef3c7', '#d97706', route('targets.index')],
-                ['Analytics', 'trending-up', '#ede9fe', '#7c3aed', route('analytics.index')],
+                ['Analytics', 'trending-up', '#ede9fe', '#6D28D9', route('analytics.index')],
             ] as $action)
                 <a class="qa" href="{{ $action[4] }}">
                     <span class="qa-ico" style="background:{{ $action[2] }};color:{{ $action[3] }}">

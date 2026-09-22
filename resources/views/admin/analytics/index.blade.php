@@ -35,7 +35,7 @@
                         <strong>{{ $pct }}%</strong>
                     </div>
                     <div style="height:8px;background:#eef2f7;border-radius:99px;margin-top:6px">
-                        <div style="height:8px;width:{{ $pct }}%;background:#a855f7;border-radius:99px"></div>
+                        <div style="height:8px;width:{{ $pct }}%;background:#6D28D9;border-radius:99px"></div>
                     </div>
                     <div class="muted" style="font-size:12px;margin-top:4px">
                         {{ \App\Support\DemoData::taka($row->achieved_amount) }} / {{ \App\Support\DemoData::taka($row->target_amount) }}
