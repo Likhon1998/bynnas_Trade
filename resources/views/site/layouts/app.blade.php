@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Home') · Bynnas Trade</title>
-    <meta name="description" content="@yield('meta', 'Bynnas Trade — private B2B wholesale gadget distribution from China import to shop delivery.')">
+    <meta name="description" content="@yield('meta', 'Bynnas Trade — B2B wholesale distribution from China import to warehouse fulfilment and shop delivery in Bangladesh.')">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/site.css') }}">
@@ -34,7 +34,7 @@
         <div class="site-wrap site-footer-grid">
             <div>
                 <strong class="site-footer-brand">Bynnas Trade</strong>
-                <div style="margin-top:8px">China import → warehouse → shops · Bangladesh wholesale</div>
+                <div style="margin-top:8px">B2B wholesale · Bangladesh</div>
             </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap">
                 <a href="{{ route('site.about') }}">About</a>

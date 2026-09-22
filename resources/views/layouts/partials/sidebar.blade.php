@@ -44,10 +44,27 @@
     ];
 @endphp
 
-<aside class="sidebar" :class="{ open: sidebarOpen, compact: !sidebarExpanded }" @click.outside="if (window.innerWidth < 1024) sidebarOpen = false">
-    <a href="{{ route('dashboard') }}" class="sidebar-brand" title="Bynnas Trade">
-        <x-brand-logo :size="40" show-wordmark />
-    </a>
+<aside
+    class="sidebar"
+    :class="{ open: sidebarOpen, compact: isDesktop && !sidebarExpanded }"
+    @click.outside="if (!isDesktop) sidebarOpen = false"
+>
+    <div class="sidebar-top">
+        <a href="{{ route('dashboard') }}" class="sidebar-brand" title="Bynnas Trade">
+            <x-brand-logo :size="32" show-wordmark />
+        </a>
+        <button
+            type="button"
+            class="sidebar-expand-btn"
+            x-show="isDesktop && !sidebarExpanded"
+            x-cloak
+            @click="expandSidebar()"
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+        >
+            <i data-lucide="chevrons-right"></i>
+        </button>
+    </div>
 
     <div class="nav-scroll">
         <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}" title="Dashboard">
@@ -74,8 +91,8 @@
     <div class="sidebar-user">
         <div class="avatar">{{ strtoupper(substr($authUser?->name ?? 'SA', 0, 2)) }}</div>
         <div class="sidebar-user-meta" style="min-width:0">
-            <div style="color:#fff;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ $authUser?->name ?? 'Admin' }}</div>
-            <div style="font-size:12px;color:#8b93a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ $authUser?->roles?->first()?->name ?? 'Administrator' }}</div>
+            <div style="color:#fff;font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ $authUser?->name ?? 'Admin' }}</div>
+            <div style="font-size:11px;color:#8b93a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ $authUser?->roles?->first()?->name ?? 'Administrator' }}</div>
         </div>
         <form action="{{ route('logout') }}" method="post" style="margin-left:auto">
             @csrf

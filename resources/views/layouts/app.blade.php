@@ -8,32 +8,51 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
     @include('partials.favicon')
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@0.469.0"></script>
     <style>[x-cloak]{display:none !important}</style>
     @stack('head')
+    {{-- Register before Alpine loads so adminShell exists on boot --}}
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('adminShell', () => {
+                const stored = localStorage.getItem('bt_sidebar_v2');
+                return {
+                    isDesktop: window.innerWidth >= 1025,
+                    sidebarOpen: window.innerWidth >= 1025,
+                    sidebarExpanded: stored !== '0',
+                    commandOpen: false,
+                    notifsOpen: false,
+                    toggleSidebar() {
+                        if (!this.isDesktop) {
+                            this.sidebarOpen = !this.sidebarOpen;
+                            return;
+                        }
+                        this.sidebarExpanded = !this.sidebarExpanded;
+                        localStorage.setItem('bt_sidebar_v2', this.sidebarExpanded ? '1' : '0');
+                        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                    },
+                    expandSidebar() {
+                        this.sidebarExpanded = true;
+                        localStorage.setItem('bt_sidebar_v2', '1');
+                        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                    },
+                    onResize() {
+                        this.isDesktop = window.innerWidth >= 1025;
+                        if (this.isDesktop) this.sidebarOpen = true;
+                    },
+                };
+            });
+        });
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
 </head>
-<body x-data="{
-        sidebarOpen: window.innerWidth >= 1024,
-        sidebarExpanded: localStorage.getItem('bt_sidebar_expanded') === '1',
-        commandOpen: false,
-        notifsOpen: false,
-        toggleSidebar() {
-            if (window.innerWidth < 1024) {
-                this.sidebarOpen = !this.sidebarOpen;
-                return;
-            }
-            this.sidebarExpanded = !this.sidebarExpanded;
-            localStorage.setItem('bt_sidebar_expanded', this.sidebarExpanded ? '1' : '0');
-            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
-        }
-      }"
+<body x-data="adminShell"
       @keydown.ctrl.k.prevent="commandOpen = true"
       @keydown.meta.k.prevent="commandOpen = true"
       @keydown.escape="commandOpen = false; notifsOpen = false"
-      @resize.window="if (window.innerWidth >= 1024) { sidebarOpen = true }">
-    <div class="overlay" :class="sidebarOpen && window.innerWidth < 1024 && 'show'" @click="sidebarOpen = false"></div>
+      @resize.window="onResize()">
+    <div class="overlay" :class="sidebarOpen && !isDesktop && 'show'" @click="sidebarOpen = false"></div>
     <div class="app-shell">
         @include('layouts.partials.sidebar')
         <div class="main">

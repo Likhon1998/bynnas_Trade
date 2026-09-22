@@ -168,16 +168,13 @@ img { max-width: 100%; display: block; }
 }
 
 .site-hero-brand {
-    font-family: var(--font-display);
-    font-size: clamp(2.8rem, 8vw, 5.6rem);
-    font-weight: 800;
-    letter-spacing: -0.05em;
-    line-height: 0.95;
-    margin: 0 0 18px;
-    background: var(--bt-gradient);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    font-family: var(--font-body);
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin: 0 0 16px;
+    color: #ffffff;
     animation: rise .9s ease both;
 }
 
@@ -397,7 +394,7 @@ img { max-width: 100%; display: block; }
 
     .site-nav-links.open { display: flex; }
 
-    .site-hero-brand { font-size: clamp(2.4rem, 12vw, 3.4rem); }
+    .site-hero-brand { font-size: clamp(2rem, 10vw, 2.8rem); }
 
     .site-brand .brand-wordmark { font-size: 1.1rem; }
 }

@@ -25,7 +25,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Paginator::useBootstrapFive();
+        Paginator::defaultView('vendor.pagination.admin');
+        Paginator::defaultSimpleView('vendor.pagination.simple-admin');
 
         Gate::policy(Shop::class, ShopPolicy::class);
         Gate::policy(Product::class, ProductPolicy::class);
