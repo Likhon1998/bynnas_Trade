@@ -45,9 +45,11 @@ class InvoiceService
 
             $remaining = max(0, round((float) $order->total - $advancePaid, 2));
             $terms = (int) ($order->shop->payment_terms_days ?: 21);
-            $notes = 'Auto-raised from order '.$order->number;
+            $notes = 'Final invoice for order '.$order->number
+                .' · Order total ৳ '.number_format((float) $order->total, 2);
             if ($advancePaid > 0) {
-                $notes .= ' · Advance already paid ৳ '.number_format($advancePaid, 2);
+                $notes .= ' · Advance paid ৳ '.number_format($advancePaid, 2)
+                    .' · Remaining due ৳ '.number_format($remaining, 2);
             }
 
             $invoice = Invoice::query()->create([
@@ -127,6 +129,8 @@ class InvoiceService
                 return Invoice::query()->findOrFail($order->advance_invoice_id);
             }
 
+            $remaining = max(0, round((float) $order->total - $amount, 2));
+
             $invoice = Invoice::query()->create([
                 'number' => $this->nextNumber(),
                 'shop_id' => $order->shop_id,
@@ -139,14 +143,18 @@ class InvoiceService
                 'balance' => $amount,
                 'issued_at' => now(),
                 'due_at' => now()->toDateString(),
-                'notes' => 'Advance payment required before approving order '.$order->number,
+                'notes' => 'Advance on order '.$order->number
+                    .' · Order total ৳ '.number_format((float) $order->total, 2)
+                    .' · Advance due ৳ '.number_format($amount, 2)
+                    .' · Remaining after advance ৳ '.number_format($remaining, 2)
+                    .' (acknowledged on final invoice / delivery)',
                 'created_by' => $actor?->id,
             ]);
 
             InvoiceItem::query()->create([
                 'invoice_id' => $invoice->id,
                 'product_id' => null,
-                'product_name' => 'Advance on order '.$order->number,
+                'product_name' => 'Advance on order '.$order->number.' (remaining ৳ '.number_format($remaining, 2).' later)',
                 'product_sku' => 'ADVANCE',
                 'quantity' => 1,
                 'unit_price' => $amount,

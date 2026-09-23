@@ -99,7 +99,7 @@ class PaymentService
 
             $this->credit->recalculateOutstanding($payment->shop);
 
-            $this->commissions->accrueFromPayment($payment->fresh(['invoice.order', 'invoice.shop']), $actor);
+            $this->commissions->accrueFromPayment($payment->fresh(['invoice.order.visit', 'invoice.shop', 'shop']), $actor);
 
             if ($payment->invoice_id) {
                 $advanceOrder = \App\Models\Order::query()

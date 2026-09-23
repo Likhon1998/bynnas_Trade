@@ -187,6 +187,60 @@ class Order extends Model
         return (float) $invoice->balance <= 0.009;
     }
 
+    /**
+     * Order total vs advance paid vs amount still owed.
+     *
+     * @return array{
+     *     order_total: float,
+     *     advance_required: float,
+     *     advance_paid: float,
+     *     sales_paid: float,
+     *     remaining_due: float,
+     *     has_advance: bool,
+     *     advance_cleared: bool,
+     *     fully_settled: bool
+     * }
+     */
+    public function settlement(): array
+    {
+        $orderTotal = round((float) $this->total, 2);
+        $advanceRequired = round((float) ($this->advance_amount ?: 0), 2);
+
+        $advanceInvoice = $this->relationLoaded('advanceInvoice')
+            ? $this->advanceInvoice
+            : $this->advanceInvoice()->first();
+
+        $advancePaid = 0.0;
+        if ($advanceInvoice) {
+            $advancePaid = round((float) $advanceInvoice->paid_amount, 2);
+        } elseif ($this->advance_paid_at && $advanceRequired > 0) {
+            $advancePaid = $advanceRequired;
+        }
+
+        $salesInvoice = $this->relationLoaded('invoice')
+            ? $this->invoice
+            : $this->invoice()->first();
+
+        $salesPaid = 0.0;
+        $remainingDue = max(0, round($orderTotal - $advancePaid, 2));
+
+        if ($salesInvoice && (int) $salesInvoice->id !== (int) ($this->advance_invoice_id ?: 0)) {
+            $salesPaid = round((float) $salesInvoice->paid_amount, 2);
+            $remainingDue = round((float) $salesInvoice->balance, 2);
+        }
+
+        return [
+            'order_total' => $orderTotal,
+            'advance_required' => $advanceRequired,
+            'advance_paid' => $advancePaid,
+            'sales_paid' => $salesPaid,
+            'remaining_due' => $remainingDue,
+            'has_advance' => $advanceRequired > 0.009 || (bool) $this->advance_required,
+            'advance_cleared' => $advanceRequired <= 0.009 || $advancePaid + 0.009 >= $advanceRequired,
+            'fully_settled' => $remainingDue <= 0.009,
+        ];
+    }
+
     public function canApproveNow(): bool
     {
         if ($this->isPendingAudit() && ! $this->advance_required) {

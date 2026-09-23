@@ -26,20 +26,60 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Submitted</div><div style="font-weight:700">{{ $order->submitted_at?->format('d M Y H:i') }}</div></div>
     </div>
 
-    @if ($order->isAwaitingAdvance())
-        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fffbeb;color:#92400e">
-            <strong>Advance payment required</strong> before this order can be approved.
-            <div style="margin-top:6px;font-weight:800;font-size:18px">{{ \App\Support\DemoData::taka($order->advance_amount) }}</div>
-            @if ($order->advanceInvoice)
-                <div style="margin-top:4px;font-size:13px">
-                    Invoice {{ $order->advanceInvoice->number }}
-                    · Balance {{ \App\Support\DemoData::taka($order->advanceInvoice->balance) }}
-                    @if ($order->isAdvancePaid())
-                        · <span style="color:#15803d;font-weight:700">Paid — waiting for admin approval</span>
-                    @else
-                        · Please pay this advance (cash / bank / mobile) and inform admin for verification.
-                    @endif
+    @php
+        $order->loadMissing(['advanceInvoice', 'invoice']);
+        $settle = $order->settlement();
+    @endphp
+    @if ($settle['has_advance'] || $settle['remaining_due'] > 0.009)
+        <div class="card" style="padding:14px;margin-bottom:14px;border:1px solid {{ $settle['fully_settled'] ? '#bbf7d0' : '#fde68a' }};background:{{ $settle['fully_settled'] ? '#f0fdf4' : '#fffbeb' }}">
+            <div style="font-weight:800;margin-bottom:8px;color:{{ $settle['fully_settled'] ? '#166534' : '#92400e' }}">
+                @if ($settle['fully_settled'])
+                    Payment fully settled
+                @elseif ($settle['advance_cleared'])
+                    Advance received — remaining still due
+                @else
+                    Advance required
+                @endif
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+                <div>
+                    <div class="muted" style="font-size:11px">Order total</div>
+                    <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['order_total']) }}</div>
                 </div>
+                <div>
+                    <div class="muted" style="font-size:11px">Advance paid</div>
+                    <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['advance_paid']) }}</div>
+                </div>
+                <div>
+                    <div class="muted" style="font-size:11px">Remaining due</div>
+                    <div style="font-weight:800;font-size:18px;color:{{ $settle['fully_settled'] ? '#166534' : '#b45309' }}">
+                        {{ \App\Support\DemoData::taka($settle['remaining_due']) }}
+                    </div>
+                </div>
+            </div>
+            @if (! $settle['fully_settled'])
+                <p class="muted" style="margin:10px 0 0;font-size:12px">
+                    @if ($settle['advance_cleared'])
+                        Your advance is acknowledged. The remaining amount will be collected on the final invoice after delivery.
+                    @else
+                        Please pay the advance first. After that, {{ \App\Support\DemoData::taka($settle['remaining_due']) }} will still be due later.
+                    @endif
+                </p>
+            @endif
+        </div>
+    @endif
+
+    @if ($order->isAwaitingAdvance())
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff7ed;color:#9a3412">
+            <strong>Next step:</strong>
+            @if ($order->isAdvancePaid())
+                Advance is paid — waiting for admin approval.
+            @else
+                Pay advance {{ \App\Support\DemoData::taka($order->advance_amount) }}
+                @if ($order->advanceInvoice)
+                    (invoice {{ $order->advanceInvoice->number }})
+                @endif
+                and inform admin for verification.
             @endif
         </div>
     @elseif ($order->isPendingAudit())

@@ -31,11 +31,14 @@ class PaymentController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('admin.payments.index', [
-            'payments' => $payments,
-            'shops' => Shop::query()->where('status', '!=', Shop::STATUS_REJECTED)->orderBy('name')->get(),
-            'openInvoices' => Invoice::query()->whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])->with('shop')->latest()->get(),
-        ]);
+        return view('admin.payments.index', compact('payments'));
+    }
+
+    public function create(Request $request)
+    {
+        abort_unless($request->user()->can('payments.create'), 403);
+
+        return view('admin.payments.create', $this->formData($request));
     }
 
     public function store(Request $request)
@@ -60,20 +63,29 @@ class PaymentController extends Controller
 
         $payment = $this->payments->record($data, $request->user());
 
+        $downloadUrl = $payment->invoice_id
+            ? route('invoices.download', $payment->invoice_id)
+            : null;
+
         if ($request->boolean('verify_now') && $request->user()->can('payments.verify')) {
-            // Already auto-verified when linked to an advance invoice.
             if ($payment->status !== Payment::STATUS_VERIFIED) {
                 $this->payments->verify($payment, $request->user());
             }
 
-            return back()->with('success', 'Payment recorded and verified. Related orders updated automatically.');
+            return redirect()->route('payments.index')
+                ->with('success', 'Payment recorded and verified. Related orders updated automatically.')
+                ->with('invoice_download', $downloadUrl);
         }
 
         if ($payment->status === Payment::STATUS_VERIFIED) {
-            return back()->with('success', 'Advance payment applied — order status updated automatically.');
+            return redirect()->route('payments.index')
+                ->with('success', 'Advance payment applied — order status updated automatically.')
+                ->with('invoice_download', $downloadUrl);
         }
 
-        return back()->with('success', 'Payment recorded — pending verification.');
+        return redirect()->route('payments.index')
+            ->with('success', 'Payment recorded — pending verification.')
+            ->with('invoice_download', $downloadUrl);
     }
 
     public function verify(Request $request, Payment $payment)
@@ -81,7 +93,9 @@ class PaymentController extends Controller
         abort_unless($request->user()->can('payments.verify'), 403);
         $this->payments->verify($payment, $request->user());
 
-        return back()->with('success', 'Payment verified. Shop outstanding reduced.');
+        return back()
+            ->with('success', 'Payment verified. Shop outstanding reduced.')
+            ->with('invoice_download', $payment->invoice_id ? route('invoices.download', $payment->invoice_id) : null);
     }
 
     public function reject(Request $request, Payment $payment)
@@ -92,5 +106,25 @@ class PaymentController extends Controller
         $this->payments->reject($payment, $data['rejection_reason'], $request->user());
 
         return back()->with('success', 'Payment rejected.');
+    }
+
+    /**
+     * @return array{shops: \Illuminate\Support\Collection, openInvoices: \Illuminate\Support\Collection}
+     */
+    private function formData(Request $request): array
+    {
+        return [
+            'shops' => Shop::query()
+                ->where('status', '!=', Shop::STATUS_REJECTED)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code', 'outstanding_balance']),
+            'openInvoices' => Invoice::query()
+                ->whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])
+                ->with(['shop:id,name', 'order:id,number,advance_invoice_id'])
+                ->latest()
+                ->get(),
+            'prefillInvoiceId' => $request->integer('invoice_id') ?: null,
+            'prefillShopId' => $request->integer('shop_id') ?: null,
+        ];
     }
 }

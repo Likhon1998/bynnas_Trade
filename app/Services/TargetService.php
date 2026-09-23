@@ -100,8 +100,27 @@ class TargetService
             ->where('status', Payment::STATUS_VERIFIED)
             ->whereBetween('verified_at', [$start, $end])
             ->where(function ($q) use ($target) {
-                $q->whereHas('invoice.order', fn ($o) => $o->where('salesman_id', $target->salesman_id))
-                    ->orWhereHas('invoice.shop', fn ($s) => $s->where('assigned_salesman_id', $target->salesman_id));
+                $sid = $target->salesman_id;
+
+                // Prefer order salesman when present (exclusive attribution).
+                $q->whereHas('invoice.order', fn ($o) => $o->where('salesman_id', $sid))
+                    ->orWhere(function ($fallback) use ($sid) {
+                        // Shop / payment shop only when the linked order has no salesman.
+                        $fallback->where(function ($noOrderSalesman) {
+                            $noOrderSalesman
+                                ->whereDoesntHave('invoice')
+                                ->orWhereHas('invoice', function ($inv) {
+                                    $inv->where(function ($i) {
+                                        $i->whereNull('order_id')
+                                            ->orWhereHas('order', fn ($o) => $o->whereNull('salesman_id'));
+                                    });
+                                });
+                        })->where(function ($shopAttr) use ($sid) {
+                            $shopAttr
+                                ->whereHas('invoice.shop', fn ($s) => $s->where('assigned_salesman_id', $sid))
+                                ->orWhereHas('shop', fn ($s) => $s->where('assigned_salesman_id', $sid));
+                        });
+                    });
             })
             ->sum('amount');
 

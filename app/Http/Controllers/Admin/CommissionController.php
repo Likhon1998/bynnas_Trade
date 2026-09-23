@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Commission;
 use App\Models\CommissionRule;
+use App\Models\Payment;
 use App\Services\CommissionService;
 use Illuminate\Http\Request;
 
@@ -17,7 +18,7 @@ class CommissionController extends Controller
         abort_unless($request->user()->can('commissions.view'), 403);
 
         $commissions = Commission::query()
-            ->with(['salesman', 'payment', 'invoice'])
+            ->with(['salesman', 'payment', 'invoice', 'order'])
             ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->when($request->type, fn ($q, $type) => $q->where('type', $type))
             ->when($request->year, fn ($q, $year) => $q->where('year', $year))
@@ -26,10 +27,29 @@ class CommissionController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        $unlinked = Payment::query()
+            ->where('status', Payment::STATUS_VERIFIED)
+            ->whereDoesntHave('commissions', fn ($q) => $q->where('type', Commission::TYPE_COLLECTION))
+            ->count();
+
         return view('admin.commissions.index', [
             'commissions' => $commissions,
             'rule' => CommissionRule::activeDefault(),
+            'pipeline' => $this->commissions->pipelineTotals(),
+            'unlinkedPayments' => $unlinked,
         ]);
+    }
+
+    public function sync(Request $request)
+    {
+        abort_unless($request->user()->can('commissions.manage'), 403);
+
+        $result = $this->commissions->syncFromVerifiedPayments($request->user());
+
+        return back()->with(
+            'success',
+            "Commission sync complete · {$result['created']} accrued · {$result['existing']} already linked · {$result['skipped']} skipped (no salesman)."
+        );
     }
 
     public function updateRule(Request $request)

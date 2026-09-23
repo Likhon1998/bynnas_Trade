@@ -52,6 +52,22 @@ class AppNotificationService
         );
     }
 
+    public function commissionAccrued(\App\Models\Commission $commission): void
+    {
+        $commission->loadMissing(['salesman', 'payment']);
+
+        $this->notifyAdmins(
+            "Commission {$commission->number} accrued",
+            ($commission->salesman?->name ?: 'Salesman')
+                .' · '.$commission->typeLabel()
+                .' · ৳ '.number_format((float) $commission->commission_amount, 2)
+                .($commission->payment ? ' · '.$commission->payment->number : ''),
+            '/admin/commissions?status=accrued',
+            'commissions',
+            'info',
+        );
+    }
+
     public function returnSubmitted(ProductReturn $return): void
     {
         $this->notifyAdmins(

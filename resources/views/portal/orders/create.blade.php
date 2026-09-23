@@ -11,7 +11,7 @@
     @endif
 
     <div class="card" style="padding:14px;margin-bottom:14px;background:#fff7ed;color:#9a3412;font-size:13px">
-        Orders go to Super Admin audit first. Stock is reserved only after approval. Available credit: <strong>{{ \App\Support\DemoData::taka($shop->availableCredit()) }}</strong>
+        Orders go to Super Admin audit first. Stock is reserved only after approval.
     </div>
 
     <form class="card" style="padding:16px" method="post" action="{{ route('portal.orders.store') }}">

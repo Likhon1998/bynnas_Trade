@@ -9,7 +9,7 @@
         posters: @js($posters),
         shopId: {{ (int) $shop->id }},
         shopName: @js($shop->name),
-        creditLabel: @js(\App\Support\DemoData::taka($credit)),
+        creditLabel: '',
         storeUrl: @js($storeUrl),
         csrf: @js(csrf_token()),
         search: @js($initialSearch),
@@ -80,7 +80,7 @@
 
     <div class="ecom-meta">
         <span x-text="filteredCountLabel()"></span>
-        <span class="muted">Credit {{ \App\Support\DemoData::taka($credit) }}</span>
+        <span class="muted">Order any quantity you need</span>
     </div>
 
     {{-- Product grid --}}

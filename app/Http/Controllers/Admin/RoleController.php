@@ -23,7 +23,10 @@ class RoleController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('admin.roles.index', compact('roles'));
+        return view('admin.roles.index', [
+            'roles' => $roles,
+            'presetDescriptions' => PermissionCatalog::rolePresetDescriptions(),
+        ]);
     }
 
     public function create()
@@ -32,6 +35,8 @@ class RoleController extends Controller
 
         return view('admin.roles.create', [
             'modules' => PermissionCatalog::modules(),
+            'presets' => PermissionCatalog::rolePresets(),
+            'presetDescriptions' => PermissionCatalog::rolePresetDescriptions(),
         ]);
     }
 
@@ -58,6 +63,8 @@ class RoleController extends Controller
             'role' => $role,
             'modules' => PermissionCatalog::modules(),
             'selected' => $role->permissions->pluck('name')->all(),
+            'presets' => PermissionCatalog::rolePresets(),
+            'presetDescriptions' => PermissionCatalog::rolePresetDescriptions(),
         ]);
     }
 

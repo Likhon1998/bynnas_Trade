@@ -3,24 +3,24 @@
 @section('title', 'Edit user')
 
 @section('content')
-    <x-page-header title="Edit user" subtitle="{{ $user->email }}" />
+    <x-page-header title="Edit user" subtitle="{{ $user->email }}">
+        <x-slot:description>Change roles to update access. Permission overrides stay on this user only.</x-slot:description>
+    </x-page-header>
 
-    <div class="card" style="padding:22px;max-width:960px;margin-bottom:16px">
-        <form class="form-grid" action="{{ route('users.update', $user) }}" method="post">
-            @csrf
-            @method('PUT')
-            @include('admin.users._form', ['user' => $user, 'selectedPermissions' => old('permissions', $selectedPermissions)])
-            <div class="form-span" style="display:flex;gap:8px;justify-content:flex-end">
-                <a class="btn btn-ghost" href="{{ route('users.index') }}">Cancel</a>
-                <button class="btn btn-primary" type="submit">Save changes</button>
-            </div>
-        </form>
-    </div>
+    <form class="rbac-shell" action="{{ route('users.update', $user) }}" method="post" style="margin-bottom:16px">
+        @csrf
+        @method('PUT')
+        @include('admin.users._form', ['user' => $user, 'selectedPermissions' => old('permissions', $selectedPermissions)])
+        <div class="rbac-actions">
+            <a class="btn btn-ghost" href="{{ route('users.index') }}">Cancel</a>
+            <button class="btn btn-primary" type="submit">Save changes</button>
+        </div>
+    </form>
 
     @can('users.reset_password')
-        <div class="card" style="padding:22px;max-width:960px">
+        <div class="card" style="padding:22px">
             <div class="section-title" style="margin-bottom:12px">Reset credentials</div>
-            <form class="form-grid" action="{{ route('users.reset-password', $user) }}" method="post">
+            <form class="form-grid" action="{{ route('users.reset-password', $user) }}" method="post" style="max-width:640px">
                 @csrf
                 <div>
                     <label class="label">New password</label>

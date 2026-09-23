@@ -72,20 +72,21 @@ class Phase8Seeder extends Seeder
             // Backfill commission for already-verified payments linked to salesman orders.
             Payment::query()
                 ->where('status', Payment::STATUS_VERIFIED)
-                ->with(['invoice.order', 'invoice.shop'])
+                ->with(['invoice.order', 'invoice.shop', 'shop'])
                 ->get()
-                ->each(function (Payment $payment) use ($commissions, $admin, $salesman) {
+                ->each(function (Payment $payment) use ($salesman) {
                     $order = $payment->invoice?->order;
                     if ($order && ! $order->salesman_id) {
                         $order->update(['salesman_id' => $salesman->id]);
-                        $payment->load('invoice.order');
                     }
-                    try {
-                        $commissions->accrueFromPayment($payment->fresh(['invoice.order', 'invoice.shop']), $admin);
-                    } catch (\Throwable) {
-                        // skip
+                    $shop = $payment->invoice?->shop ?: $payment->shop;
+                    if ($shop && ! $shop->assigned_salesman_id) {
+                        $shop->update(['assigned_salesman_id' => $salesman->id]);
                     }
                 });
+
+            $sync = $commissions->syncFromVerifiedPayments($admin);
+            unset($sync);
 
             $targets->recalculatePeriod($year, $month);
 

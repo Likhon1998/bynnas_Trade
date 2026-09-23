@@ -3,16 +3,16 @@
 @section('title', 'Invite user')
 
 @section('content')
-    <x-page-header title="Invite user" subtitle="Create account, role, scope and optional permission overrides" />
+    <x-page-header title="Invite user" subtitle="Account, role and access in one place">
+        <x-slot:description>Choose a role and the matching permissions appear automatically. Add overrides only if this person needs extras.</x-slot:description>
+    </x-page-header>
 
-    <div class="card" style="padding:22px;max-width:960px">
-        <form class="form-grid" action="{{ route('users.store') }}" method="post">
-            @csrf
-            @include('admin.users._form', ['user' => null, 'selectedPermissions' => old('permissions', [])])
-            <div class="form-span" style="display:flex;gap:8px;justify-content:flex-end">
-                <a class="btn btn-ghost" href="{{ route('users.index') }}">Cancel</a>
-                <button class="btn btn-primary" type="submit">Create user</button>
-            </div>
-        </form>
-    </div>
+    <form class="rbac-shell" action="{{ route('users.store') }}" method="post">
+        @csrf
+        @include('admin.users._form', ['user' => null, 'selectedPermissions' => old('permissions', [])])
+        <div class="rbac-actions">
+            <a class="btn btn-ghost" href="{{ route('users.index') }}">Cancel</a>
+            <button class="btn btn-primary" type="submit">Create user</button>
+        </div>
+    </form>
 @endsection

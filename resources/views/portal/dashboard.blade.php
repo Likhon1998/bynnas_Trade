@@ -7,10 +7,10 @@
     </div>
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([
-            ['Credit limit', \App\Support\DemoData::taka($shop->credit_limit)],
-            ['Outstanding', \App\Support\DemoData::taka($shop->outstanding_balance)],
-            ['Available credit', \App\Support\DemoData::taka($shop->availableCredit())],
+            ['Outstanding due', \App\Support\DemoData::taka($shop->outstanding_balance)],
             ['Pending audit', number_format($pendingOrders)],
+            ['Price group', $shop->priceGroup?->name ?: 'Standard'],
+            ['Payment terms', ($shop->payment_terms_days ?: 21).' days'],
         ] as $card)
             <div class="card" style="padding:16px">
                 <div class="muted">{{ $card[0] }}</div>

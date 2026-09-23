@@ -19,7 +19,7 @@
 
     <div class="card" style="padding:14px;margin-bottom:14px;background:#fff7ed;color:#9a3412;font-size:13px">
         You can change quantities and notes until Super Admin approves. Stock is not reserved yet.
-        Available credit: <strong>{{ \App\Support\DemoData::taka($shop->availableCredit()) }}</strong>
+        Edit quantities below, then save. Changes stay in audit until Super Admin approves.
     </div>
 
     <form class="card" style="padding:16px" method="post" action="{{ route('portal.orders.update', $order) }}">

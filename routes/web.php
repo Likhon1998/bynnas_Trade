@@ -216,9 +216,11 @@ Route::prefix('admin')->group(function () {
         // Phase 7 — Invoices, payments, credit, returns
         Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::get('/invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
         Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeFromOrder'])->name('orders.invoice');
 
         Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+        Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
         Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
         Route::post('/payments/{payment}/verify', [PaymentController::class, 'verify'])->name('payments.verify');
         Route::post('/payments/{payment}/reject', [PaymentController::class, 'reject'])->name('payments.reject');
@@ -237,6 +239,7 @@ Route::prefix('admin')->group(function () {
         Route::post('/targets/{target}/recalculate', [TargetController::class, 'recalculate'])->name('targets.recalculate');
 
         Route::get('/commissions', [CommissionController::class, 'index'])->name('commissions.index');
+        Route::post('/commissions/sync', [CommissionController::class, 'sync'])->name('commissions.sync');
         Route::post('/commissions/rule', [CommissionController::class, 'updateRule'])->name('commissions.rule');
         Route::post('/commissions/{commission}/approve', [CommissionController::class, 'approve'])->name('commissions.approve');
         Route::post('/commissions/{commission}/pay', [CommissionController::class, 'pay'])->name('commissions.pay');

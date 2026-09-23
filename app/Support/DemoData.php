@@ -4,8 +4,9 @@ namespace App\Support;
 
 class DemoData
 {
-    public static function taka(int|float $amount): string
+    public static function taka(int|float|string|null $amount): string
     {
+        $amount = (float) ($amount ?? 0);
         $n = (string) abs((int) round($amount));
         $last3 = substr($n, -3);
         $rest = substr($n, 0, -3);

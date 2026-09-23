@@ -193,4 +193,94 @@ class PermissionCatalog
 
         return self::modules()[$module][$action] ?? $permission;
     }
+
+    /**
+     * Recommended permission sets keyed by system role name.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function rolePresets(): array
+    {
+        $all = self::all();
+
+        return [
+            'Super Admin' => $all,
+            'Admin' => array_values(array_filter(
+                $all,
+                fn (string $p) => $p !== 'roles.delete' && ! str_starts_with($p, 'permissions.')
+            )),
+            'Sales Manager' => [
+                'shops.view', 'shops.create', 'shops.edit', 'shops.approve', 'shops.manage_credentials',
+                'salesmen.view', 'salesmen.create', 'salesmen.edit',
+                'visits.view', 'visits.create', 'visits.edit',
+                'orders.view', 'orders.create', 'orders.edit', 'orders.approve', 'orders.reject', 'orders.cancel', 'orders.export',
+                'products.view', 'products.create', 'products.edit', 'categories.view', 'categories.create',
+                'price_groups.view', 'reports.view', 'analytics.view', 'targets.view', 'targets.manage', 'commissions.view', 'rewards.view',
+            ],
+            'Salesman' => [
+                'shops.view', 'visits.view', 'visits.create', 'visits.edit',
+                'orders.view', 'orders.create', 'products.view',
+                'targets.view', 'commissions.view', 'rewards.view', 'deliveries.view',
+            ],
+            'Warehouse Manager' => [
+                'warehouses.view', 'warehouses.create', 'warehouses.edit',
+                'inventory.view', 'inventory.receive', 'inventory.adjust', 'inventory.transfer',
+                'fulfilment.view', 'fulfilment.pick', 'fulfilment.pack', 'fulfilment.dispatch',
+                'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.receive',
+                'suppliers.view', 'purchases.view', 'purchases.create',
+                'orders.view', 'products.view', 'products.manage_stock',
+                'deliveries.view', 'deliveries.assign', 'deliveries.update_status',
+            ],
+            'Warehouse Staff' => [
+                'warehouses.view', 'inventory.view', 'inventory.receive',
+                'fulfilment.view', 'fulfilment.pick', 'fulfilment.pack',
+                'orders.view', 'products.view', 'shipments.view', 'shipments.receive', 'deliveries.view',
+            ],
+            'Finance Manager' => [
+                'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.export',
+                'payments.view', 'payments.create', 'payments.verify',
+                'orders.view', 'shops.view', 'returns.view', 'returns.approve',
+                'reports.view', 'analytics.view', 'commissions.view', 'commissions.approve', 'commissions.manage',
+                'targets.view', 'targets.manage', 'rewards.view', 'rewards.manage', 'rewards.approve',
+            ],
+            'Delivery Manager' => [
+                'deliveries.view', 'deliveries.assign', 'deliveries.update_status',
+                'fulfilment.view', 'fulfilment.dispatch',
+                'orders.view', 'shops.view',
+            ],
+            'Delivery Staff' => [
+                'deliveries.view', 'deliveries.update_status', 'orders.view', 'fulfilment.view',
+            ],
+            'Shop Owner' => [
+                'orders.view', 'orders.create', 'products.view',
+                'invoices.view', 'payments.view', 'returns.view', 'returns.create',
+            ],
+            'Accountant' => [
+                'invoices.view', 'invoices.export', 'payments.view', 'payments.verify',
+                'reports.view', 'analytics.view', 'shops.view', 'orders.view',
+            ],
+        ];
+    }
+
+    /**
+     * Short descriptions for role preset picker UI.
+     *
+     * @return array<string, string>
+     */
+    public static function rolePresetDescriptions(): array
+    {
+        return [
+            'Super Admin' => 'Full system access including roles and permissions.',
+            'Admin' => 'Broad admin access without deleting roles or managing the permission catalog.',
+            'Sales Manager' => 'Shops, sales team, orders, pricing overview and sales reporting.',
+            'Salesman' => 'Field sales: shop visits, create orders, view targets and commissions.',
+            'Warehouse Manager' => 'Warehouses, stock, fulfilment, shipments and purchases.',
+            'Warehouse Staff' => 'Pick, pack, receive stock and view related orders.',
+            'Finance Manager' => 'Invoices, payments, returns approval and financial reports.',
+            'Delivery Manager' => 'Assign and track deliveries and dispatch.',
+            'Delivery Staff' => 'Update delivery status for assigned routes.',
+            'Shop Owner' => 'Shop portal: place orders, view invoices and payments.',
+            'Accountant' => 'Read invoices/payments and export financial reports.',
+        ];
+    }
 }

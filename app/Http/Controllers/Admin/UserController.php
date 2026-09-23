@@ -44,7 +44,7 @@ class UserController extends Controller
         $this->authorize('users.create');
 
         return view('admin.users.create', [
-            'roles' => Role::query()->orderBy('name')->get(),
+            'roles' => Role::query()->with('permissions')->orderBy('name')->get(),
             'modules' => PermissionCatalog::modules(),
             'scopeTypes' => $this->scopeTypes(),
         ]);
@@ -91,7 +91,7 @@ class UserController extends Controller
 
         return view('admin.users.edit', [
             'user' => $user,
-            'roles' => Role::query()->orderBy('name')->get(),
+            'roles' => Role::query()->with('permissions')->orderBy('name')->get(),
             'modules' => PermissionCatalog::modules(),
             'scopeTypes' => $this->scopeTypes(),
             'selectedPermissions' => $user->getDirectPermissions()->pluck('name')->all(),

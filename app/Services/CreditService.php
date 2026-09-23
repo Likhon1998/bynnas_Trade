@@ -53,38 +53,13 @@ class CreditService
 
     public function enforceCreditHold(Shop $shop): Shop
     {
-        if ($shop->status === Shop::STATUS_REJECTED || $shop->status === Shop::STATUS_PENDING) {
-            return $shop;
-        }
-
-        $overLimit = (float) $shop->outstanding_balance > (float) $shop->credit_limit;
-
-        if ($overLimit && $shop->status === Shop::STATUS_ACTIVE) {
-            $shop->update(['status' => Shop::STATUS_ON_HOLD]);
-            $this->auditLogger->log('credit', 'hold', "Shop {$shop->code} put on hold — credit exceeded", $shop);
-        }
-
-        if (! $overLimit && $shop->status === Shop::STATUS_ON_HOLD) {
-            $shop->update(['status' => Shop::STATUS_ACTIVE]);
-            $this->auditLogger->log('credit', 'release', "Shop {$shop->code} credit hold released", $shop);
-        }
-
-        return $shop->fresh();
+        // Credit limit is informational only — shops are not blocked from buying.
+        return $shop;
     }
 
     public function assertCanOrder(Shop $shop, float $orderTotal, bool $override = false): void
     {
-        if ($shop->status === Shop::STATUS_ON_HOLD && ! $override) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'credit' => 'Shop is on credit hold. Clear outstanding or override with permission.',
-            ]);
-        }
-
-        if ($orderTotal > $shop->availableCredit() && ! $override) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'credit' => 'Insufficient available credit (৳ '.number_format($shop->availableCredit(), 2).').',
-            ]);
-        }
+        // No available-balance gate: any shop may order any quantity.
     }
 
     public function syncAllShops(): void

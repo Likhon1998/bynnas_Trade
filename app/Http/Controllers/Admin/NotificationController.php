@@ -9,12 +9,27 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
+        $filter = $request->get('filter', 'all'); // all | unread | read
+
         $notifications = $request->user()
             ->notifications()
+            ->when($filter === 'unread', fn ($q) => $q->whereNull('read_at'))
+            ->when($filter === 'read', fn ($q) => $q->whereNotNull('read_at'))
+            ->when($request->search, function ($q, $search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('data->title', 'like', "%{$search}%")
+                        ->orWhere('data->body', 'like', "%{$search}%")
+                        ->orWhere('data->category', 'like', "%{$search}%");
+                });
+            })
             ->latest()
-            ->paginate(30);
+            ->paginate(40)
+            ->withQueryString();
 
-        return view('admin.notifications.index', compact('notifications'));
+        $unreadCount = $request->user()->unreadNotifications()->count();
+        $totalCount = $request->user()->notifications()->count();
+
+        return view('admin.notifications.index', compact('notifications', 'filter', 'unreadCount', 'totalCount'));
     }
 
     public function markRead(Request $request, string $id)
@@ -27,7 +42,6 @@ class NotificationController extends Controller
             return back();
         }
 
-        // Relative paths (preferred) and same-app absolute URLs both stay on this host.
         if (str_starts_with($url, '/')) {
             return redirect()->to($url);
         }

@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\OrderService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class OrderController extends Controller
 {
@@ -28,8 +33,6 @@ class OrderController extends Controller
             ->limit(500)
             ->get();
 
-        $user = $request->user();
-
         $rows = $orders->map(fn (Order $order) => [
             'id' => $order->id,
             'number' => $order->number,
@@ -45,11 +48,8 @@ class OrderController extends Controller
             'status_label' => $order->statusLabel(),
             'status_badge' => $this->statusBadgeClass($order),
             'advance_paid' => $order->isAwaitingAdvance() && $order->isAdvancePaid(),
+            'show_url' => route('orders.show', $order, false),
         ])->values();
-
-        $previews = $orders->mapWithKeys(
-            fn (Order $order) => [$order->id => $this->previewPayload($order, $user)]
-        );
 
         $initialFilters = [
             'search' => (string) $request->get('search', ''),
@@ -59,7 +59,7 @@ class OrderController extends Controller
             'source' => (string) $request->get('source', ''),
         ];
 
-        return view('admin.orders.index', compact('rows', 'pendingCount', 'previews', 'initialFilters'));
+        return view('admin.orders.index', compact('rows', 'pendingCount', 'initialFilters'));
     }
 
     public function create(Request $request)
@@ -123,15 +123,45 @@ class OrderController extends Controller
     {
         $this->authorize('view', $order);
 
-        $order->load([
+        $user = request()->user();
+        $payload = $this->previewPayload($order, $user);
+        $snapshot = $this->orders->auditSnapshot($order);
+        $purchase = $payload['purchase'];
+
+        $order->loadMissing([
             'shop.priceGroup', 'salesman', 'visit', 'items.product',
             'creator', 'auditor', 'canceller', 'statusHistories.user',
-            'warehouse', 'fulfilment.delivery', 'invoice',
+            'warehouse', 'fulfilment.delivery',
+            'invoice.items', 'invoice.payments', 'invoice.shop', 'invoice.creator', 'invoice.order',
+            'advanceInvoice.items', 'advanceInvoice.payments', 'advanceInvoice.shop',
+            'advanceInvoice.creator', 'advanceInvoice.order',
         ]);
 
-        $snapshot = $this->orders->auditSnapshot($order);
+        $invoicePreviews = collect();
+        if ($order->advanceInvoice) {
+            $order->advanceInvoice->setRelation('order', $order);
+            $invoicePreviews->push([
+                'title' => 'Advance invoice',
+                'invoice' => $order->advanceInvoice,
+                'kind' => 'Advance Invoice',
+            ]);
+        }
+        if ($order->invoice && (int) $order->invoice_id !== (int) $order->advance_invoice_id) {
+            $order->invoice->setRelation('order', $order);
+            $invoicePreviews->push([
+                'title' => 'Sales invoice',
+                'invoice' => $order->invoice,
+                'kind' => 'Sales Invoice',
+            ]);
+        }
 
-        return view('admin.orders.show', compact('order', 'snapshot'));
+        return view('admin.orders.show', [
+            'order' => $order,
+            'snapshot' => $snapshot,
+            'purchase' => $purchase,
+            'payload' => $payload,
+            'invoicePreviews' => $invoicePreviews,
+        ]);
     }
 
     public function preview(Order $order)
@@ -220,16 +250,24 @@ class OrderController extends Controller
         );
 
         $order->refresh();
+        $settlement = $order->settlement();
 
         $msg = $order->isAdvancePaid()
-            ? 'Advance received for '.$order->number.' — status is now '.$order->statusLabel().'.'
-            : 'Partial advance recorded for '.$order->number.'. Remaining balance still due.';
+            ? 'Advance received for '.$order->number
+                .' — remaining '.\App\Support\DemoData::taka($settlement['remaining_due'])
+                .' still due on final invoice. Status: '.$order->statusLabel().'.'
+            : 'Partial advance recorded for '.$order->number
+                .'. Advance still due: '.\App\Support\DemoData::taka($order->advanceInvoice?->balance)
+                .'. Remaining after full advance: '.\App\Support\DemoData::taka($settlement['remaining_due']).'.';
 
         return $this->redirectAfterAudit(
             $request,
             $order,
             $msg,
             $order->isAdvancePaid() ? 'advance_paid' : 'advance_partial',
+            $order->advance_invoice_id
+                ? route('invoices.download', $order->advance_invoice_id)
+                : null,
         );
     }
 
@@ -305,7 +343,13 @@ class OrderController extends Controller
      */
     private function previewPayload(Order $order, ?User $user = null): array
     {
-        $order->loadMissing(['shop', 'salesman', 'items.product', 'advanceInvoice']);
+        $order->loadMissing([
+            'shop', 'salesman', 'items.product', 'advanceInvoice', 'invoice',
+            'statusHistories.user', 'warehouse',
+            'fulfilment.delivery.assignee', 'fulfilment.warehouse',
+            'fulfilment.picker', 'fulfilment.packer', 'fulfilment.dispatcher',
+            'auditor', 'creator', 'canceller',
+        ]);
         $snapshot = $this->orders->auditSnapshot($order);
 
         $statusTone = match ($order->status) {
@@ -321,6 +365,9 @@ class OrderController extends Controller
         $advanceBalance = $order->advanceInvoice
             ? (float) $order->advanceInvoice->balance
             : (float) ($order->advance_amount ?: 0);
+
+        $settlement = $order->settlement();
+        $dossier = $this->purchaseDossier($order);
 
         return [
             'id' => $order->id,
@@ -347,9 +394,18 @@ class OrderController extends Controller
             'advance_balance' => \App\Support\DemoData::taka($advanceBalance),
             'advance_balance_raw' => round($advanceBalance, 2),
             'advance_invoice_number' => $order->advanceInvoice?->number,
+            'settlement' => [
+                'order_total' => \App\Support\DemoData::taka($settlement['order_total']),
+                'advance_paid' => \App\Support\DemoData::taka($settlement['advance_paid']),
+                'remaining_due' => \App\Support\DemoData::taka($settlement['remaining_due']),
+                'remaining_due_raw' => $settlement['remaining_due'],
+                'has_advance' => $settlement['has_advance'],
+                'advance_cleared' => $settlement['advance_cleared'],
+                'fully_settled' => $settlement['fully_settled'],
+            ],
             'payment_url' => $order->advance_invoice_id
-                ? url('/admin/payments?invoice_id='.$order->advance_invoice_id)
-                : url('/admin/payments'),
+                ? url('/admin/payments/create?invoice_id='.$order->advance_invoice_id)
+                : url('/admin/payments/create'),
             'collect_advance_url' => $order->isAwaitingAdvance() && ! $advancePaid
                 ? route('orders.collect-advance', $order, false)
                 : null,
@@ -366,6 +422,8 @@ class OrderController extends Controller
                 'credit_available' => \App\Support\DemoData::taka($snapshot['credit_available']),
                 'stock_ok' => $snapshot['stock_ok'],
             ],
+            'purchase' => $dossier,
+            'payment_history' => $dossier['payments'],
             'items' => $order->items->map(function ($item) {
                 $available = $item->product?->availableStock() ?? ($item->available_at_audit ?? 0);
                 $ok = $available >= $item->quantity || $item->reserved_quantity > 0;
@@ -381,6 +439,281 @@ class OrderController extends Controller
                     'ok' => $ok,
                 ];
             })->values(),
+        ];
+    }
+
+    /**
+     * Full purchase dossier for the History panel: timeline, invoices, payments.
+     *
+     * @return array{summary:array, timeline:list<array>, invoices:list<array>, payments:list<array>, event_count:int}
+     */
+    private function purchaseDossier(Order $order): array
+    {
+        $invoiceIds = array_values(array_filter([
+            $order->advance_invoice_id,
+            $order->invoice_id,
+        ]));
+
+        $payments = $invoiceIds === []
+            ? collect()
+            : Payment::query()
+                ->with(['invoice', 'verifier', 'creator'])
+                ->whereIn('invoice_id', $invoiceIds)
+                ->latest('paid_at')
+                ->latest('id')
+                ->get();
+
+        $invoices = collect();
+        if ($order->advanceInvoice) {
+            $invoices->push($this->invoiceCard($order->advanceInvoice, 'Advance invoice'));
+        }
+        if ($order->invoice && (int) $order->invoice_id !== (int) $order->advance_invoice_id) {
+            $invoices->push($this->invoiceCard($order->invoice, 'Sales invoice'));
+        }
+
+        $timeline = $this->buildPurchaseTimeline($order, $payments);
+
+        return [
+            'summary' => [
+                'order' => $order->number,
+                'shop' => $order->shop?->name,
+                'shop_code' => $order->shop?->code,
+                'total' => \App\Support\DemoData::taka($order->total),
+                'status' => $order->statusLabel(),
+                'source' => ucfirst(str_replace('_', ' ', $order->source)),
+                'salesman' => $order->salesman?->name,
+                'lines' => (int) $order->item_count,
+            ],
+            'timeline' => $timeline,
+            'invoices' => $invoices->values()->all(),
+            'payments' => $payments->map(function (Payment $payment) use ($order) {
+                $kind = $payment->invoice_id && (int) $payment->invoice_id === (int) $order->advance_invoice_id
+                    ? 'Advance'
+                    : 'Invoice';
+                $paid = $this->stamp($payment->paid_at);
+                $verified = $this->stamp($payment->verified_at);
+
+                return [
+                    'id' => $payment->id,
+                    'number' => $payment->number,
+                    'kind' => $kind,
+                    'invoice' => $payment->invoice?->number,
+                    'amount' => \App\Support\DemoData::taka($payment->amount),
+                    'method' => $payment->methodLabel(),
+                    'reference' => $payment->reference,
+                    'status' => $payment->statusLabel(),
+                    'status_key' => $payment->status,
+                    'paid_at' => $paid['full'] ?? '—',
+                    'paid_day' => $paid['day'] ?? null,
+                    'paid_date' => $paid['date'] ?? null,
+                    'paid_time' => $paid['time'] ?? null,
+                    'verified_at' => $verified['full'] ?? null,
+                    'verified_day' => $verified['day'] ?? null,
+                    'verified_date' => $verified['date'] ?? null,
+                    'verified_time' => $verified['time'] ?? null,
+                    'recorded_by' => $payment->creator?->name,
+                    'verified_by' => $payment->verifier?->name,
+                    'notes' => $payment->notes,
+                ];
+            })->values()->all(),
+            'event_count' => count($timeline) + $invoices->count() + $payments->count(),
+        ];
+    }
+
+    /**
+     * @return array{title:string, number:string, status:string, status_key:string, total:string, paid:string, balance:string, issued:string|null, issued_day:?string, due:string|null, due_day:?string, notes:?string, link:?string}
+     */
+    private function invoiceCard(Invoice $invoice, string $title): array
+    {
+        $issued = $this->stamp($invoice->issued_at);
+        $dueFull = null;
+        $dueDay = null;
+        if ($invoice->due_at) {
+            $dueDt = Carbon::parse($invoice->due_at);
+            $dueDay = $dueDt->format('l');
+            $dueFull = $dueDt->format('l, d M Y');
+        }
+
+        return [
+            'title' => $title,
+            'number' => $invoice->number,
+            'status' => $invoice->statusLabel(),
+            'status_key' => $invoice->status,
+            'total' => \App\Support\DemoData::taka($invoice->total),
+            'paid' => \App\Support\DemoData::taka($invoice->paid_amount),
+            'balance' => \App\Support\DemoData::taka($invoice->balance),
+            'issued' => $issued['full'] ?? null,
+            'issued_day' => $issued['day'] ?? null,
+            'issued_date' => $issued['date'] ?? null,
+            'issued_time' => $issued['time'] ?? null,
+            'due' => $dueFull,
+            'due_day' => $dueDay,
+            'notes' => $invoice->notes,
+            'link' => route('invoices.show', $invoice, false),
+            'download' => route('invoices.download', $invoice, false),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Payment>  $payments
+     * @return list<array{at:string, day:?string, date:?string, time:?string, title:string, detail:?string, by:?string, tone:string}>
+     */
+    private function buildPurchaseTimeline(Order $order, Collection $payments): array
+    {
+        $events = collect();
+
+        $push = function (?Carbon $when, string $title, ?string $detail, ?string $by, string $tone) use ($events) {
+            if (! $when) {
+                return;
+            }
+            $stamp = $this->stamp($when);
+            $events->push([
+                'sort' => $when->timestamp,
+                'at' => $stamp['full'],
+                'day' => $stamp['day'],
+                'date' => $stamp['date'],
+                'time' => $stamp['time'],
+                'title' => $title,
+                'detail' => $detail,
+                'by' => $by,
+                'tone' => $tone,
+            ]);
+        };
+
+        $push($order->submitted_at, 'Order submitted', 'Source: '.ucfirst(str_replace('_', ' ', $order->source)).' · Total '.\App\Support\DemoData::taka($order->total), $order->creator?->name ?? $order->salesman?->name, 'info');
+        $advanceShown = $order->advance_amount ?? $order->advanceInvoice?->total;
+        $remainingAfterAdvance = max(0, round((float) $order->total - (float) ($advanceShown ?: 0), 2));
+        $push(
+            $order->advance_requested_at,
+            'Advance requested',
+            'Advance '.\App\Support\DemoData::taka($advanceShown)
+                .' of order '.\App\Support\DemoData::taka($order->total)
+                .' · Remaining after advance '.\App\Support\DemoData::taka($remainingAfterAdvance)
+                .($order->advanceInvoice ? ' · Invoice '.$order->advanceInvoice->number : ''),
+            $order->auditor?->name,
+            'warn',
+        );
+        $push(
+            $order->advance_paid_at,
+            'Advance paid in full',
+            'Advance '.\App\Support\DemoData::taka($advanceShown)
+                .' received'
+                .($order->advanceInvoice ? ' · Invoice '.$order->advanceInvoice->number : '')
+                .' · Remaining '.\App\Support\DemoData::taka($remainingAfterAdvance)
+                .' still due on final invoice',
+            null,
+            'ok',
+        );
+        $push($order->audited_at, 'Order approved · stock reserved', $order->warehouse?->name ? 'Warehouse: '.$order->warehouse->name : ($order->audit_notes ?: null), $order->auditor?->name, 'ok');
+
+        if ($order->status === Order::STATUS_REJECTED) {
+            $push($order->audited_at, 'Order rejected', $order->rejection_reason, $order->auditor?->name, 'bad');
+        }
+        $push($order->cancelled_at, 'Order cancelled', $order->cancellation_reason, $order->canceller?->name, 'muted');
+
+        foreach ($order->statusHistories as $history) {
+            /** @var OrderStatusHistory $history */
+            $label = $this->historyEventLabel($history);
+            $push(
+                $history->created_at,
+                $label,
+                $history->notes,
+                $history->user?->name,
+                $this->historyEventTone($history),
+            );
+        }
+
+        $f = $order->fulfilment;
+        if ($f) {
+            $push($f->picking_started_at, 'Picking started', $f->warehouse?->name, $f->picker?->name, 'info');
+            $push($f->picked_at, 'Picking completed', null, $f->picker?->name, 'ok');
+            $push($f->packed_at, 'Packed', null, $f->packer?->name, 'ok');
+            $push($f->dispatched_at, 'Dispatched from warehouse', null, $f->dispatcher?->name, 'ok');
+            $push($f->delivered_at, 'Delivered to shop', null, null, 'ok');
+        }
+
+        $d = $f?->delivery;
+        if ($d) {
+            $push($d->dispatched_at, 'Out for delivery', $d->tracking_ref ? 'Tracking '.$d->tracking_ref : $d->number, $d->assignee?->name, 'info');
+            $push($d->delivered_at, 'Delivery confirmed', $d->delivery_address, $d->assignee?->name, 'ok');
+        }
+
+        if ($order->advanceInvoice?->issued_at) {
+            $push($order->advanceInvoice->issued_at, 'Advance invoice issued', $order->advanceInvoice->number.' · '.\App\Support\DemoData::taka($order->advanceInvoice->total), null, 'info');
+        }
+        if ($order->invoice?->issued_at && (int) $order->invoice_id !== (int) $order->advance_invoice_id) {
+            $push($order->invoice->issued_at, 'Sales invoice issued', $order->invoice->number.' · '.\App\Support\DemoData::taka($order->invoice->total), null, 'info');
+        }
+
+        foreach ($payments as $payment) {
+            $kind = $payment->invoice_id && (int) $payment->invoice_id === (int) $order->advance_invoice_id
+                ? 'Advance payment'
+                : 'Invoice payment';
+            $push(
+                $payment->paid_at ?: $payment->created_at,
+                $kind.' · '.$payment->methodLabel(),
+                \App\Support\DemoData::taka($payment->amount)
+                    .($payment->reference ? ' · Ref '.$payment->reference : '')
+                    .' · '.$payment->statusLabel(),
+                $payment->creator?->name,
+                $payment->status === Payment::STATUS_VERIFIED ? 'ok' : ($payment->status === Payment::STATUS_REJECTED ? 'bad' : 'warn'),
+            );
+            if ($payment->verified_at && $payment->status === Payment::STATUS_VERIFIED) {
+                $push($payment->verified_at, 'Payment verified', $payment->number, $payment->verifier?->name, 'ok');
+            }
+        }
+
+        return $events
+            ->sortByDesc('sort')
+            ->unique(fn ($e) => $e['title'].'|'.$e['at'].'|'.($e['detail'] ?? ''))
+            ->values()
+            ->map(fn ($e) => collect($e)->except('sort')->all())
+            ->all();
+    }
+
+    private function historyEventLabel(OrderStatusHistory $history): string
+    {
+        return match ($history->event) {
+            'submitted_for_audit' => 'Submitted for audit',
+            'advance_requested' => 'Advance requested',
+            'advance_paid' => 'Advance marked paid',
+            'approved_reserved' => 'Approved & stock reserved',
+            'rejected' => 'Rejected',
+            'cancelled' => 'Cancelled',
+            'deleted_before_audit' => 'Deleted before approval',
+            'edited_before_audit' => 'Edited before audit',
+            default => $history->event
+                ? ucfirst(str_replace('_', ' ', $history->event))
+                : 'Status → '.ucfirst(str_replace('_', ' ', (string) $history->to_status)),
+        };
+    }
+
+    private function historyEventTone(OrderStatusHistory $history): string
+    {
+        return match ($history->event) {
+            'rejected', 'cancelled', 'deleted_before_audit' => 'bad',
+            'approved_reserved', 'advance_paid' => 'ok',
+            'advance_requested' => 'warn',
+            default => 'info',
+        };
+    }
+
+    /**
+     * @return array{full:string, day:string, date:string, time:string}|array{}
+     */
+    private function stamp(mixed $value): array
+    {
+        if (! $value) {
+            return [];
+        }
+
+        $dt = $value instanceof Carbon ? $value : Carbon::parse($value);
+
+        return [
+            'full' => $dt->timezone(config('app.timezone'))->format('l, d M Y · h:i A'),
+            'day' => $dt->timezone(config('app.timezone'))->format('l'),
+            'date' => $dt->timezone(config('app.timezone'))->format('d M Y'),
+            'time' => $dt->timezone(config('app.timezone'))->format('h:i A'),
         ];
     }
 
@@ -407,7 +740,7 @@ class OrderController extends Controller
         };
     }
 
-    private function redirectAfterAudit(Request $request, Order $order, string $message, string $result = 'updated')
+    private function redirectAfterAudit(Request $request, Order $order, string $message, string $result = 'updated', ?string $invoiceDownload = null)
     {
         $return = $request->input('return_url');
         $flash = [
@@ -417,14 +750,18 @@ class OrderController extends Controller
             'result' => $result,
         ];
 
-        if (is_string($return) && str_starts_with($return, '/admin/orders')) {
-            return redirect()->to($return)
-                ->with('success', $message)
-                ->with('status_flash', $flash);
-        }
+        $redirect = is_string($return) && str_starts_with($return, '/admin/orders')
+            ? redirect()->to($return)
+            : redirect()->route('orders.show', $order);
 
-        return redirect()->route('orders.show', $order)
+        $redirect = $redirect
             ->with('success', $message)
             ->with('status_flash', $flash);
+
+        if ($invoiceDownload) {
+            $redirect = $redirect->with('invoice_download', $invoiceDownload);
+        }
+
+        return $redirect;
     }
 }

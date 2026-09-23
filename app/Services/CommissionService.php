@@ -23,29 +23,51 @@ class CommissionService
             return null;
         }
 
-        if (Commission::query()->where('payment_id', $payment->id)->where('type', Commission::TYPE_COLLECTION)->exists()) {
-            return Commission::query()->where('payment_id', $payment->id)->where('type', Commission::TYPE_COLLECTION)->first();
-        }
+        $payment->loadMissing(['invoice.order.visit', 'invoice.shop', 'shop']);
 
-        $payment->loadMissing(['invoice.order', 'invoice.shop']);
-        $order = $payment->invoice?->order;
-        $salesmanId = $order?->salesman_id ?: $payment->invoice?->shop?->assigned_salesman_id;
+        return DB::transaction(function () use ($payment, $actor) {
+            $existing = Commission::query()
+                ->where('payment_id', $payment->id)
+                ->where('type', Commission::TYPE_COLLECTION)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $salesmanId) {
-            return null;
-        }
+            if ($existing) {
+                return $existing->load(['salesman', 'payment']);
+            }
 
-        $rule = CommissionRule::activeDefault();
-        $rate = (float) ($rule?->collection_rate_percent ?? 3.5);
-        $amount = round(((float) $payment->amount) * $rate / 100, 2);
-        $when = $payment->verified_at ?? now();
-        $year = (int) $when->year;
-        $month = (int) $when->month;
+            $salesmanId = $this->resolveSalesmanId($payment);
 
-        $salesman = User::query()->findOrFail($salesmanId);
-        $target = $this->targets->ensureForSalesman($salesman, $year, $month, $actor);
+            if (! $salesmanId) {
+                $this->auditLogger->log(
+                    'commissions',
+                    'skipped',
+                    "Commission skipped for {$payment->number} — no salesman on order/shop",
+                    $payment,
+                    null,
+                    ['payment_id' => $payment->id, 'shop_id' => $payment->shop_id],
+                    $actor,
+                );
 
-        return DB::transaction(function () use ($payment, $order, $salesmanId, $target, $rate, $amount, $year, $month, $actor) {
+                return null;
+            }
+
+            $rule = CommissionRule::activeDefault();
+            $rate = (float) ($rule?->collection_rate_percent ?? 3.5);
+            $amount = round(((float) $payment->amount) * $rate / 100, 2);
+
+            if ($amount <= 0) {
+                return null;
+            }
+
+            $when = $payment->verified_at ?? now();
+            $year = (int) $when->year;
+            $month = (int) $when->month;
+            $order = $payment->invoice?->order;
+
+            $salesman = User::query()->findOrFail($salesmanId);
+            $target = $this->targets->ensureForSalesman($salesman, $year, $month, $actor);
+
             $commission = Commission::query()->create([
                 'number' => $this->nextNumber(),
                 'salesman_id' => $salesmanId,
@@ -73,59 +95,105 @@ class CommissionService
                 "Commission {$commission->number} accrued",
                 $commission,
                 null,
-                ['amount' => $amount, 'payment_id' => $payment->id],
+                ['amount' => $amount, 'payment_id' => $payment->id, 'salesman_id' => $salesmanId],
                 $actor,
             );
+
+            try {
+                app(AppNotificationService::class)->commissionAccrued($commission->fresh(['salesman', 'payment']));
+            } catch (\Throwable) {
+                // non-blocking
+            }
 
             return $commission->fresh(['salesman', 'payment']);
         });
     }
 
+    /**
+     * Accrue any missing collection commissions for verified payments.
+     *
+     * @return array{created:int, skipped:int, existing:int}
+     */
+    public function syncFromVerifiedPayments(?User $actor = null): array
+    {
+        $created = 0;
+        $skipped = 0;
+        $existing = 0;
+
+        Payment::query()
+            ->where('status', Payment::STATUS_VERIFIED)
+            ->with(['invoice.order.visit', 'invoice.shop', 'shop'])
+            ->orderBy('id')
+            ->each(function (Payment $payment) use ($actor, &$created, &$skipped, &$existing) {
+                $had = Commission::query()
+                    ->where('payment_id', $payment->id)
+                    ->where('type', Commission::TYPE_COLLECTION)
+                    ->exists();
+
+                $result = $this->accrueFromPayment($payment, $actor);
+
+                if ($had) {
+                    $existing++;
+                } elseif ($result) {
+                    $created++;
+                } else {
+                    $skipped++;
+                }
+            });
+
+        return compact('created', 'skipped', 'existing');
+    }
+
     public function maybeAccrueTargetBonus(SalesTarget $target, ?User $actor = null): ?Commission
     {
-        if (! $target->target_met) {
-            return null;
-        }
+        return DB::transaction(function () use ($target, $actor) {
+            $target = SalesTarget::query()->lockForUpdate()->findOrFail($target->id);
 
-        $existing = Commission::query()
-            ->where('sales_target_id', $target->id)
-            ->where('type', Commission::TYPE_TARGET_BONUS)
-            ->whereNotIn('status', [Commission::STATUS_REJECTED])
-            ->first();
+            if (! $target->target_met) {
+                return null;
+            }
 
-        if ($existing) {
-            return $existing;
-        }
+            $existing = Commission::query()
+                ->where('sales_target_id', $target->id)
+                ->where('type', Commission::TYPE_TARGET_BONUS)
+                ->whereNotIn('status', [Commission::STATUS_REJECTED])
+                ->lockForUpdate()
+                ->first();
 
-        $rule = CommissionRule::activeDefault();
-        $rate = (float) ($rule?->target_bonus_percent ?? 1.0);
-        $base = (float) $target->collected_amount;
-        if ($base <= 0) {
-            $base = (float) $target->achieved_amount;
-        }
-        $amount = round($base * $rate / 100, 2);
-        if ($amount <= 0) {
-            return null;
-        }
+            if ($existing) {
+                return $existing;
+            }
 
-        $commission = Commission::query()->create([
-            'number' => $this->nextNumber(),
-            'salesman_id' => $target->salesman_id,
-            'sales_target_id' => $target->id,
-            'type' => Commission::TYPE_TARGET_BONUS,
-            'year' => $target->year,
-            'month' => $target->month,
-            'base_amount' => $base,
-            'rate_percent' => $rate,
-            'commission_amount' => $amount,
-            'status' => Commission::STATUS_ACCRUED,
-            'notes' => 'Target met bonus for '.$target->periodLabel(),
-            'created_by' => $actor?->id,
-        ]);
+            $rule = CommissionRule::activeDefault();
+            $rate = (float) ($rule?->target_bonus_percent ?? 1.0);
+            $base = (float) $target->collected_amount;
+            if ($base <= 0) {
+                $base = (float) $target->achieved_amount;
+            }
+            $amount = round($base * $rate / 100, 2);
+            if ($amount <= 0) {
+                return null;
+            }
 
-        $this->auditLogger->log('commissions', 'bonus', "Target bonus {$commission->number}", $commission, null, ['amount' => $amount], $actor);
+            $commission = Commission::query()->create([
+                'number' => $this->nextNumber(),
+                'salesman_id' => $target->salesman_id,
+                'sales_target_id' => $target->id,
+                'type' => Commission::TYPE_TARGET_BONUS,
+                'year' => $target->year,
+                'month' => $target->month,
+                'base_amount' => $base,
+                'rate_percent' => $rate,
+                'commission_amount' => $amount,
+                'status' => Commission::STATUS_ACCRUED,
+                'notes' => 'Target met bonus for '.$target->periodLabel(),
+                'created_by' => $actor?->id,
+            ]);
 
-        return $commission;
+            $this->auditLogger->log('commissions', 'bonus', "Target bonus {$commission->number}", $commission, null, ['amount' => $amount], $actor);
+
+            return $commission;
+        });
     }
 
     public function approve(Commission $commission, ?User $actor = null): Commission
@@ -147,15 +215,13 @@ class CommissionService
 
     public function markPaid(Commission $commission, ?User $actor = null): Commission
     {
-        if (! in_array($commission->status, [Commission::STATUS_APPROVED, Commission::STATUS_ACCRUED], true)) {
-            throw ValidationException::withMessages(['commission' => 'Commission cannot be marked paid.']);
+        if ($commission->status !== Commission::STATUS_APPROVED) {
+            throw ValidationException::withMessages(['commission' => 'Only approved commissions can be marked paid.']);
         }
 
         $commission->update([
             'status' => Commission::STATUS_PAID,
             'paid_at' => now(),
-            'approved_at' => $commission->approved_at ?? now(),
-            'approved_by' => $commission->approved_by ?? $actor?->id,
         ]);
 
         $this->auditLogger->log('commissions', 'paid', "Commission {$commission->number} paid", $commission, null, null, $actor);
@@ -167,6 +233,10 @@ class CommissionService
     {
         if ($commission->status === Commission::STATUS_PAID) {
             throw ValidationException::withMessages(['commission' => 'Paid commissions cannot be rejected.']);
+        }
+
+        if ($commission->status === Commission::STATUS_REJECTED) {
+            throw ValidationException::withMessages(['commission' => 'Commission is already rejected.']);
         }
 
         $commission->update([
@@ -181,10 +251,52 @@ class CommissionService
         return $commission->fresh();
     }
 
+    /**
+     * Order salesman → visit salesman → invoice shop → payment shop.
+     */
+    public function resolveSalesmanId(Payment $payment): ?int
+    {
+        $payment->loadMissing(['invoice.order.visit', 'invoice.shop', 'shop']);
+
+        $order = $payment->invoice?->order;
+
+        $id = $order?->salesman_id
+            ?: $order?->visit?->salesman_id
+            ?: $payment->invoice?->shop?->assigned_salesman_id
+            ?: $payment->shop?->assigned_salesman_id;
+
+        return $id ? (int) $id : null;
+    }
+
     public function nextNumber(): string
     {
         $seq = Commission::withTrashed()->count() + 1;
 
         return 'COM-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @return array{accrued:float, approved:float, paid:float, rejected:float, count_accrued:int, count_approved:int, count_paid:int}
+     */
+    public function pipelineTotals(): array
+    {
+        $rows = Commission::query()
+            ->selectRaw('status, COUNT(*) as cnt, COALESCE(SUM(commission_amount), 0) as total')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        $amount = fn (string $status) => (float) ($rows[$status]->total ?? 0);
+        $count = fn (string $status) => (int) ($rows[$status]->cnt ?? 0);
+
+        return [
+            'accrued' => $amount(Commission::STATUS_ACCRUED),
+            'approved' => $amount(Commission::STATUS_APPROVED),
+            'paid' => $amount(Commission::STATUS_PAID),
+            'rejected' => $amount(Commission::STATUS_REJECTED),
+            'count_accrued' => $count(Commission::STATUS_ACCRUED),
+            'count_approved' => $count(Commission::STATUS_APPROVED),
+            'count_paid' => $count(Commission::STATUS_PAID),
+        ];
     }
 }

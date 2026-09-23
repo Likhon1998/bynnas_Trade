@@ -284,14 +284,20 @@ class OrderService
         if (! $order->advance_paid_at) {
             $order->update(['advance_paid_at' => now()]);
 
+            $remaining = max(0, round((float) $order->total - (float) ($order->advance_amount ?: 0), 2));
+            $note = 'Advance payment received — remaining ৳ '.number_format($remaining, 2)
+                .' still due on final invoice / delivery. Order is ready to approve.';
+
             $this->recordHistory(
                 $order,
                 $order->status,
                 $order->status,
                 'advance_paid',
-                'Advance payment received — order is ready to approve.',
+                $note,
                 [
                     'advance_amount' => (float) $order->advance_amount,
+                    'remaining_due' => $remaining,
+                    'order_total' => (float) $order->total,
                     'invoice_id' => $order->advance_invoice_id,
                 ],
                 null,
@@ -300,10 +306,13 @@ class OrderService
             $this->auditLogger->log(
                 'orders',
                 'advance_paid',
-                "Advance paid for {$order->number} — ready to approve",
+                "Advance paid for {$order->number} — remaining ৳ ".number_format($remaining, 2).' acknowledged',
                 $order,
                 null,
-                ['advance_amount' => (float) $order->advance_amount],
+                [
+                    'advance_amount' => (float) $order->advance_amount,
+                    'remaining_due' => $remaining,
+                ],
                 null,
             );
         }
@@ -392,24 +401,6 @@ class OrderService
                 ]);
             }
 
-            if ($shop->status === \App\Models\Shop::STATUS_ON_HOLD && ! $creditOverride) {
-                throw ValidationException::withMessages([
-                    'credit' => 'Shop is on credit hold. Clear outstanding balance or use credit override.',
-                ]);
-            }
-
-            if ($order->total > $availableCredit && ! $creditOverride) {
-                throw ValidationException::withMessages([
-                    'credit' => 'Shop credit is insufficient (available ৳ '.number_format($availableCredit, 2).'). Enable credit override to approve anyway.',
-                ]);
-            }
-
-            if ($order->total > $availableCredit && $creditOverride && ! $actor->can('orders.approve')) {
-                throw ValidationException::withMessages([
-                    'credit' => 'You cannot override credit limits.',
-                ]);
-            }
-
             $stockIssues = [];
 
             foreach ($order->items as $item) {
@@ -459,7 +450,7 @@ class OrderService
                 'stock_reserved' => true,
                 'audit_notes' => $notes,
                 'credit_available_at_audit' => $availableCredit,
-                'credit_override' => $creditOverride && $order->total > $availableCredit,
+                'credit_override' => false,
                 'rejection_reason' => null,
             ]);
 
@@ -467,7 +458,7 @@ class OrderService
 
             $this->recordHistory($order, $from, Order::STATUS_APPROVED, 'approved_reserved', $notes, [
                 'credit_available' => $availableCredit,
-                'credit_override' => $order->credit_override,
+                'credit_override' => false,
                 'total' => (float) $order->total,
                 'warehouse_id' => $warehouse->id,
                 'advance_amount' => (float) ($order->advance_amount ?: 0),
@@ -655,7 +646,7 @@ class OrderService
         }
 
         return [
-            'credit_ok' => $order->total <= $creditAvailable,
+            'credit_ok' => true,
             'credit_available' => (float) $creditAvailable,
             'stock_ok' => $stockOk,
             'lines' => $lines,
