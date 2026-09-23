@@ -3,7 +3,7 @@
 @section('content')
     <div class="toolbar">
         <div class="page-kicker"><strong>Dashboard</strong> / Welcome, {{ auth()->user()->name }}</div>
-        <a class="btn btn-primary" href="{{ route('portal.orders.create') }}">Place order</a>
+        <a class="btn btn-primary" href="{{ route('portal.products') }}">Shop catalogue</a>
     </div>
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([

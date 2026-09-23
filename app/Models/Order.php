@@ -16,6 +16,8 @@ class Order extends Model
 
     public const STATUS_PENDING_AUDIT = 'pending_audit';
 
+    public const STATUS_AWAITING_ADVANCE = 'awaiting_advance';
+
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_PICKING = 'picking';
@@ -44,6 +46,8 @@ class Order extends Model
         'submitted_at', 'created_by', 'audited_by', 'audited_at',
         'stock_reserved_at', 'audit_notes', 'rejection_reason',
         'credit_available_at_audit', 'credit_override', 'stock_reserved',
+        'advance_required', 'advance_amount', 'advance_invoice_id',
+        'advance_requested_at', 'advance_paid_at',
         'cancelled_by', 'cancelled_at', 'cancellation_reason',
     ];
 
@@ -56,9 +60,13 @@ class Order extends Model
             'credit_available_at_audit' => 'decimal:2',
             'credit_override' => 'boolean',
             'stock_reserved' => 'boolean',
+            'advance_required' => 'boolean',
+            'advance_amount' => 'decimal:2',
             'submitted_at' => 'datetime',
             'audited_at' => 'datetime',
             'stock_reserved_at' => 'datetime',
+            'advance_requested_at' => 'datetime',
+            'advance_paid_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -86,6 +94,11 @@ class Order extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function advanceInvoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'advance_invoice_id');
     }
 
     public function salesman(): BelongsTo
@@ -128,6 +141,9 @@ class Order extends Model
         return match ($this->status) {
             self::STATUS_DRAFT => 'Draft',
             self::STATUS_PENDING_AUDIT => 'Pending Super Admin Audit',
+            self::STATUS_AWAITING_ADVANCE => $this->isAdvancePaid()
+                ? 'Advance Paid · Ready to Approve'
+                : 'Awaiting Advance Payment',
             self::STATUS_APPROVED => 'Approved · Stock Reserved',
             self::STATUS_PICKING => 'Picking',
             self::STATUS_PICKED => 'Picked',
@@ -145,14 +161,50 @@ class Order extends Model
         return $this->status === self::STATUS_PENDING_AUDIT;
     }
 
+    public function isAwaitingAdvance(): bool
+    {
+        return $this->status === self::STATUS_AWAITING_ADVANCE;
+    }
+
+    public function isAdvancePaid(): bool
+    {
+        if (! $this->advance_required) {
+            return true;
+        }
+
+        if ($this->advance_paid_at) {
+            return true;
+        }
+
+        $invoice = $this->relationLoaded('advanceInvoice')
+            ? $this->advanceInvoice
+            : $this->advanceInvoice()->first();
+
+        if (! $invoice) {
+            return false;
+        }
+
+        return (float) $invoice->balance <= 0.009;
+    }
+
+    public function canApproveNow(): bool
+    {
+        if ($this->isPendingAudit() && ! $this->advance_required) {
+            return true;
+        }
+
+        return $this->isAwaitingAdvance() && $this->isAdvancePaid();
+    }
+
     public function canPartnerEdit(): bool
     {
-        return $this->isPendingAudit() && ! $this->stock_reserved;
+        return $this->isPendingAudit() && ! $this->stock_reserved && ! $this->advance_required;
     }
 
     public function canDeleteBeforeApproval(): bool
     {
-        return $this->isPendingAudit() && ! $this->stock_reserved;
+        return in_array($this->status, [self::STATUS_PENDING_AUDIT, self::STATUS_AWAITING_ADVANCE], true)
+            && ! $this->stock_reserved;
     }
 
     public function isApproved(): bool

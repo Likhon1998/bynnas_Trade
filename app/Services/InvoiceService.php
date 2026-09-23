@@ -29,39 +29,64 @@ class InvoiceService
         }
 
         return DB::transaction(function () use ($order, $actor) {
-            $order = Order::query()->lockForUpdate()->with(['items', 'shop'])->findOrFail($order->id);
+            $order = Order::query()->lockForUpdate()->with(['items', 'shop', 'advanceInvoice'])->findOrFail($order->id);
 
             if ($order->invoice_id) {
                 return Invoice::query()->findOrFail($order->invoice_id);
             }
 
+            $advancePaid = 0.0;
+            if ($order->advance_invoice_id && $order->advanceInvoice) {
+                $advancePaid = min(
+                    (float) ($order->advance_amount ?: 0),
+                    (float) $order->advanceInvoice->paid_amount
+                );
+            }
+
+            $remaining = max(0, round((float) $order->total - $advancePaid, 2));
             $terms = (int) ($order->shop->payment_terms_days ?: 21);
+            $notes = 'Auto-raised from order '.$order->number;
+            if ($advancePaid > 0) {
+                $notes .= ' · Advance already paid ৳ '.number_format($advancePaid, 2);
+            }
 
             $invoice = Invoice::query()->create([
                 'number' => $this->nextNumber(),
                 'shop_id' => $order->shop_id,
                 'order_id' => $order->id,
-                'status' => Invoice::STATUS_ISSUED,
-                'subtotal' => $order->subtotal,
-                'discount_total' => $order->discount_total,
-                'total' => $order->total,
-                'paid_amount' => 0,
-                'balance' => $order->total,
+                'status' => $remaining <= 0.009 ? Invoice::STATUS_PAID : Invoice::STATUS_ISSUED,
+                'subtotal' => $remaining,
+                'discount_total' => 0,
+                'total' => $remaining,
+                'paid_amount' => $remaining <= 0.009 ? $remaining : 0,
+                'balance' => $remaining <= 0.009 ? 0 : $remaining,
                 'issued_at' => now(),
                 'due_at' => now()->addDays($terms)->toDateString(),
-                'notes' => 'Auto-raised from order '.$order->number,
+                'notes' => $notes,
                 'created_by' => $actor?->id,
             ]);
 
-            foreach ($order->items as $item) {
+            if ($remaining > 0.009) {
+                foreach ($order->items as $item) {
+                    InvoiceItem::query()->create([
+                        'invoice_id' => $invoice->id,
+                        'product_id' => $item->product_id,
+                        'product_name' => $item->product_name,
+                        'product_sku' => $item->product_sku,
+                        'quantity' => $item->quantity,
+                        'unit_price' => $item->unit_price,
+                        'line_total' => $item->line_total,
+                    ]);
+                }
+            } else {
                 InvoiceItem::query()->create([
                     'invoice_id' => $invoice->id,
-                    'product_id' => $item->product_id,
-                    'product_name' => $item->product_name,
-                    'product_sku' => $item->product_sku,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'line_total' => $item->line_total,
+                    'product_id' => null,
+                    'product_name' => 'Fully covered by advance on '.$order->number,
+                    'product_sku' => 'ADVANCE',
+                    'quantity' => 1,
+                    'unit_price' => 0,
+                    'line_total' => 0,
                 ]);
             }
 
@@ -75,7 +100,68 @@ class InvoiceService
                 "Invoice {$invoice->number} issued for {$order->number}",
                 $invoice,
                 null,
-                ['total' => (float) $invoice->total, 'shop_id' => $invoice->shop_id],
+                ['total' => (float) $invoice->total, 'shop_id' => $invoice->shop_id, 'advance_applied' => $advancePaid],
+                $actor,
+            );
+
+            return $invoice->fresh(['items', 'shop', 'order']);
+        });
+    }
+
+    public function createAdvanceInvoice(Order $order, float $amount, ?User $actor = null): Invoice
+    {
+        $amount = round($amount, 2);
+
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['advance_amount' => 'Advance amount must be positive.']);
+        }
+
+        if ($amount > (float) $order->total + 0.01) {
+            throw ValidationException::withMessages(['advance_amount' => 'Advance cannot exceed order total.']);
+        }
+
+        return DB::transaction(function () use ($order, $amount, $actor) {
+            $order = Order::query()->lockForUpdate()->with('shop')->findOrFail($order->id);
+
+            if ($order->advance_invoice_id) {
+                return Invoice::query()->findOrFail($order->advance_invoice_id);
+            }
+
+            $invoice = Invoice::query()->create([
+                'number' => $this->nextNumber(),
+                'shop_id' => $order->shop_id,
+                'order_id' => $order->id,
+                'status' => Invoice::STATUS_ISSUED,
+                'subtotal' => $amount,
+                'discount_total' => 0,
+                'total' => $amount,
+                'paid_amount' => 0,
+                'balance' => $amount,
+                'issued_at' => now(),
+                'due_at' => now()->toDateString(),
+                'notes' => 'Advance payment required before approving order '.$order->number,
+                'created_by' => $actor?->id,
+            ]);
+
+            InvoiceItem::query()->create([
+                'invoice_id' => $invoice->id,
+                'product_id' => null,
+                'product_name' => 'Advance on order '.$order->number,
+                'product_sku' => 'ADVANCE',
+                'quantity' => 1,
+                'unit_price' => $amount,
+                'line_total' => $amount,
+            ]);
+
+            $this->credit->recalculateOutstanding($order->shop);
+
+            $this->auditLogger->log(
+                'invoices',
+                'advance_issued',
+                "Advance invoice {$invoice->number} for {$order->number}",
+                $invoice,
+                null,
+                ['amount' => $amount, 'order_id' => $order->id],
                 $actor,
             );
 

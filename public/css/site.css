@@ -310,6 +310,44 @@ img { max-width: 100%; display: block; }
     color: var(--bt-sand);
 }
 
+.site-field-hint {
+    font-size: 0.78rem;
+    color: var(--bt-muted);
+    font-weight: 500;
+}
+
+.bd-phone {
+    display: grid;
+    gap: 6px;
+}
+
+.site-form .bd-phone-input {
+    width: 100%;
+    border: 1px solid var(--c30-line);
+    background: rgba(255,255,255,.04);
+    color: #fff;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    color-scheme: dark;
+}
+
+.site-form .bd-phone-input:focus {
+    outline: 2px solid rgba(109, 40, 217, .45);
+    border-color: transparent;
+}
+
+.bd-phone-input {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+}
+
+.bd-phone-hint strong {
+    color: inherit;
+}
+
 .site-form input,
 .site-form select,
 .site-form textarea {

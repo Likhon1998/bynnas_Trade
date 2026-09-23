@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Site;
 use App\Http\Controllers\Controller;
 use App\Models\ContactMessage;
 use App\Models\PartnerInquiry;
+use App\Rules\BangladeshPhone;
 use App\Services\AppNotificationService;
 use Illuminate\Http\Request;
 
@@ -62,11 +63,13 @@ class SiteController extends Controller
             'business_name' => ['required', 'string', 'max:180'],
             'contact_name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:180'],
-            'phone' => ['nullable', 'string', 'max:40'],
+            'phone' => ['required', 'string', 'max:20', new BangladeshPhone(required: true)],
             'city' => ['nullable', 'string', 'max:80'],
             'business_type' => ['nullable', 'in:retailer,distributor,other'],
             'message' => ['nullable', 'string', 'max:5000'],
         ]);
+
+        $data['phone'] = BangladeshPhone::normalize($data['phone']);
 
         $inquiry = PartnerInquiry::query()->create($data + ['status' => PartnerInquiry::STATUS_NEW]);
 

@@ -18,10 +18,12 @@ class OrderController extends Controller
     {
         $this->authorize('viewAny', Order::class);
 
-        $pendingCount = Order::query()->where('status', Order::STATUS_PENDING_AUDIT)->count();
+        $pendingCount = Order::query()
+            ->whereIn('status', [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE])
+            ->count();
 
         $orders = Order::query()
-            ->with(['shop', 'salesman', 'auditor', 'items.product'])
+            ->with(['shop', 'salesman', 'auditor', 'items.product', 'advanceInvoice'])
             ->latest('submitted_at')
             ->limit(500)
             ->get();
@@ -41,7 +43,8 @@ class OrderController extends Controller
             'submitted_at' => $order->submitted_at?->format('d M Y H:i') ?: '—',
             'status' => $order->status,
             'status_label' => $order->statusLabel(),
-            'status_badge' => $this->statusBadgeClass($order->status),
+            'status_badge' => $this->statusBadgeClass($order),
+            'advance_paid' => $order->isAwaitingAdvance() && $order->isAdvancePaid(),
         ])->values();
 
         $previews = $orders->mapWithKeys(
@@ -167,6 +170,69 @@ class OrderController extends Controller
         );
     }
 
+    public function requestAdvance(Request $request, Order $order)
+    {
+        $this->authorize('requestAdvance', $order);
+
+        $data = $request->validate([
+            'advance_amount' => ['required', 'numeric', 'min:1'],
+            'audit_notes' => ['nullable', 'string', 'max:2000'],
+            'return_url' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $this->orders->requestAdvance(
+            $order,
+            $request->user(),
+            (float) $data['advance_amount'],
+            $data['audit_notes'] ?? null,
+        );
+
+        $order->refresh();
+
+        return $this->redirectAfterAudit(
+            $request,
+            $order,
+            'Advance of ৳ '.number_format((float) $data['advance_amount'], 2).' requested for '.$order->number.'. Collect payment, then approve.',
+            'advance_requested',
+        );
+    }
+
+    public function collectAdvance(Request $request, Order $order)
+    {
+        abort_unless(
+            $request->user()->can('orders.approve') && $order->isAwaitingAdvance() && ! $order->isAdvancePaid(),
+            403
+        );
+
+        $data = $request->validate([
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
+            'method' => ['required', 'in:cash,bank_transfer,cheque,mobile_banking'],
+            'reference' => ['nullable', 'string', 'max:120'],
+            'return_url' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $this->orders->collectAdvance(
+            $order,
+            $request->user(),
+            (float) ($data['amount'] ?? 0),
+            $data['method'],
+            $data['reference'] ?? null,
+        );
+
+        $order->refresh();
+
+        $msg = $order->isAdvancePaid()
+            ? 'Advance received for '.$order->number.' — status is now '.$order->statusLabel().'.'
+            : 'Partial advance recorded for '.$order->number.'. Remaining balance still due.';
+
+        return $this->redirectAfterAudit(
+            $request,
+            $order,
+            $msg,
+            $order->isAdvancePaid() ? 'advance_paid' : 'advance_partial',
+        );
+    }
+
     public function reject(Request $request, Order $order)
     {
         $this->authorize('reject', $order);
@@ -239,17 +305,22 @@ class OrderController extends Controller
      */
     private function previewPayload(Order $order, ?User $user = null): array
     {
-        $order->loadMissing(['shop', 'salesman', 'items.product']);
+        $order->loadMissing(['shop', 'salesman', 'items.product', 'advanceInvoice']);
         $snapshot = $this->orders->auditSnapshot($order);
 
         $statusTone = match ($order->status) {
-            Order::STATUS_PENDING_AUDIT => 'pending',
+            Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE => 'pending',
             Order::STATUS_APPROVED, Order::STATUS_PICKING, Order::STATUS_PICKED,
             Order::STATUS_PACKED, Order::STATUS_DISPATCHED, Order::STATUS_DELIVERED => 'success',
             Order::STATUS_REJECTED => 'danger',
             Order::STATUS_CANCELLED => 'muted',
             default => 'muted',
         };
+
+        $advancePaid = $order->isAdvancePaid();
+        $advanceBalance = $order->advanceInvoice
+            ? (float) $order->advanceInvoice->balance
+            : (float) ($order->advance_amount ?: 0);
 
         return [
             'id' => $order->id,
@@ -259,6 +330,7 @@ class OrderController extends Controller
             'status_tone' => $statusTone,
             'source' => ucfirst(str_replace('_', ' ', $order->source)),
             'total' => \App\Support\DemoData::taka($order->total),
+            'total_raw' => (float) $order->total,
             'item_count' => $order->item_count,
             'notes' => $order->notes,
             'rejection_reason' => $order->rejection_reason,
@@ -266,11 +338,27 @@ class OrderController extends Controller
             'shop' => $order->shop?->name,
             'shop_code' => $order->shop?->code,
             'salesman' => $order->salesman?->name,
-            'pending_audit' => $order->isPendingAudit(),
+            'pending_audit' => $order->isPendingAudit() || $order->isAwaitingAdvance(),
+            'awaiting_advance' => $order->isAwaitingAdvance(),
+            'advance_required' => (bool) $order->advance_required,
+            'advance_amount' => $order->advance_amount !== null ? \App\Support\DemoData::taka($order->advance_amount) : null,
+            'advance_amount_raw' => (float) ($order->advance_amount ?: 0),
+            'advance_paid' => $advancePaid,
+            'advance_balance' => \App\Support\DemoData::taka($advanceBalance),
+            'advance_balance_raw' => round($advanceBalance, 2),
+            'advance_invoice_number' => $order->advanceInvoice?->number,
+            'payment_url' => $order->advance_invoice_id
+                ? url('/admin/payments?invoice_id='.$order->advance_invoice_id)
+                : url('/admin/payments'),
+            'collect_advance_url' => $order->isAwaitingAdvance() && ! $advancePaid
+                ? route('orders.collect-advance', $order, false)
+                : null,
             'can_approve' => $user?->can('approve', $order) ?? false,
+            'can_request_advance' => $user?->can('requestAdvance', $order) ?? false,
             'can_reject' => $user?->can('reject', $order) ?? false,
             'can_delete' => $user?->can('delete', $order) ?? false,
             'approve_url' => route('orders.approve', $order, false),
+            'request_advance_url' => route('orders.request-advance', $order, false),
             'reject_url' => route('orders.reject', $order, false),
             'delete_url' => route('orders.destroy', $order, false),
             'snapshot' => [
@@ -296,10 +384,19 @@ class OrderController extends Controller
         ];
     }
 
-    private function statusBadgeClass(string $status): string
+    private function statusBadgeClass(Order|string $orderOrStatus): string
     {
+        if ($orderOrStatus instanceof Order) {
+            if ($orderOrStatus->isAwaitingAdvance() && $orderOrStatus->isAdvancePaid()) {
+                return 'badge-approved';
+            }
+            $status = $orderOrStatus->status;
+        } else {
+            $status = $orderOrStatus;
+        }
+
         return match ($status) {
-            Order::STATUS_PENDING_AUDIT => 'badge-pending',
+            Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE => 'badge-pending',
             Order::STATUS_APPROVED => 'badge-approved',
             Order::STATUS_PICKING, Order::STATUS_PICKED => 'badge-processing',
             Order::STATUS_PACKED => 'badge-shipped',

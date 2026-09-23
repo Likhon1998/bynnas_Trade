@@ -3,7 +3,7 @@
 @section('content')
     <div class="toolbar">
         <div class="page-kicker"><strong>Orders</strong> / Track audit status</div>
-        <a class="btn btn-primary" href="{{ route('portal.orders.create') }}">Place order</a>
+        <a class="btn btn-primary" href="{{ route('portal.products') }}">Shop & add to cart</a>
     </div>
 
     @if (session('success'))

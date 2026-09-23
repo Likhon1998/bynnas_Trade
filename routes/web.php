@@ -165,6 +165,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/orders/{order}/preview', [OrderController::class, 'preview'])->name('orders.preview');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
         Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
+        Route::post('/orders/{order}/request-advance', [OrderController::class, 'requestAdvance'])->name('orders.request-advance');
+        Route::post('/orders/{order}/collect-advance', [OrderController::class, 'collectAdvance'])->name('orders.collect-advance');
         Route::post('/orders/{order}/reject', [OrderController::class, 'reject'])->name('orders.reject');
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
         Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
@@ -247,7 +249,10 @@ Route::prefix('admin')->group(function () {
         Route::post('/rewards/{reward}/cancel', [RewardController::class, 'cancel'])->name('rewards.cancel');
 
         Route::get('/partner-leads', [PartnerInquiryController::class, 'index'])->name('partner-inquiries.index');
-        Route::put('/partner-leads/{partnerInquiry}', [PartnerInquiryController::class, 'update'])->name('partner-inquiries.update');
+        Route::post('/partner-leads/{partnerInquiry}/accept', [PartnerInquiryController::class, 'accept'])->name('partner-inquiries.accept');
+        Route::post('/partner-leads/{partnerInquiry}/reject', [PartnerInquiryController::class, 'reject'])->name('partner-inquiries.reject');
+        Route::post('/partner-leads/{partnerInquiry}/pending', [PartnerInquiryController::class, 'pending'])->name('partner-inquiries.pending');
+        Route::post('/partner-leads/{partnerInquiry}/send-whatsapp', [PartnerInquiryController::class, 'sendWhatsapp'])->name('partner-inquiries.send-whatsapp');
         Route::put('/contact-messages/{contactMessage}', [PartnerInquiryController::class, 'markMessage'])->name('contact-messages.update');
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');

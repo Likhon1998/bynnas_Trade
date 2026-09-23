@@ -25,7 +25,7 @@ class PaymentService
             throw ValidationException::withMessages(['amount' => 'Payment amount must be positive.']);
         }
 
-        return DB::transaction(function () use ($data, $amount, $actor) {
+        $payment = DB::transaction(function () use ($data, $amount, $actor) {
             $payment = Payment::query()->create([
                 'number' => $this->nextNumber(),
                 'shop_id' => $data['shop_id'],
@@ -49,18 +49,23 @@ class PaymentService
                 $actor,
             );
 
-            $fresh = $payment->fresh(['shop', 'invoice']);
-
-            DB::afterCommit(function () use ($fresh) {
-                try {
-                    app(AppNotificationService::class)->paymentPending($fresh);
-                } catch (\Throwable) {
-                    // non-blocking
-                }
-            });
-
-            return $fresh;
+            return $payment->fresh(['shop', 'invoice']);
         });
+
+        // Advance invoice payments are applied immediately — order status updates everywhere.
+        if ($payment->invoice_id && $this->isAdvanceInvoice((int) $payment->invoice_id)) {
+            return $this->verify($payment, $actor);
+        }
+
+        DB::afterCommit(function () use ($payment) {
+            try {
+                app(AppNotificationService::class)->paymentPending($payment);
+            } catch (\Throwable) {
+                // non-blocking
+            }
+        });
+
+        return $payment;
     }
 
     public function verify(Payment $payment, ?User $actor = null): Payment
@@ -96,6 +101,15 @@ class PaymentService
 
             $this->commissions->accrueFromPayment($payment->fresh(['invoice.order', 'invoice.shop']), $actor);
 
+            if ($payment->invoice_id) {
+                $advanceOrder = \App\Models\Order::query()
+                    ->where('advance_invoice_id', $payment->invoice_id)
+                    ->first();
+                if ($advanceOrder) {
+                    app(\App\Services\OrderService::class)->refreshAdvanceStatus($advanceOrder);
+                }
+            }
+
             $this->auditLogger->log(
                 'payments',
                 'verified',
@@ -108,6 +122,13 @@ class PaymentService
 
             return $payment->fresh(['shop', 'invoice', 'verifier']);
         });
+    }
+
+    private function isAdvanceInvoice(int $invoiceId): bool
+    {
+        return \App\Models\Order::query()
+            ->where('advance_invoice_id', $invoiceId)
+            ->exists();
     }
 
     public function reject(Payment $payment, string $reason, ?User $actor = null): Payment

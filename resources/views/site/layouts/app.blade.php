@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Home') · Bynnas Trade</title>
     <meta name="description" content="@yield('meta', 'Bynnas Trade — B2B wholesale distribution from China import to warehouse fulfilment and shop delivery in Bangladesh.')">
     <link rel="preconnect" href="https://fonts.googleapis.com">

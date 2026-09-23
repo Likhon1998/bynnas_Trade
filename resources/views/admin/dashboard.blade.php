@@ -25,7 +25,12 @@
 
     <div class="grid-5" style="margin-bottom:16px">
         @foreach ($stats as $stat)
-            <div class="card stat-card">
+            @php $isNewShops = ($stat['title'] ?? '') === 'New Shops (This Month)'; @endphp
+            @if ($isNewShops)
+                <a href="{{ route('shops.index') }}" class="card stat-card" style="text-decoration:none;color:inherit;display:block">
+            @else
+                <div class="card stat-card">
+            @endif
                 <div class="stat-title">{{ $stat['title'] }}</div>
                 <div class="stat-value">
                     @if (!empty($stat['raw']))
@@ -37,7 +42,11 @@
                 <div class="stat-delta {{ $stat['up'] ? 'up' : 'down' }}">
                     {{ $stat['up'] ? '↑' : '↓' }} {{ $stat['delta'] }}
                 </div>
-            </div>
+            @if ($isNewShops)
+                </a>
+            @else
+                </div>
+            @endif
         @endforeach
     </div>
 

@@ -20,6 +20,15 @@
     @if (session('success'))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>
     @endif
+    @if (session('whatsapp_chat_url'))
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+                <div style="font-weight:700">Notify owner on WhatsApp</div>
+                <div class="muted" style="font-size:13px;margin-top:2px">Opens WhatsApp with approval + login details ready to send.</div>
+            </div>
+            <a class="btn btn-primary" href="{{ session('whatsapp_chat_url') }}" target="_blank" rel="noopener">Open WhatsApp</a>
+        </div>
+    @endif
 
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([
@@ -66,7 +75,11 @@
                         <label class="label">Password</label>
                         <input class="input" style="width:100%" type="text" name="login_password" value="12345678" required>
                     </div>
-                    <div class="form-span">
+                    <div class="form-span" style="display:flex;flex-direction:column;gap:10px">
+                        <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+                            <input type="checkbox" name="notify_whatsapp" value="1" checked>
+                            Notify owner on WhatsApp after issuing credentials
+                        </label>
                         <button class="btn btn-primary" type="submit">Issue / reset credentials</button>
                     </div>
                 </form>

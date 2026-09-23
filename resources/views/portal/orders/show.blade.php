@@ -26,7 +26,23 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Submitted</div><div style="font-weight:700">{{ $order->submitted_at?->format('d M Y H:i') }}</div></div>
     </div>
 
-    @if ($order->isPendingAudit())
+    @if ($order->isAwaitingAdvance())
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fffbeb;color:#92400e">
+            <strong>Advance payment required</strong> before this order can be approved.
+            <div style="margin-top:6px;font-weight:800;font-size:18px">{{ \App\Support\DemoData::taka($order->advance_amount) }}</div>
+            @if ($order->advanceInvoice)
+                <div style="margin-top:4px;font-size:13px">
+                    Invoice {{ $order->advanceInvoice->number }}
+                    · Balance {{ \App\Support\DemoData::taka($order->advanceInvoice->balance) }}
+                    @if ($order->isAdvancePaid())
+                        · <span style="color:#15803d;font-weight:700">Paid — waiting for admin approval</span>
+                    @else
+                        · Please pay this advance (cash / bank / mobile) and inform admin for verification.
+                    @endif
+                </div>
+            @endif
+        </div>
+    @elseif ($order->isPendingAudit())
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff7ed;color:#9a3412">
             Waiting for Super Admin audit. Stock is not reserved yet.
             @if ($order->canPartnerEdit())

@@ -53,38 +53,91 @@ class ShopPortalController extends Controller
             ->with(['category', 'brand', 'prices'])
             ->where('status', Product::STATUS_ACTIVE)
             ->where('is_published', true)
-            ->when($request->search, function ($q, $search) {
-                $q->where(function ($inner) use ($search) {
-                    $inner->where('name', 'like', "%{$search}%")
-                        ->orWhere('sku', 'like', "%{$search}%");
-                });
-            })
-            ->when($request->category_id, fn ($q, $id) => $q->where('category_id', $id))
             ->orderBy('name')
-            ->paginate(12)
-            ->withQueryString();
+            ->limit(400)
+            ->get();
+
+        $trendingIds = collect();
+        try {
+            $trendingIds = \App\Models\OrderItem::query()
+                ->selectRaw('product_id, SUM(quantity) as sold')
+                ->where('created_at', '>=', now()->subDays(60))
+                ->groupBy('product_id')
+                ->orderByDesc('sold')
+                ->limit(24)
+                ->pluck('sold', 'product_id');
+        } catch (\Throwable) {
+            $trendingIds = collect();
+        }
+
+        $newCutoff = now()->subDays(45);
+
+        $catalog = $products->map(function (Product $product) use ($shop, $trendingIds, $newCutoff) {
+            $price = (float) $product->priceForGroup($shop->priceGroup);
+            $stock = (int) $product->availableStock();
+            $isNew = $product->created_at && $product->created_at->gte($newCutoff);
+            $sold = (int) ($trendingIds[$product->id] ?? 0);
+
+            return [
+                'id' => $product->id,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'category_id' => $product->category_id,
+                'category' => $product->category?->name ?: 'General',
+                'stock' => $stock,
+                'price' => $price,
+                'price_label' => \App\Support\DemoData::taka($price),
+                'image' => $product->imageUrl(),
+                'in_stock' => $stock > 0,
+                'is_new' => $isNew,
+                'is_trending' => $sold > 0 || $stock >= 200,
+                'sold' => $sold,
+                'low_stock' => $stock > 0 && $stock <= max(5, (int) $product->minimum_stock),
+            ];
+        })->values();
+
+        $posters = [
+            [
+                'eyebrow' => 'Wholesale desk',
+                'title' => 'Order faster for '.$shop->name,
+                'text' => 'Browse your price list, save a wishlist, and send orders for audit in one flow.',
+                'tone' => 'violet',
+                'cta' => 'Shop new arrivals',
+                'filter' => 'new',
+            ],
+            [
+                'eyebrow' => 'Trending now',
+                'title' => 'What partners are ordering',
+                'text' => 'Stock up on high-demand items before the next cycle.',
+                'tone' => 'ink',
+                'cta' => 'View trending',
+                'filter' => 'trending',
+            ],
+            [
+                'eyebrow' => 'Credit ready',
+                'title' => \App\Support\DemoData::taka($shop->availableCredit()).' available',
+                'text' => 'Your wholesale prices and credit terms are already applied.',
+                'tone' => 'sand',
+                'cta' => 'Browse all',
+                'filter' => 'all',
+            ],
+        ];
 
         return view('portal.products.index', [
             'shop' => $shop,
-            'products' => $products,
+            'catalog' => $catalog,
             'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(),
+            'credit' => $shop->availableCredit(),
+            'storeUrl' => route('portal.orders.store'),
+            'initialSearch' => (string) $request->get('search', ''),
+            'initialCategory' => (string) $request->get('category_id', ''),
+            'posters' => $posters,
         ]);
     }
 
     public function createOrder(Request $request)
     {
-        /** @var Shop $shop */
-        $shop = $request->attributes->get('shop');
-        $shop->load('priceGroup');
-
-        $products = Product::query()
-            ->with('prices')
-            ->where('status', Product::STATUS_ACTIVE)
-            ->where('is_published', true)
-            ->orderBy('name')
-            ->get();
-
-        return view('portal.orders.create', compact('shop', 'products'));
+        return redirect()->route('portal.products');
     }
 
     public function storeOrder(Request $request)
@@ -94,15 +147,24 @@ class ShopPortalController extends Controller
 
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
-            'items' => ['required', 'array'],
+            'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'items.*.quantity' => ['nullable', 'integer', 'min:0'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
         ]);
+
+        $items = collect($data['items'])
+            ->filter(fn ($row) => (int) ($row['quantity'] ?? 0) > 0)
+            ->values()
+            ->all();
+
+        if ($items === []) {
+            return back()->withErrors(['items' => 'Add at least one product to your cart.']);
+        }
 
         $order = $this->orders->placeFromShopPortal(
             $request->user(),
             $shop,
-            $data['items'],
+            $items,
             $data['notes'] ?? null,
         );
 
@@ -192,7 +254,7 @@ class ShopPortalController extends Controller
         $shop = $request->attributes->get('shop');
         abort_unless($order->shop_id === $shop->id, 404);
 
-        $order->load(['items', 'salesman', 'auditor']);
+        $order->load(['items', 'salesman', 'auditor', 'advanceInvoice']);
 
         return view('portal.orders.show', compact('shop', 'order'));
     }

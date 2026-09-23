@@ -18,7 +18,7 @@
 </div>
 <div>
     <label class="label">Phone</label>
-    <input class="input" style="width:100%" name="phone" value="{{ old('phone', $shop?->phone) }}">
+    <x-bd-phone-input name="phone" :value="old('phone', $shop?->phone)" variant="admin" />
 </div>
 <div>
     <label class="label">City</label>

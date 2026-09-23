@@ -29,18 +29,24 @@ class OrderPolicy
 
     public function approve(User $user, Order $order): bool
     {
+        return $user->can('orders.approve') && $order->canApproveNow();
+    }
+
+    public function requestAdvance(User $user, Order $order): bool
+    {
         return $user->can('orders.approve') && $order->isPendingAudit();
     }
 
     public function reject(User $user, Order $order): bool
     {
-        return $user->can('orders.reject') && $order->isPendingAudit();
+        return $user->can('orders.reject')
+            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE], true);
     }
 
     public function cancel(User $user, Order $order): bool
     {
         return $user->can('orders.cancel')
-            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_APPROVED], true);
+            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE, Order::STATUS_APPROVED], true);
     }
 
     public function delete(User $user, Order $order): bool

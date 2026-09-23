@@ -19,6 +19,7 @@ class OrderService
         private AuditLogger $auditLogger,
         private InventoryService $inventory,
         private FulfilmentService $fulfilment,
+        private InvoiceService $invoices,
     ) {}
 
     /**
@@ -205,16 +206,182 @@ class OrderService
         );
     }
 
-    public function approve(Order $order, User $actor, ?string $notes = null, bool $creditOverride = false): Order
+
+    public function requestAdvance(Order $order, User $actor, float $amount, ?string $notes = null): Order
     {
         if (! $order->isPendingAudit()) {
             throw ValidationException::withMessages([
-                'order' => 'Only orders pending Super Admin audit can be approved.',
+                'order' => 'Advance can only be requested on orders pending audit.',
+            ]);
+        }
+
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['advance_amount' => 'Enter a valid advance amount.']);
+        }
+        if ($amount > (float) $order->total + 0.01) {
+            throw ValidationException::withMessages(['advance_amount' => 'Advance cannot exceed order total.']);
+        }
+
+        return DB::transaction(function () use ($order, $actor, $amount, $notes) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            if (! $order->isPendingAudit()) {
+                throw ValidationException::withMessages([
+                    'order' => 'Advance can only be requested on orders pending audit.',
+                ]);
+            }
+
+            $invoice = $this->invoices->createAdvanceInvoice($order, $amount, $actor);
+            $from = $order->status;
+
+            $order->update([
+                'status' => Order::STATUS_AWAITING_ADVANCE,
+                'advance_required' => true,
+                'advance_amount' => $amount,
+                'advance_invoice_id' => $invoice->id,
+                'advance_requested_at' => now(),
+                'advance_paid_at' => null,
+                'audit_notes' => $notes,
+                'audited_by' => $actor->id,
+            ]);
+
+            $this->recordHistory($order, $from, Order::STATUS_AWAITING_ADVANCE, 'advance_requested', $notes, [
+                'advance_amount' => $amount,
+                'advance_invoice_id' => $invoice->id,
+            ], $actor);
+
+            $this->auditLogger->log(
+                'orders',
+                'advance_requested',
+                'Advance of ৳ '.number_format($amount, 2)." requested for {$order->number}",
+                $order,
+                ['status' => $from],
+                ['status' => Order::STATUS_AWAITING_ADVANCE, 'advance_amount' => $amount],
+                $actor,
+            );
+
+            return $order->fresh(['items.product', 'shop', 'salesman', 'advanceInvoice', 'statusHistories.user']);
+        });
+    }
+
+    public function refreshAdvanceStatus(Order $order): Order
+    {
+        $order->loadMissing('advanceInvoice');
+
+        if (! $order->advance_required || ! $order->advance_invoice_id) {
+            return $order;
+        }
+
+        // Re-read invoice balances after payment apply.
+        $order->unsetRelation('advanceInvoice');
+        $order->load('advanceInvoice');
+
+        if (! $order->isAdvancePaid()) {
+            return $order->fresh(['advanceInvoice']);
+        }
+
+        if (! $order->advance_paid_at) {
+            $order->update(['advance_paid_at' => now()]);
+
+            $this->recordHistory(
+                $order,
+                $order->status,
+                $order->status,
+                'advance_paid',
+                'Advance payment received — order is ready to approve.',
+                [
+                    'advance_amount' => (float) $order->advance_amount,
+                    'invoice_id' => $order->advance_invoice_id,
+                ],
+                null,
+            );
+
+            $this->auditLogger->log(
+                'orders',
+                'advance_paid',
+                "Advance paid for {$order->number} — ready to approve",
+                $order,
+                null,
+                ['advance_amount' => (float) $order->advance_amount],
+                null,
+            );
+        }
+
+        return $order->fresh(['advanceInvoice']);
+    }
+
+    /**
+     * Record (and auto-apply) the remaining advance for an order in one step.
+     */
+    public function collectAdvance(
+        Order $order,
+        User $actor,
+        float $amount,
+        string $method = \App\Models\Payment::METHOD_CASH,
+        ?string $reference = null,
+    ): Order {
+        if (! $order->isAwaitingAdvance() || ! $order->advance_invoice_id) {
+            throw ValidationException::withMessages([
+                'order' => 'This order is not waiting for an advance payment.',
+            ]);
+        }
+
+        $order->loadMissing('advanceInvoice');
+        $invoice = $order->advanceInvoice;
+        if (! $invoice) {
+            throw ValidationException::withMessages(['advance' => 'Advance invoice missing.']);
+        }
+
+        $balance = (float) $invoice->balance;
+        if ($balance <= 0.009) {
+            return $this->refreshAdvanceStatus($order);
+        }
+
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            $amount = $balance;
+        }
+        if ($amount > $balance + 0.01) {
+            throw ValidationException::withMessages([
+                'amount' => 'Amount exceeds advance balance (৳ '.number_format($balance, 2).').',
+            ]);
+        }
+
+        app(\App\Services\PaymentService::class)->record([
+            'shop_id' => $order->shop_id,
+            'invoice_id' => $invoice->id,
+            'amount' => $amount,
+            'method' => $method,
+            'reference' => $reference,
+            'notes' => 'Advance for order '.$order->number,
+        ], $actor);
+
+        return $this->refreshAdvanceStatus($order->fresh(['advanceInvoice']));
+    }
+
+    public function approve(Order $order, User $actor, ?string $notes = null, bool $creditOverride = false): Order
+    {
+        if (! $order->canApproveNow()) {
+            if ($order->isAwaitingAdvance() && ! $order->isAdvancePaid()) {
+                throw ValidationException::withMessages([
+                    'advance' => 'Advance payment is still due. Collect and verify the advance before approving.',
+                ]);
+            }
+
+            throw ValidationException::withMessages([
+                'order' => 'Only orders pending audit (or with advance paid) can be approved.',
             ]);
         }
 
         return DB::transaction(function () use ($order, $actor, $notes, $creditOverride) {
-            $order = Order::query()->lockForUpdate()->with(['items', 'shop'])->findOrFail($order->id);
+            $order = Order::query()->lockForUpdate()->with(['items', 'shop', 'advanceInvoice'])->findOrFail($order->id);
+
+            if (! $order->canApproveNow()) {
+                throw ValidationException::withMessages([
+                    'order' => 'Only orders pending audit (or with advance paid) can be approved.',
+                ]);
+            }
             $shop = $order->shop;
             $availableCredit = $shop->availableCredit();
             $warehouse = Warehouse::defaultWarehouse();
@@ -303,6 +470,7 @@ class OrderService
                 'credit_override' => $order->credit_override,
                 'total' => (float) $order->total,
                 'warehouse_id' => $warehouse->id,
+                'advance_amount' => (float) ($order->advance_amount ?: 0),
             ], $actor);
 
             $this->auditLogger->log(
@@ -321,9 +489,9 @@ class OrderService
 
     public function reject(Order $order, User $actor, string $reason): Order
     {
-        if (! $order->isPendingAudit()) {
+        if (! in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE], true)) {
             throw ValidationException::withMessages([
-                'order' => 'Only pending audit orders can be rejected.',
+                'order' => 'Only orders pending audit or awaiting advance can be rejected.',
             ]);
         }
 
@@ -399,7 +567,7 @@ class OrderService
 
     public function cancel(Order $order, User $actor, string $reason): Order
     {
-        if (! in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_APPROVED], true)) {
+        if (! in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE, Order::STATUS_APPROVED], true)) {
             throw ValidationException::withMessages([
                 'order' => 'Only pending or approved orders can be cancelled.',
             ]);

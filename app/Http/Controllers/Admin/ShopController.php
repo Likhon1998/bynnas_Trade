@@ -7,7 +7,9 @@ use App\Models\PriceGroup;
 use App\Models\Shop;
 use App\Models\Territory;
 use App\Models\User;
+use App\Rules\BangladeshPhone;
 use App\Services\ShopService;
+use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -21,21 +23,37 @@ class ShopController extends Controller
 
         $shops = Shop::query()
             ->with(['territory', 'priceGroup', 'assignedSalesman'])
-            ->when($request->search, function ($q, $search) {
-                $q->where(function ($inner) use ($search) {
-                    $inner->where('name', 'like', "%{$search}%")
-                        ->orWhere('code', 'like', "%{$search}%")
-                        ->orWhere('owner_name', 'like', "%{$search}%")
-                        ->orWhere('city', 'like', "%{$search}%");
-                });
-            })
-            ->when($request->status, fn ($q, $status) => $q->where('status', $status))
-            ->when($request->city, fn ($q, $city) => $q->where('city', $city))
             ->latest()
-            ->paginate(15)
-            ->withQueryString();
+            ->limit(500)
+            ->get();
 
-        return view('admin.shops.index', compact('shops'));
+        $rows = $shops->map(fn (Shop $shop) => [
+            'id' => $shop->id,
+            'code' => $shop->code,
+            'name' => $shop->name,
+            'owner' => $shop->owner_name ?: '',
+            'city' => $shop->city ?: '',
+            'price_group' => $shop->priceGroup?->name ?: '—',
+            'salesman' => $shop->assignedSalesman?->name ?: '—',
+            'credit' => \App\Support\DemoData::taka($shop->credit_limit),
+            'outstanding' => \App\Support\DemoData::taka($shop->outstanding_balance),
+            'status' => $shop->status,
+            'status_label' => $shop->statusLabel(),
+            'status_badge' => match ($shop->status) {
+                Shop::STATUS_ACTIVE => 'badge-active',
+                Shop::STATUS_ON_HOLD => 'badge-hold',
+                Shop::STATUS_REJECTED => 'badge-out',
+                default => 'badge-pending',
+            },
+            'url' => route('shops.show', $shop),
+        ])->values();
+
+        $initialFilters = [
+            'search' => (string) $request->get('search', ''),
+            'status' => (string) $request->get('status', ''),
+        ];
+
+        return view('admin.shops.index', compact('rows', 'initialFilters'));
     }
 
     public function create()
@@ -50,6 +68,7 @@ class ShopController extends Controller
         $this->authorize('create', Shop::class);
 
         $data = $this->validated($request);
+        $data['phone'] = BangladeshPhone::normalize($data['phone']);
 
         $shop = $this->shops->create(
             $data,
@@ -85,7 +104,10 @@ class ShopController extends Controller
     {
         $this->authorize('update', $shop);
 
-        $this->shops->update($shop, $this->validated($request, $shop), $request->user());
+        $data = $this->validated($request, $shop);
+        $data['phone'] = BangladeshPhone::normalize($data['phone']);
+
+        $this->shops->update($shop, $data, $request->user());
 
         return redirect()->route('shops.show', $shop)->with('success', 'Shop updated successfully.');
     }
@@ -106,6 +128,7 @@ class ShopController extends Controller
         $data = $request->validate([
             'login_email' => ['required', 'email', 'max:190'],
             'login_password' => ['required', 'string', 'min:8'],
+            'notify_whatsapp' => ['sometimes', 'boolean'],
         ]);
 
         $this->shops->attachShopUser($shop, [
@@ -119,7 +142,38 @@ class ShopController extends Controller
             $this->shops->approve($shop, $request->user());
         }
 
-        return back()->with('success', 'Shop portal credentials issued.');
+        $whatsapp = app(WhatsAppService::class);
+        $result = null;
+
+        if ($request->boolean('notify_whatsapp', true)) {
+            $result = $whatsapp->notifyApproval(
+                $shop->phone,
+                $shop->name,
+                $data['login_email'],
+                $data['login_password'],
+            );
+        } else {
+            $message = $whatsapp->approvalMessage($shop->name, $data['login_email'], $data['login_password']);
+            $result = [
+                'ok' => true,
+                'via' => 'manual',
+                'chat_url' => $whatsapp->chatUrl($shop->phone, $message),
+                'error' => null,
+            ];
+        }
+
+        $flash = 'Shop portal credentials issued.';
+        if ($result['ok'] && ($result['via'] ?? '') === 'meta') {
+            $flash .= ' WhatsApp approval message sent.';
+        } elseif ($result['ok'] && ($result['via'] ?? '') === 'log') {
+            $flash .= ' WhatsApp message logged (set WHATSAPP_DRIVER=meta to send live).';
+        } elseif (! empty($result['error'])) {
+            $flash .= ' WhatsApp auto-send skipped: '.$result['error'];
+        }
+
+        return back()
+            ->with('success', $flash)
+            ->with('whatsapp_chat_url', $result['chat_url'] ?? null);
     }
 
     private function validated(Request $request, ?Shop $shop = null): array
@@ -127,7 +181,7 @@ class ShopController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:160'],
             'owner_name' => ['required', 'string', 'max:120'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['required', 'string', 'max:20', new BangladeshPhone(required: true)],
             'email' => ['nullable', 'email', 'max:190'],
             'address' => ['nullable', 'string'],
             'city' => ['nullable', 'string', 'max:100'],

@@ -1,124 +1,157 @@
 @extends('layouts.app')
 @section('title', 'Partner leads')
 @section('content')
-    <x-page-header title="Partner & contact leads" subtitle="Public site applications and messages">
-        <a class="btn btn-ghost" href="{{ route('site.home') }}" target="_blank">Open public site</a>
-    </x-page-header>
+    <div class="partner-desk">
+        <div class="partner-desk-top">
+            <div>
+                <div class="page-kicker"><strong>Partner requests</strong> / Review · accept · WhatsApp</div>
+            </div>
+            <div class="partner-desk-top-actions">
+                <a class="btn btn-ghost btn-sm" href="{{ route('site.partner') }}" target="_blank">Apply form</a>
+            </div>
+        </div>
 
-    @if (session('success'))
-        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>
-    @endif
+        @if (session('success') || session('error'))
+            <div class="partner-flash {{ session('error') ? 'is-error' : 'is-ok' }}">
+                {{ session('error') ?: session('success') }}
+            </div>
+        @endif
 
-    <div class="card" style="padding:14px;margin-bottom:14px">
-        <form class="filters" method="get">
-            <select class="select" name="status">
-                <option value="">All partner statuses</option>
-                @foreach (['new','contacted','converted','closed'] as $status)
-                    <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst($status) }}</option>
-                @endforeach
-            </select>
-            <button class="btn btn-ghost" type="submit">Filter</button>
-        </form>
-    </div>
+        @if (session('cred_email'))
+            <div class="partner-cred">
+                <div class="partner-cred-main">
+                    <div class="partner-cred-title">Credentials ready · {{ session('cred_shop') }}</div>
+                    <div class="partner-cred-grid">
+                        <span><em>Email</em> {{ session('cred_email') }}</span>
+                        <span><em>Temp pass</em> {{ session('cred_password') }}</span>
+                        <span><em>Portal</em> {{ url('/portal/login') }}</span>
+                    </div>
+                </div>
+                <div class="partner-cred-actions">
+                    @if (session('accepted_inquiry_id'))
+                        <form method="post" action="{{ route('partner-inquiries.send-whatsapp', session('accepted_inquiry_id')) }}">
+                            @csrf
+                            <button class="btn btn-primary btn-sm" type="submit">Send WhatsApp</button>
+                        </form>
+                    @endif
+                    @if (session('whatsapp_chat_url'))
+                        <a class="btn btn-ghost btn-sm" href="{{ session('whatsapp_chat_url') }}" target="_blank" rel="noopener">Open chat</a>
+                    @endif
+                </div>
+            </div>
+        @endif
 
-    <div class="card" style="margin-bottom:18px">
-        <div style="padding:14px;font-weight:700;border-bottom:1px solid #eee">Partner applications</div>
-        <div class="table-wrap">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>Business</th>
-                        <th>Contact</th>
-                        <th>City</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Update</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <div class="partner-desk-grid">
+            <section class="partner-panel">
+                <div class="partner-panel-head">
+                    <div class="partner-tabs">
+                        @foreach ([
+                            '' => ['All', $counts['all']],
+                            'pending' => ['Pending', $counts['pending']],
+                            'accepted' => ['Accepted', $counts['accepted']],
+                            'rejected' => ['Rejected', $counts['rejected']],
+                        ] as $key => [$label, $count])
+                            <a
+                                href="{{ route('partner-inquiries.index', array_filter(['status' => $key ?: null])) }}"
+                                class="partner-tab {{ request('status', '') === $key ? 'is-active' : '' }}"
+                            >
+                                {{ $label }} <b>{{ $count }}</b>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="partner-list">
                     @forelse ($inquiries as $row)
-                        <tr>
-                            <td>
-                                <div style="font-weight:700">{{ $row->business_name }}</div>
-                                <div class="muted" style="font-size:12px">{{ $row->created_at?->format('d M Y H:i') }}</div>
-                                @if ($row->message)<div class="muted" style="font-size:12px;margin-top:4px">{{ \Illuminate\Support\Str::limit($row->message, 90) }}</div>@endif
-                            </td>
-                            <td>
-                                <div>{{ $row->contact_name }}</div>
-                                <div class="muted" style="font-size:12px">{{ $row->email }}</div>
-                                <div class="muted" style="font-size:12px">{{ $row->phone }}</div>
-                            </td>
-                            <td>{{ $row->city ?: '—' }}</td>
-                            <td>{{ ucfirst($row->business_type ?: '—') }}</td>
-                            <td><x-badge :status="$row->statusLabel()" /></td>
-                            <td>
-                                <form method="post" action="{{ route('partner-inquiries.update', $row) }}" style="display:grid;gap:6px;min-width:180px">
-                                    @csrf
-                                    @method('put')
-                                    <select class="select" name="status">
-                                        @foreach (['new','contacted','converted','closed'] as $status)
-                                            <option value="{{ $status }}" @selected($row->status === $status)>{{ ucfirst($status) }}</option>
-                                        @endforeach
-                                    </select>
-                                    <input class="input" name="admin_notes" value="{{ $row->admin_notes }}" placeholder="Notes">
-                                    <button class="btn btn-ghost" type="submit" style="font-size:12px">Save</button>
-                                </form>
-                            </td>
-                        </tr>
+                        <article class="partner-row {{ $row->isPending() ? 'is-pending' : '' }}">
+                            <div class="partner-row-main">
+                                <div class="partner-row-title">
+                                    <strong>{{ $row->business_name }}</strong>
+                                    <x-badge :status="$row->statusLabel()" />
+                                    @if ($row->shop)
+                                        <a class="link partner-shop-link" href="{{ route('shops.show', $row->shop) }}">{{ $row->shop->code }}</a>
+                                    @endif
+                                </div>
+                                <div class="partner-row-meta">
+                                    <span>{{ $row->contact_name }}</span>
+                                    <span>{{ $row->email }}</span>
+                                    <span>{{ $row->phone ?: '—' }}</span>
+                                    <span>{{ $row->city ?: 'No city' }}</span>
+                                    <span>{{ $row->created_at?->format('d M, H:i') }}</span>
+                                </div>
+                                @if ($row->message)
+                                    <p class="partner-row-note">{{ \Illuminate\Support\Str::limit($row->message, 140) }}</p>
+                                @endif
+                            </div>
+                            <div class="partner-row-actions">
+                                @if ($row->isPending())
+                                    <form method="post" action="{{ route('partner-inquiries.accept', $row) }}">
+                                        @csrf
+                                        <button class="btn btn-primary btn-sm" type="submit">Accept</button>
+                                    </form>
+                                    <form method="post" action="{{ route('partner-inquiries.reject', $row) }}" onsubmit="return confirm('Reject this request?')">
+                                        @csrf
+                                        <button class="btn btn-ghost btn-sm partner-btn-reject" type="submit">Reject</button>
+                                    </form>
+                                @elseif ($row->isAccepted())
+                                    <form method="post" action="{{ route('partner-inquiries.send-whatsapp', $row) }}">
+                                        @csrf
+                                        <button class="btn btn-primary btn-sm" type="submit">WhatsApp</button>
+                                    </form>
+                                @else
+                                    <form method="post" action="{{ route('partner-inquiries.pending', $row) }}">
+                                        @csrf
+                                        <button class="btn btn-ghost btn-sm" type="submit">Reopen</button>
+                                    </form>
+                                @endif
+                            </div>
+                        </article>
                     @empty
-                        <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">No partner applications yet.</td></tr>
+                        <div class="partner-empty">No partner requests in this filter.</div>
                     @endforelse
-                </tbody>
-            </table>
-        </div>
-        @if ($inquiries->hasPages())
-            <div style="padding:12px 16px">{{ $inquiries->links() }}</div>
-        @endif
-    </div>
+                </div>
 
-    <div class="card">
-        <div style="padding:14px;font-weight:700;border-bottom:1px solid #eee">Contact messages</div>
-        <div class="table-wrap">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>From</th>
-                        <th>Subject</th>
-                        <th>Message</th>
-                        <th>Status</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
+                @if ($inquiries->hasPages())
+                    <div class="partner-pager">{{ $inquiries->links() }}</div>
+                @endif
+            </section>
+
+            <aside class="partner-panel partner-messages">
+                <div class="partner-panel-head">
+                    <strong>Contact inbox</strong>
+                    <span class="muted" style="font-size:12px">{{ $messages->total() }} total</span>
+                </div>
+                <div class="partner-list">
                     @forelse ($messages as $msg)
-                        <tr>
-                            <td>
-                                <div style="font-weight:600">{{ $msg->name }}</div>
-                                <div class="muted" style="font-size:12px">{{ $msg->email }}</div>
-                            </td>
-                            <td>{{ $msg->subject ?: '—' }}</td>
-                            <td class="muted" style="max-width:280px">{{ \Illuminate\Support\Str::limit($msg->message, 120) }}</td>
-                            <td><x-badge :status="$msg->statusLabel()" /></td>
-                            <td>
-                                <form method="post" action="{{ route('contact-messages.update', $msg) }}">
-                                    @csrf
-                                    @method('put')
-                                    <select class="select" name="status" onchange="this.form.submit()">
-                                        @foreach (['new','read','closed'] as $status)
-                                            <option value="{{ $status }}" @selected($msg->status === $status)>{{ ucfirst($status) }}</option>
-                                        @endforeach
-                                    </select>
-                                </form>
-                            </td>
-                        </tr>
+                        <article class="partner-msg">
+                            <div class="partner-msg-top">
+                                <strong>{{ $msg->name }}</strong>
+                                <x-badge :status="$msg->statusLabel()" />
+                            </div>
+                            <div class="partner-row-meta">
+                                <span>{{ $msg->email }}</span>
+                                <span>{{ $msg->created_at?->diffForHumans() }}</span>
+                            </div>
+                            <div class="partner-msg-subject">{{ $msg->subject ?: 'General enquiry' }}</div>
+                            <p class="partner-row-note">{{ \Illuminate\Support\Str::limit($msg->message, 110) }}</p>
+                            <form method="post" action="{{ route('contact-messages.update', $msg) }}" class="partner-msg-status">
+                                @csrf
+                                @method('put')
+                                <select class="select" name="status" onchange="this.form.submit()">
+                                    @foreach (['new' => 'New', 'read' => 'Read', 'closed' => 'Closed'] as $value => $label)
+                                        <option value="{{ $value }}" @selected($msg->status === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </form>
+                        </article>
                     @empty
-                        <tr><td colspan="5" class="muted" style="padding:24px;text-align:center">No contact messages yet.</td></tr>
+                        <div class="partner-empty">No contact messages.</div>
                     @endforelse
-                </tbody>
-            </table>
+                </div>
+                @if ($messages->hasPages())
+                    <div class="partner-pager">{{ $messages->links() }}</div>
+                @endif
+            </aside>
         </div>
-        @if ($messages->hasPages())
-            <div style="padding:12px 16px">{{ $messages->links() }}</div>
-        @endif
     </div>
 @endsection

@@ -61,9 +61,16 @@ class PaymentController extends Controller
         $payment = $this->payments->record($data, $request->user());
 
         if ($request->boolean('verify_now') && $request->user()->can('payments.verify')) {
-            $this->payments->verify($payment, $request->user());
+            // Already auto-verified when linked to an advance invoice.
+            if ($payment->status !== Payment::STATUS_VERIFIED) {
+                $this->payments->verify($payment, $request->user());
+            }
 
-            return back()->with('success', 'Payment recorded and verified. Credit updated.');
+            return back()->with('success', 'Payment recorded and verified. Related orders updated automatically.');
+        }
+
+        if ($payment->status === Payment::STATUS_VERIFIED) {
+            return back()->with('success', 'Advance payment applied — order status updated automatically.');
         }
 
         return back()->with('success', 'Payment recorded — pending verification.');

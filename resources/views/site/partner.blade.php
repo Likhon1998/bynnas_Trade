@@ -24,7 +24,10 @@
                     <label>Business / shop name<input name="business_name" value="{{ old('business_name') }}" required></label>
                     <div class="site-form-row">
                         <label>Contact person<input name="contact_name" value="{{ old('contact_name') }}" required></label>
-                        <label>Phone<input name="phone" value="{{ old('phone') }}"></label>
+                        <label>
+                            Phone
+                            <x-bd-phone-input name="phone" :value="old('phone')" variant="site" />
+                        </label>
                     </div>
                     <div class="site-form-row">
                         <label>Email<input type="email" name="email" value="{{ old('email') }}" required></label>

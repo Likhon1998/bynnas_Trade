@@ -41,6 +41,12 @@ class AnalyticsService
         $ordersPrev = Order::query()->whereBetween('submitted_at', [$prevStart, $prevEnd])->count();
 
         $shops = Shop::query()->whereIn('status', [Shop::STATUS_ACTIVE, Shop::STATUS_ON_HOLD])->count();
+        $shopsThisMonth = Shop::query()
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->count();
+        $shopsPrevMonth = Shop::query()
+            ->whereBetween('created_at', [$prevStart, $prevEnd])
+            ->count();
         $outstanding = (float) Shop::query()->sum('outstanding_balance');
         $products = Product::query()->where('status', Product::STATUS_ACTIVE)->count();
 
@@ -80,10 +86,10 @@ class AnalyticsService
                     'raw' => true,
                 ],
                 [
-                    'title' => 'Active Shops',
-                    'value' => $shops,
-                    'delta' => 'Live partners',
-                    'up' => true,
+                    'title' => 'New Shops (This Month)',
+                    'value' => $shopsThisMonth,
+                    'delta' => $this->deltaLabel($shopsThisMonth, $shopsPrevMonth).' · '.$shops.' active',
+                    'up' => $shopsThisMonth >= $shopsPrevMonth,
                     'color' => '#8b5cf6',
                     'raw' => true,
                 ],
