@@ -52,11 +52,23 @@
                             'rejected' => ['Rejected', $counts['rejected']],
                         ] as $key => [$label, $count])
                             <a
-                                href="{{ route('partner-inquiries.index', array_filter(['status' => $key ?: null])) }}"
+                                href="{{ route('partner-inquiries.index', array_filter(['status' => $key ?: null, 'source' => $source])) }}"
                                 class="partner-tab {{ request('status', '') === $key ? 'is-active' : '' }}"
                             >
                                 {{ $label }} <b>{{ $count }}</b>
                             </a>
+                        @endforeach
+                    </div>
+                    <div class="partner-sources" role="group" aria-label="Where the request came from">
+                        @foreach ([
+                            '' => ['All sources', $sourceCounts->sum()],
+                            'website' => ['Website', $sourceCounts['website'] ?? 0],
+                            'field' => ['Field officers', $sourceCounts['field'] ?? 0],
+                        ] as $key => [$label, $count])
+                            <a
+                                href="{{ route('partner-inquiries.index', array_filter(['status' => request('status'), 'source' => $key ?: null])) }}"
+                                class="partner-src {{ ($source ?? '') === $key ? 'is-active' : '' }}"
+                            >{{ $label }} <b>{{ $count }}</b></a>
                         @endforeach
                     </div>
                 </div>
@@ -71,9 +83,14 @@
                                     @if ($row->shop)
                                         <a class="link partner-shop-link" href="{{ route('shops.show', $row->shop) }}">{{ $row->shop->code }}</a>
                                     @endif
+                                    @if ($row->isFromField())
+                                        <span class="partner-source" title="Submitted from the field app">Field · {{ $row->submitter?->name ?? 'Salesman' }}</span>
+                                    @else
+                                        <span class="partner-source is-web" title="Submitted on the public website">Website</span>
+                                    @endif
                                 </div>
                                 <div class="partner-row-meta">
-                                    <span>{{ $row->contact_name }}</span>
+                                    <span>{{ $row->contact_name ?: 'No owner name' }}</span>
                                     <span>{{ $row->email }}</span>
                                     <span>{{ $row->phone ?: '—' }}</span>
                                     <span>{{ $row->city ?: 'No city' }}</span>
@@ -81,6 +98,15 @@
                                 </div>
                                 @if ($row->message)
                                     <p class="partner-row-note">{{ \Illuminate\Support\Str::limit($row->message, 140) }}</p>
+                                @endif
+                                @if ($row->isAccepted())
+                                    @if ($row->needsLogin())
+                                        <p class="partner-login is-waiting">Waiting for {{ $row->submitter?->name ?? 'the field officer' }} to create the owner's login</p>
+                                    @else
+                                        <p class="partner-login is-ready">Portal login {{ $row->portal_email }}{{ $row->isFromField() ? ' · set by '.($row->submitter?->name ?? 'field officer') : '' }}</p>
+                                    @endif
+                                @elseif ($row->isPending() && $row->isFromField())
+                                    <p class="partner-login">On accept, {{ $row->submitter?->name ?? 'the field officer' }} will create the login with the owner</p>
                                 @endif
                             </div>
                             <div class="partner-row-actions">
@@ -92,6 +118,11 @@
                                     <form method="post" action="{{ route('partner-inquiries.reject', $row) }}" onsubmit="return confirm('Reject this request?')">
                                         @csrf
                                         <button class="btn btn-ghost btn-sm partner-btn-reject" type="submit">Reject</button>
+                                    </form>
+                                @elseif ($row->needsLogin())
+                                    <form method="post" action="{{ route('partner-inquiries.issue-login', $row) }}" onsubmit="return confirm('Create the login yourself instead of the field officer?')">
+                                        @csrf
+                                        <button class="btn btn-ghost btn-sm" type="submit">Issue login</button>
                                     </form>
                                 @elseif ($row->isAccepted())
                                     <form method="post" action="{{ route('partner-inquiries.send-whatsapp', $row) }}">

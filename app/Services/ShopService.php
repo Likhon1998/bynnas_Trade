@@ -23,6 +23,8 @@ class ShopService
                 'email' => $data['email'] ?? null,
                 'address' => $data['address'] ?? null,
                 'city' => $data['city'] ?? null,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
                 'territory_id' => $data['territory_id'] ?? null,
                 'price_group_id' => $data['price_group_id'] ?? null,
                 'assigned_salesman_id' => $data['assigned_salesman_id'] ?? null,

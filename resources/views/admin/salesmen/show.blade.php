@@ -17,6 +17,34 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">This month collected</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($monthOrders) }}</div></div>
     </div>
 
+    @php
+        $today = $activity['today'];
+        $month = $activity['month'];
+        $all = $activity['all'];
+    @endphp
+    <div class="fa-stats">
+        <a class="card fa-stat fa-violet" href="{{ route('visits.index', ['period' => 'today', 'salesman_id' => $salesman->id]) }}#log">
+            <div class="fa-stat-label">Shop visits today</div>
+            <div class="fa-stat-value">{{ $today['visits'] }}</div>
+            <div class="fa-stat-meta">{{ $today['shops'] }} different shop{{ $today['shops'] === 1 ? '' : 's' }} · {{ $today['last_at'] ? 'last '.$today['last_at']->format('g:i A') : 'no visits yet' }}</div>
+        </a>
+        <a class="card fa-stat fa-blue" href="{{ route('visits.index', ['period' => 'month', 'salesman_id' => $salesman->id]) }}#log">
+            <div class="fa-stat-label">Visits this month</div>
+            <div class="fa-stat-value">{{ $month['visits'] }}</div>
+            <div class="fa-stat-meta">{{ $month['shops'] }} unique shops · {{ $all['visits'] }} all time</div>
+        </a>
+        <div class="card fa-stat fa-green">
+            <div class="fa-stat-label">Orders this month</div>
+            <div class="fa-stat-value">{{ $month['orders'] }}</div>
+            <div class="fa-stat-meta">{{ \App\Support\DemoData::taka($month['order_value']) }}{{ $month['conversion'] !== null ? ' · '.$month['conversion'].'% of visits' : '' }}</div>
+        </div>
+        <a class="card fa-stat fa-amber" href="#added-shops">
+            <div class="fa-stat-label">Shops added</div>
+            <div class="fa-stat-value">{{ $all['added'] }}</div>
+            <div class="fa-stat-meta">{{ $month['added'] }} this month{{ $all['added_pending'] ? ' · '.$all['added_pending'].' pending approval' : '' }}</div>
+        </a>
+    </div>
+
     <div class="card" style="padding:16px;margin-bottom:14px">
         <div style="font-weight:700;margin-bottom:8px">Field login</div>
         <div class="muted">URL: <a class="link" href="{{ url('/field/login') }}">{{ url('/field/login') }}</a></div>
@@ -55,6 +83,53 @@
                             </tr>
                         @empty
                             <tr><td class="muted" style="padding:16px">No orders yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <div class="card">
+            <div class="fa-card-head">
+                <strong>Recent visits</strong>
+                <a class="link" href="{{ route('visits.index', ['period' => 'all', 'salesman_id' => $salesman->id]) }}#log">All visits ›</a>
+            </div>
+            <div class="table-wrap">
+                <table class="data">
+                    <tbody>
+                        @forelse ($salesman->visits as $visit)
+                            <tr>
+                                <td style="white-space:nowrap">{{ $visit->checked_in_at?->format('d M, g:i A') }}</td>
+                                <td>{{ $visit->shop?->name }}</td>
+                                <td><x-badge :status="$visit->outcomeLabel()" /></td>
+                            </tr>
+                        @empty
+                            <tr><td class="muted" style="padding:16px">No visits yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card" id="added-shops">
+            <div class="fa-card-head">
+                <strong>Shops added in the field</strong>
+                @if ($salesman->createdShops->isNotEmpty())
+                    <a class="link" href="{{ route('shops.index', ['source' => 'field', 'search' => $salesman->name]) }}">Open in Shops ›</a>
+                @endif
+            </div>
+            <div class="table-wrap">
+                <table class="data">
+                    <tbody>
+                        @forelse ($salesman->createdShops as $shop)
+                            <tr>
+                                <td><a class="link" href="{{ route('shops.show', $shop) }}">{{ $shop->code }}</a></td>
+                                <td>{{ $shop->name }}<div class="muted" style="font-size:11.5px">{{ $shop->city ?: '—' }} · {{ $shop->created_at?->format('d M Y') }}</div></td>
+                                <td><x-badge :status="$shop->statusLabel()" /></td>
+                            </tr>
+                        @empty
+                            <tr><td class="muted" style="padding:16px">This salesman hasn't added any shops yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -4,7 +4,6 @@
         ['label' => 'SALES & ORDERS', 'items' => [
             ['name' => 'shops.index', 'label' => 'Shops', 'icon' => 'store'],
             ['name' => 'salesmen.index', 'label' => 'Salesmen', 'icon' => 'users', 'permission' => 'salesmen.view'],
-            ['name' => 'visits.index', 'label' => 'Visits', 'icon' => 'map-pin', 'permission' => 'visits.view'],
             ['name' => 'orders.index', 'label' => 'Orders', 'icon' => 'shopping-bag', 'permission' => 'orders.view'],
             ['name' => 'fulfilment.index', 'label' => 'Warehouse desk', 'icon' => 'clipboard-check', 'permission' => 'fulfilment.view'],
             ['name' => 'deliveries.index', 'label' => 'Deliveries', 'icon' => 'truck', 'permission' => 'deliveries.view'],
@@ -13,6 +12,7 @@
             ['name' => 'payments.index', 'label' => 'Payments', 'icon' => 'wallet'],
         ]],
         ['label' => 'FIELD PERFORMANCE', 'items' => [
+            ['name' => 'visits.index', 'label' => 'Field activity', 'icon' => 'map-pin', 'permission' => 'visits.view'],
             ['name' => 'targets.index', 'label' => 'Targets', 'icon' => 'target', 'permission' => 'targets.view'],
             ['name' => 'commissions.index', 'label' => 'Commissions', 'icon' => 'percent', 'permission' => 'commissions.view'],
             ['name' => 'rewards.index', 'label' => 'Rewards', 'icon' => 'gift', 'permission' => 'rewards.view'],
@@ -39,7 +39,7 @@
             ['name' => 'roles.index', 'label' => 'Roles & Permissions', 'icon' => 'shield', 'permission' => 'roles.view'],
             ['name' => 'price-groups.index', 'label' => 'Price Groups', 'icon' => 'tags', 'permission' => 'price_groups.view'],
             ['name' => 'audit.index', 'label' => 'Audit Logs', 'icon' => 'scroll-text', 'permission' => 'audit.view'],
-            ['name' => 'settings.index', 'label' => 'Settings', 'icon' => 'settings'],
+            ['name' => 'settings.index', 'label' => 'Settings', 'icon' => 'settings', 'permission' => 'settings.view'],
         ]],
     ];
 @endphp

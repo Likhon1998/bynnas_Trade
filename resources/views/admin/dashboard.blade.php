@@ -11,18 +11,48 @@
         </span>
     </div>
 
-    @if ($pendingAudit > 0 || $pendingPayments > 0)
+    @php
+        $user = auth()->user();
+        $showAudit = $pendingAudit > 0 && $user->can('orders.approve');
+        $showPayments = $pendingPayments > 0 && $user->can('payments.verify');
+        $canAnalytics = $user->can('analytics.view');
+        $canOrders = $user->can('orders.view');
+        $quickActions = collect([
+            ['Add Shop', 'store', '#dbeafe', '#2563eb', 'shops.create', 'shops.create'],
+            ['Create Order', 'shopping-bag', '#f3e8ff', '#6D28D9', 'orders.create', 'orders.create'],
+            ['Add Product', 'package-plus', '#dcfce7', '#16a34a', 'products.create', 'products.create'],
+            ['Add Shipment', 'ship', '#e0f2fe', '#0284c7', 'shipments.create', 'shipments.create'],
+            ['Receive Stock', 'package-check', '#ccfbf1', '#0f766e', 'inventory.receive', 'inventory.receive'],
+            ['Generate Report', 'file-bar-chart', '#f1f5f9', '#334155', 'reports.index', 'reports.view'],
+            ['Targets', 'target', '#fef3c7', '#d97706', 'targets.index', 'targets.view'],
+            ['Analytics', 'trending-up', '#ede9fe', '#6D28D9', 'analytics.index', 'analytics.view'],
+        ])->filter(fn ($a) => $user->can($a[5]));
+        $showAnything = $canAnalytics || $canOrders || $quickActions->isNotEmpty()
+            || $user->can('products.view') || $user->can('shipments.view');
+    @endphp
+
+    @if ($showAudit || $showPayments)
         <div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-            @if ($pendingAudit > 0)
+            @if ($showAudit)
                 <a class="btn btn-primary" href="{{ route('orders.index', ['audit_queue' => 1]) }}">Audit queue ({{ $pendingAudit }})</a>
             @endif
-            @if ($pendingPayments > 0)
+            @if ($showPayments)
                 <a class="btn btn-ghost" href="{{ route('payments.index', ['status' => 'pending']) }}">Payments to verify ({{ $pendingPayments }})</a>
             @endif
-            <span class="muted" style="font-size:13px">{{ $openInvoices }} open invoice(s)</span>
+            @can('invoices.view')
+                <span class="muted" style="font-size:13px">{{ $openInvoices }} open invoice(s)</span>
+            @endcan
         </div>
     @endif
 
+    @unless ($showAnything)
+        <div class="card" style="padding:28px;text-align:center">
+            <div class="section-title" style="margin-bottom:6px">No modules assigned yet</div>
+            <div class="muted">Your account doesn't have access to any dashboard sections. Ask a Super Admin to assign you a role.</div>
+        </div>
+    @endunless
+
+    @if ($canAnalytics)
     <div class="grid-5" style="margin-bottom:16px">
         @foreach ($stats as $stat)
             @php $isNewShops = ($stat['title'] ?? '') === 'New Shops (This Month)'; @endphp
@@ -49,8 +79,11 @@
             @endif
         @endforeach
     </div>
+    @endif
 
-    <div class="grid-2" style="margin-bottom:16px">
+    @if ($canAnalytics || $canOrders)
+    <div class="{{ $canAnalytics && $canOrders ? 'grid-2' : '' }}" style="margin-bottom:16px">
+        @if ($canAnalytics)
         <div class="card" style="padding:18px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                 <div class="section-title">Sales Overview</div>
@@ -58,6 +91,8 @@
             </div>
             <canvas id="salesChart" height="120"></canvas>
         </div>
+        @endif
+        @if ($canOrders)
         <div class="card" style="padding:18px;display:flex;gap:18px;align-items:center">
             <div style="flex:1">
                 <div class="section-title" style="margin-bottom:12px">Order Status</div>
@@ -86,22 +121,16 @@
                 @endforeach
             </div>
         </div>
+        @endif
     </div>
+    @endif
 
+    @if ($quickActions->isNotEmpty())
     <div class="card" style="padding:18px;margin-bottom:16px">
         <div class="section-title" style="margin-bottom:12px">Quick Actions</div>
         <div class="qa-grid">
-            @foreach ([
-                ['Add Shop', 'store', '#dbeafe', '#2563eb', route('shops.create')],
-                ['Create Order', 'shopping-bag', '#f3e8ff', '#6D28D9', route('orders.create')],
-                ['Add Product', 'package-plus', '#dcfce7', '#16a34a', route('products.create')],
-                ['Add Shipment', 'ship', '#e0f2fe', '#0284c7', route('shipments.create')],
-                ['Receive Stock', 'package-check', '#ccfbf1', '#0f766e', route('inventory.receive')],
-                ['Generate Report', 'file-bar-chart', '#f1f5f9', '#334155', route('reports.index')],
-                ['Targets', 'target', '#fef3c7', '#d97706', route('targets.index')],
-                ['Analytics', 'trending-up', '#ede9fe', '#6D28D9', route('analytics.index')],
-            ] as $action)
-                <a class="qa" href="{{ $action[4] }}">
+            @foreach ($quickActions as $action)
+                <a class="qa" href="{{ route($action[4]) }}">
                     <span class="qa-ico" style="background:{{ $action[2] }};color:{{ $action[3] }}">
                         <i data-lucide="{{ $action[1] }}"></i>
                     </span>
@@ -110,8 +139,10 @@
             @endforeach
         </div>
     </div>
+    @endif
 
     <div class="grid-3">
+        @if ($canOrders)
         <div class="card" style="padding:8px 0 0;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px">
                 <div class="section-title">Recent Orders</div>
@@ -142,7 +173,9 @@
                 </table>
             </div>
         </div>
+        @endif
 
+        @can('products.view')
         <div class="card" style="padding:16px">
             <div class="section-title" style="margin-bottom:12px">Top stock products</div>
             @forelse ($topProducts as $product)
@@ -160,7 +193,9 @@
                 <div class="muted">No products</div>
             @endforelse
         </div>
+        @endcan
 
+        @can('shipments.view')
         <div class="card" style="padding:16px">
             <div class="section-title" style="margin-bottom:12px">Shipments</div>
             @forelse ($shipments as $shipment)
@@ -178,12 +213,13 @@
                 <div class="muted">No shipments</div>
             @endforelse
         </div>
+        @endcan
     </div>
 @endsection
 
 @push('scripts')
 <script>
-    new Chart(document.getElementById('salesChart'), {
+    document.getElementById('salesChart') && new Chart(document.getElementById('salesChart'), {
         type: 'line',
         data: {
             labels: @json(collect($salesSeries)->pluck('label')),
@@ -207,7 +243,7 @@
         }
     });
 
-    new Chart(document.getElementById('orderChart'), {
+    document.getElementById('orderChart') && new Chart(document.getElementById('orderChart'), {
         type: 'doughnut',
         data: {
             labels: ['Pending Approval', 'Approved', 'Processing', 'Dispatched', 'Delivered'],

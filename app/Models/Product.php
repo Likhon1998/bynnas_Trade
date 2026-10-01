@@ -75,8 +75,7 @@ class Product extends Model
     public function priceForGroup(?PriceGroup $group = null): float
     {
         if ($group) {
-            $override = $this->prices->firstWhere('price_group_id', $group->id)
-                ?? $this->prices()->where('price_group_id', $group->id)->first();
+            $override = $this->prices->firstWhere('price_group_id', $group->id);
 
             if ($override) {
                 if ($override->promotional_price

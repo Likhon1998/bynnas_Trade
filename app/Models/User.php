@@ -82,6 +82,11 @@ class User extends Authenticatable
         return $this->hasMany(Shop::class, 'assigned_salesman_id');
     }
 
+    public function createdShops(): HasMany
+    {
+        return $this->hasMany(Shop::class, 'created_by');
+    }
+
     public function visits(): HasMany
     {
         return $this->hasMany(ShopVisit::class, 'salesman_id');
@@ -97,6 +102,16 @@ class User extends Authenticatable
         return $this->hasRole('Super Admin');
     }
 
+    /** @return array{account: string, label: string, route: string} where this user is meant to sign in */
+    public function portalLogin(): array
+    {
+        return match ($this->portal) {
+            self::PORTAL_SHOP => ['account' => 'shop partner', 'label' => 'B2B Partner portal', 'route' => 'portal.login'],
+            self::PORTAL_SALESMAN => ['account' => 'field salesman', 'label' => 'Field sales app', 'route' => 'field.login'],
+            default => ['account' => 'staff', 'label' => 'Admin portal', 'route' => 'login'],
+        };
+    }
+
     public function isSalesman(): bool
     {
         return $this->portal === self::PORTAL_SALESMAN || $this->hasRole('Salesman');
@@ -106,6 +121,10 @@ class User extends Authenticatable
     {
         if ($this->isSuperAdmin()) {
             return true;
+        }
+
+        if ($this->relationLoaded('accessScopes')) {
+            return $this->accessScopes->contains('scope_type', UserAccessScope::TYPE_GLOBAL);
         }
 
         return $this->accessScopes()->where('scope_type', UserAccessScope::TYPE_GLOBAL)->exists();

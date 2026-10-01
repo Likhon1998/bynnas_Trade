@@ -1,10 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Shops')
 @section('content')
-    <div
-        x-data="shopBoard(@js($rows), @js($initialFilters))"
-        @keydown.escape.window="/* keep focus friendly */"
-    >
+    <div x-data="shopBoard(@js($rows), @js($initialFilters))">
         <x-page-header title="Shops" subtitle="Wholesale partners and portal access" action="{{ route('shops.create') }}" action-label="Add Shop">
             <x-slot:description>Filters update instantly. Approved shops receive portal credentials.</x-slot:description>
         </x-page-header>
@@ -20,7 +17,7 @@
                     type="search"
                     x-model="search"
                     @input="syncUrl()"
-                    placeholder="Search shop, owner or city"
+                    placeholder="Search shop, owner, city or salesman"
                     autocomplete="off"
                 >
                 <select class="select" x-model="status" @change="syncUrl()">
@@ -30,7 +27,11 @@
                     <option value="on_hold">On Hold</option>
                     <option value="rejected">Rejected</option>
                 </select>
-                <button type="button" class="btn btn-ghost" x-show="search || status" x-cloak @click="clearFilters()">Clear</button>
+                <select class="select" x-model="source" @change="syncUrl()">
+                    <option value="">All sources</option>
+                    <option value="field">Added by salesmen</option>
+                </select>
+                <button type="button" class="btn btn-ghost" x-show="search || status || source" x-cloak @click="clearFilters()">Clear</button>
                 <span class="muted" style="font-size:12px;margin-left:auto" x-text="filteredCountLabel()"></span>
             </div>
         </div>
@@ -55,7 +56,12 @@
                         <template x-for="row in filteredRows()" :key="row.id">
                             <tr>
                                 <td><a class="link" :href="row.url" x-text="row.code"></a></td>
-                                <td style="font-weight:600" x-text="row.name"></td>
+                                <td>
+                                    <div style="font-weight:600" x-text="row.name"></div>
+                                    <div x-show="row.added_by" class="fa-added">
+                                        Added by <b x-text="row.added_by"></b> · <span x-text="row.added_on"></span>
+                                    </div>
+                                </td>
                                 <td x-text="row.owner || '—'"></td>
                                 <td x-text="row.city || '—'"></td>
                                 <td x-text="row.price_group"></td>
@@ -82,16 +88,20 @@ function shopBoard(rows, initialFilters) {
         rows: rows || [],
         search: initialFilters?.search || '',
         status: initialFilters?.status || '',
+        source: initialFilters?.source || '',
         filteredRows() {
             const q = (this.search || '').trim().toLowerCase();
             return this.rows.filter((row) => {
                 if (this.status && row.status !== this.status) return false;
+                if (this.source && row.source !== this.source) return false;
                 if (!q) return true;
                 return (
                     String(row.code).toLowerCase().includes(q) ||
                     String(row.name).toLowerCase().includes(q) ||
                     String(row.owner).toLowerCase().includes(q) ||
-                    String(row.city).toLowerCase().includes(q)
+                    String(row.city).toLowerCase().includes(q) ||
+                    String(row.salesman).toLowerCase().includes(q) ||
+                    String(row.added_by).toLowerCase().includes(q)
                 );
             });
         },
@@ -103,6 +113,7 @@ function shopBoard(rows, initialFilters) {
         clearFilters() {
             this.search = '';
             this.status = '';
+            this.source = '';
             this.syncUrl();
         },
         syncUrl() {
@@ -113,6 +124,7 @@ function shopBoard(rows, initialFilters) {
             };
             setOrDel('search', (this.search || '').trim());
             setOrDel('status', this.status);
+            setOrDel('source', this.source);
             history.replaceState({}, '', u.pathname + u.search);
         },
     };

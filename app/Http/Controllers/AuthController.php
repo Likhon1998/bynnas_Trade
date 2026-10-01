@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RedirectsWrongPortal;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    use RedirectsWrongPortal;
+
     public function __construct(private AuditLogger $auditLogger) {}
 
     public function showLogin()
@@ -48,11 +51,7 @@ class AuthController extends Controller
         }
 
         if ($user->portal !== User::PORTAL_ADMIN && ! $user->isSuperAdmin()) {
-            Auth::logout();
-
-            throw ValidationException::withMessages([
-                'email' => 'This account is not authorized for the admin portal.',
-            ]);
+            return $this->wrongPortal($user, 'Admin portal');
         }
 
         $request->session()->regenerate();

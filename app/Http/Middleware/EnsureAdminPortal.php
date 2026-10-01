@@ -28,9 +28,11 @@ class EnsureAdminPortal
         if ($user->portal !== \App\Models\User::PORTAL_ADMIN && ! $user->isSuperAdmin()) {
             Auth::logout();
 
-            return redirect()->route('login')->withErrors([
-                'email' => 'This account is not authorized for the admin portal.',
-            ]);
+            $home = $user->portalLogin();
+
+            return redirect()->route('login')
+                ->withErrors(['email' => "This is a {$home['account']} account, so it can't open the Admin portal. Please use the {$home['label']}."])
+                ->with('portal_hint', ['label' => $home['label'], 'url' => route($home['route'], ['email' => $user->email])]);
         }
 
         return $next($request);

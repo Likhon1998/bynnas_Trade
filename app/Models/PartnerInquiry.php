@@ -17,9 +17,15 @@ class PartnerInquiry extends Model
 
     public const STATUS_CLOSED = 'closed';
 
+    public const SOURCE_WEBSITE = 'website';
+
+    public const SOURCE_FIELD = 'field';
+
+    public const BUSINESS_TYPES = ['retailer' => 'Retailer', 'distributor' => 'Distributor', 'other' => 'Other'];
+
     protected $fillable = [
         'business_name', 'contact_name', 'email', 'phone', 'city',
-        'business_type', 'message', 'status', 'admin_notes',
+        'business_type', 'message', 'status', 'source', 'submitted_by', 'admin_notes',
         'reviewed_at', 'reviewed_by', 'shop_id', 'portal_email',
     ];
 
@@ -36,6 +42,16 @@ class PartnerInquiry extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function isFromField(): bool
+    {
+        return $this->source === self::SOURCE_FIELD;
     }
 
     public function statusLabel(): string
@@ -56,5 +72,10 @@ class PartnerInquiry extends Model
     public function isAccepted(): bool
     {
         return $this->status === self::STATUS_CONVERTED;
+    }
+
+    public function needsLogin(): bool
+    {
+        return $this->isAccepted() && ! $this->portal_email;
     }
 }

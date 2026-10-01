@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\PartnerInquiry;
 use App\Models\Payment;
 use App\Models\ProductReturn;
+use App\Models\Shop;
 use App\Models\User;
 use App\Notifications\SystemAlert;
 use Illuminate\Support\Collection;
@@ -76,6 +78,28 @@ class AppNotificationService
             '/admin/returns/'.$return->id,
             'returns',
             'warning',
+        );
+    }
+
+    public function shopAddedFromField(Shop $shop, User $salesman): void
+    {
+        $this->notifyAdmins(
+            "New shop added by {$salesman->name}",
+            $shop->name.' · '.($shop->city ?: 'No area').' · '.$shop->code.' · waiting for approval',
+            '/admin/shops/'.$shop->id,
+            'shops',
+            'warning',
+        );
+    }
+
+    public function partnerFromField(PartnerInquiry $inquiry, User $salesman): void
+    {
+        $this->notifyAdmins(
+            "Partner application from {$salesman->name}",
+            $inquiry->business_name.' · '.($inquiry->city ?: 'No area').' · submitted from the field',
+            '/admin/partner-leads?status=pending',
+            'partners',
+            'info',
         );
     }
 

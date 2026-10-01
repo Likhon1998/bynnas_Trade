@@ -1,17 +1,18 @@
 @extends('site.layouts.app')
 @section('title', 'Become a Partner')
 @section('content')
-    <section class="site-page-hero">
+    <section class="page-hero">
         <div class="site-wrap">
-            <p class="site-kicker">Become a partner</p>
-            <h1 class="site-h2">Apply for wholesale shop access.</h1>
-            <p class="site-lead">Tell us about your retail business. After Super Admin review you receive portal credentials, a price group and credit terms.</p>
+            <span class="eyebrow">Become a partner</span>
+            <h1>Apply for wholesale access.</h1>
+            <p class="lead">Tell us about your retail business. After review, you'll receive shop portal access, your partner price list and payment terms.</p>
         </div>
     </section>
 
-    <section class="site-section">
-        <div class="site-wrap" style="max-width:760px">
-            <div class="site-panel">
+    <section class="section">
+        <div class="site-wrap split split-form">
+            <div class="card">
+                <h2 class="card-title">Partner application</h2>
                 @if (session('success'))
                     <div class="site-alert site-alert-ok">{{ session('success') }}</div>
                 @endif
@@ -77,10 +78,29 @@
                             </ul>
                         </div>
                     </label>
-                    <label>About your shop / volumes<textarea name="message" rows="4" placeholder="Categories you sell, monthly purchase estimate, existing locations">{{ old('message') }}</textarea></label>
-                    <button class="site-cta" type="submit">Submit application</button>
+                    <label>About your shop<textarea name="message" rows="4" placeholder="Product categories you sell, estimated monthly purchase, shop locations">{{ old('message') }}</textarea></label>
+                    <div><button class="btn btn-primary btn-lg" type="submit">Submit application</button></div>
                 </form>
             </div>
+
+            <aside class="card card-soft">
+                <h2 class="card-title">What happens next</h2>
+                <ol class="next-steps">
+                    <li>
+                        <strong>We review your application</strong>
+                        <span>Our team checks your shop details, usually within 1–2 business days.</span>
+                    </li>
+                    <li>
+                        <strong>We contact you</strong>
+                        <span>A representative calls to confirm details and discuss pricing and terms.</span>
+                    </li>
+                    <li>
+                        <strong>You get portal access</strong>
+                        <span>Log in to see your price list, place orders and manage invoices.</span>
+                    </li>
+                </ol>
+                <p class="muted small">Questions? <a class="link" href="{{ route('site.contact') }}">Contact our team</a>.</p>
+            </aside>
         </div>
     </section>
 @endsection

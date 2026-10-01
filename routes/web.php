@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\ReturnController;
 use App\Http\Controllers\Admin\RewardController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SalesmanController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SupplierController;
@@ -34,7 +35,6 @@ use App\Http\Controllers\Field\SalesmanAuthController;
 use App\Http\Controllers\Portal\ShopAuthController;
 use App\Http\Controllers\Portal\ShopPortalController;
 use App\Http\Controllers\Site\SiteController;
-use App\Http\Controllers\UiController;
 use App\Http\Middleware\EnsureAdminPortal;
 use App\Http\Middleware\EnsureSalesmanPortal;
 use App\Http\Middleware\EnsureShopPortal;
@@ -50,7 +50,7 @@ Route::post('/become-a-partner', [SiteController::class, 'storePartner'])->name(
 Route::prefix('portal')->name('portal.')->group(function () {
     Route::middleware('guest')->group(function () {
         Route::get('/login', [ShopAuthController::class, 'showLogin'])->name('login');
-        Route::post('/login', [ShopAuthController::class, 'login'])->name('login.submit');
+        Route::post('/login', [ShopAuthController::class, 'login'])->middleware('throttle:login')->name('login.submit');
     });
 
     Route::middleware(['auth', EnsureShopPortal::class])->group(function () {
@@ -72,7 +72,7 @@ Route::prefix('portal')->name('portal.')->group(function () {
 Route::prefix('field')->name('field.')->group(function () {
     Route::middleware('guest')->group(function () {
         Route::get('/login', [SalesmanAuthController::class, 'showLogin'])->name('login');
-        Route::post('/login', [SalesmanAuthController::class, 'login'])->name('login.submit');
+        Route::post('/login', [SalesmanAuthController::class, 'login'])->middleware('throttle:login')->name('login.submit');
     });
 
     Route::middleware(['auth', EnsureSalesmanPortal::class])->group(function () {
@@ -80,19 +80,27 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/', fn () => redirect()->route('field.dashboard'));
         Route::get('/dashboard', [FieldPortalController::class, 'dashboard'])->name('dashboard');
         Route::get('/shops', [FieldPortalController::class, 'shops'])->name('shops');
+        Route::get('/shops/new', [FieldPortalController::class, 'createShop'])->name('shops.create');
+        Route::post('/shops', [FieldPortalController::class, 'storeShop'])->middleware('throttle:30,1')->name('shops.store');
         Route::post('/shops/{shop}/check-in', [FieldPortalController::class, 'checkIn'])->name('shops.check-in');
         Route::get('/visits/{visit}', [FieldPortalController::class, 'showVisit'])->name('visit.show');
         Route::post('/visits/{visit}/order', [FieldPortalController::class, 'submitOrder'])->name('visit.order');
         Route::post('/visits/{visit}/check-out', [FieldPortalController::class, 'checkOut'])->name('visit.checkout');
         Route::get('/orders', [FieldPortalController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}', [FieldPortalController::class, 'showOrder'])->name('orders.show');
+        Route::get('/earnings', [FieldPortalController::class, 'earnings'])->name('earnings');
+        Route::get('/partners', [FieldPortalController::class, 'partners'])->name('partners');
+        Route::get('/partners/apply', [FieldPortalController::class, 'createPartner'])->name('partners.create');
+        Route::post('/partners', [FieldPortalController::class, 'storePartner'])->middleware('throttle:20,1')->name('partners.store');
+        Route::get('/partners/{inquiry}/login', [FieldPortalController::class, 'partnerLogin'])->name('partners.login');
+        Route::post('/partners/{inquiry}/login', [FieldPortalController::class, 'storePartnerLogin'])->middleware('throttle:20,1')->name('partners.login.store');
     });
 });
 
 Route::prefix('admin')->group(function () {
     Route::middleware('guest')->group(function () {
         Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-        Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login.submit');
     });
 
     Route::middleware(['auth', EnsureAdminPortal::class])->group(function () {
@@ -255,6 +263,7 @@ Route::prefix('admin')->group(function () {
         Route::post('/partner-leads/{partnerInquiry}/accept', [PartnerInquiryController::class, 'accept'])->name('partner-inquiries.accept');
         Route::post('/partner-leads/{partnerInquiry}/reject', [PartnerInquiryController::class, 'reject'])->name('partner-inquiries.reject');
         Route::post('/partner-leads/{partnerInquiry}/pending', [PartnerInquiryController::class, 'pending'])->name('partner-inquiries.pending');
+        Route::post('/partner-leads/{partnerInquiry}/issue-login', [PartnerInquiryController::class, 'issueLogin'])->name('partner-inquiries.issue-login');
         Route::post('/partner-leads/{partnerInquiry}/send-whatsapp', [PartnerInquiryController::class, 'sendWhatsapp'])->name('partner-inquiries.send-whatsapp');
         Route::put('/contact-messages/{contactMessage}', [PartnerInquiryController::class, 'markMessage'])->name('contact-messages.update');
 
@@ -262,6 +271,6 @@ Route::prefix('admin')->group(function () {
         Route::get('/reports/{report}', [ReportController::class, 'show'])->name('reports.show');
         Route::get('/reports/{report}/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
-        Route::get('/settings', [UiController::class, 'page'])->defaults('page', 'settings')->name('settings.index');
+        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     });
 });

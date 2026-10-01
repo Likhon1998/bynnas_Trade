@@ -1,36 +1,72 @@
 @extends('site.layouts.app')
 @section('title', 'About')
 @section('content')
-    <section class="site-page-hero">
+    <section class="page-hero">
         <div class="site-wrap">
-            <p class="site-kicker">About</p>
-            <h1 class="site-h2" style="max-width:16ch">Built for wholesale gadget distribution in Bangladesh.</h1>
-            <p class="site-lead">Bynnas Trade is the private operating system behind China import, warehouse fulfilment, salesman routes, shop credit and commission — not a public marketplace.</p>
+            <span class="eyebrow">About us</span>
+            <h1>Wholesale distribution, built for Bangladesh.</h1>
+            <p class="lead">Bynnas Trade supplies retail shops with imported products — managing sourcing, warehousing, orders, delivery and payments in one place. We work with approved partners, not as a public marketplace.</p>
         </div>
     </section>
 
-    <section class="site-section">
-        <div class="site-wrap site-split">
+    <section class="section">
+        <div class="site-wrap split">
             <div>
-                <p class="site-kicker">What we run</p>
-                <h2 class="site-h2">One company stack. Three portals.</h2>
-                <p class="site-lead">HQ controls users, shops, stock and audit. Approved shop owners order at their price group. Salesmen check in, collect orders, and chase targets on a mobile-friendly field app.</p>
+                <span class="eyebrow">What we do</span>
+                <h2>One team, three ways to work with us.</h2>
+                <p class="lead">Our head office manages stock, partners and quality control. Shop owners order at their own prices. Our field team supports shops directly.</p>
             </div>
-            <ul class="site-list site-panel">
-                <li><strong>Super Admin & HQ</strong><span>RBAC, warehouses, shipments, audit queue, finance and analytics.</span></li>
-                <li><strong>Shop portal</strong><span>Assigned prices, stock visibility, orders, invoices and returns.</span></li>
-                <li><strong>Field force</strong><span>Visits, order collection, monthly targets and achievement.</span></li>
-            </ul>
+            <div class="info-list">
+                <div class="info-item">
+                    <h3>Head office</h3>
+                    <p>Warehouses, shipments, order review, finance and reporting.</p>
+                </div>
+                <div class="info-item">
+                    <h3>Shop portal</h3>
+                    <p>Partner prices, available stock, orders, invoices and returns.</p>
+                </div>
+                <div class="info-item">
+                    <h3>Field team</h3>
+                    <p>Shop visits, order collection and on-the-ground support.</p>
+                </div>
+            </div>
         </div>
     </section>
 
-    <section class="site-section site-band">
-        <div class="site-wrap site-split">
-            <div>
-                <p class="site-kicker">Operating promise</p>
-                <h2 class="site-h2">No order ships without audit. No credit drifts unnoticed.</h2>
+    <section class="section section-soft">
+        <div class="site-wrap">
+            <div class="section-head">
+                <span class="eyebrow">Our commitments</span>
+                <h2>How we work with every partner.</h2>
             </div>
-            <p class="site-lead" style="margin:0">Shop and salesman orders wait for Super Admin approval before stock is reserved. Outstanding balances feed credit hold. Verified collections unlock commissions.</p>
+            <div class="features features-3">
+                <div class="feature">
+                    <h3>Every order is reviewed</h3>
+                    <p>Orders are checked by our team before stock is reserved, so what you order is what you receive.</p>
+                </div>
+                <div class="feature">
+                    <h3>Transparent accounts</h3>
+                    <p>Invoices, payments and outstanding balances are always visible in your shop portal.</p>
+                </div>
+                <div class="feature">
+                    <h3>Fair, consistent pricing</h3>
+                    <p>Your price list is agreed upfront and applied automatically to every order.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="site-wrap">
+            <div class="cta-band">
+                <div>
+                    <h2>Interested in becoming a partner?</h2>
+                    <p>Tell us about your shop and our team will get back to you.</p>
+                </div>
+                <div class="cta-band-actions">
+                    <a class="btn btn-white btn-lg" href="{{ route('site.partner') }}">Become a partner</a>
+                </div>
+            </div>
         </div>
     </section>
 @endsection

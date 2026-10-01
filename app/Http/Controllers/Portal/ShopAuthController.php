@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Portal;
 
+use App\Http\Controllers\Concerns\RedirectsWrongPortal;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
@@ -14,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 class ShopAuthController extends Controller
 {
+    use RedirectsWrongPortal;
+
     public function __construct(private AuditLogger $auditLogger) {}
 
     public function showLogin()
@@ -41,11 +44,15 @@ class ShopAuthController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        if (! $user->is_active || $user->portal !== User::PORTAL_SHOP) {
+        if (! $user->is_active) {
             Auth::logout();
             throw ValidationException::withMessages([
-                'email' => 'This account is not authorized for the B2B shop portal.',
+                'email' => 'This account has been deactivated. Contact Bynnas Trade admin.',
             ]);
+        }
+
+        if ($user->portal !== User::PORTAL_SHOP) {
+            return $this->wrongPortal($user, 'B2B Partner portal');
         }
 
         $shop = $user->primaryShop();

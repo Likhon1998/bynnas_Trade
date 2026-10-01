@@ -22,7 +22,7 @@ class Shop extends Model
 
     protected $fillable = [
         'code', 'name', 'owner_name', 'phone', 'email', 'address', 'city',
-        'territory_id', 'price_group_id', 'assigned_salesman_id',
+        'latitude', 'longitude', 'territory_id', 'price_group_id', 'assigned_salesman_id',
         'credit_limit', 'outstanding_balance', 'payment_terms_days',
         'status', 'notes', 'created_by', 'approved_at',
     ];
@@ -33,7 +33,25 @@ class Shop extends Model
             'credit_limit' => 'decimal:2',
             'outstanding_balance' => 'decimal:2',
             'approved_at' => 'datetime',
+            'latitude' => 'float',
+            'longitude' => 'float',
         ];
+    }
+
+    public function isFieldAdded(): bool
+    {
+        return $this->created_by !== null && $this->created_by === $this->assigned_salesman_id;
+    }
+
+    public function mapUrl(): ?string
+    {
+        if ($this->latitude !== null && $this->longitude !== null) {
+            return 'https://www.google.com/maps/search/?api=1&query='.$this->latitude.','.$this->longitude;
+        }
+
+        $query = trim(implode(', ', array_filter([$this->name, $this->address, $this->city])));
+
+        return $query === '' ? null : 'https://www.google.com/maps/search/?api=1&query='.urlencode($query);
     }
 
     public function territory(): BelongsTo

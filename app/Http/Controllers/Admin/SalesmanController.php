@@ -6,13 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\Territory;
 use App\Models\User;
+use App\Services\FieldActivityService;
 use App\Services\SalesmanService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SalesmanController extends Controller
 {
-    public function __construct(private SalesmanService $salesmen) {}
+    public function __construct(
+        private SalesmanService $salesmen,
+        private FieldActivityService $activity,
+    ) {}
 
     public function index(Request $request)
     {
@@ -64,8 +68,9 @@ class SalesmanController extends Controller
         $salesman->load([
             'salesmanProfile.territory',
             'assignedShops.territory',
-            'visits' => fn ($q) => $q->latest()->limit(10),
+            'visits' => fn ($q) => $q->with(['shop', 'order'])->latest('checked_in_at')->limit(10),
             'salesmanOrders' => fn ($q) => $q->latest()->limit(10),
+            'createdShops' => fn ($q) => $q->latest()->limit(20),
         ]);
 
         $monthOrders = $salesman->salesmanOrders()
@@ -73,7 +78,13 @@ class SalesmanController extends Controller
             ->whereYear('submitted_at', now()->year)
             ->sum('total');
 
-        return view('admin.salesmen.show', compact('salesman', 'monthOrders'));
+        $activity = [
+            'today' => $this->activity->summary($this->activity->periodStart('today'), $salesman->id)->first(),
+            'month' => $this->activity->summary($this->activity->periodStart('month'), $salesman->id)->first(),
+            'all' => $this->activity->summary(null, $salesman->id)->first(),
+        ];
+
+        return view('admin.salesmen.show', compact('salesman', 'monthOrders', 'activity'));
     }
 
     public function edit(Request $request, User $salesman)

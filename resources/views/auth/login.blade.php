@@ -19,12 +19,13 @@
             <div style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px">
                 {{ $errors->first() }}
             </div>
+            @include('partials.portal-hint')
         @endif
 
         <form action="{{ route('login.submit') }}" method="post">
             @csrf
             <label class="label">Work email</label>
-            <input class="input" style="width:100%;margin-bottom:12px" type="email" name="email" value="{{ old('email', 'admin@bynnastrade.com') }}" required autocomplete="username">
+            <input class="input" style="width:100%;margin-bottom:12px" type="email" name="email" value="{{ old('email', request('email', 'admin@bynnastrade.com')) }}" required autocomplete="username">
             <label class="label">Password</label>
             <input class="input" style="width:100%;margin-bottom:12px" type="password" name="password" required autocomplete="current-password">
             <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px">

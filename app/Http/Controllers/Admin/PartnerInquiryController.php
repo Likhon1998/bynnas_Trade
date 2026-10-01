@@ -19,6 +19,7 @@ class PartnerInquiryController extends Controller
         abort_unless($request->user()->can('shops.view'), 403);
 
         $status = $request->get('status');
+        $source = in_array($request->get('source'), [PartnerInquiry::SOURCE_WEBSITE, PartnerInquiry::SOURCE_FIELD], true) ? $request->get('source') : null;
 
         $counts = [
             'all' => PartnerInquiry::query()->count(),
@@ -26,9 +27,11 @@ class PartnerInquiryController extends Controller
             'accepted' => PartnerInquiry::query()->where('status', PartnerInquiry::STATUS_CONVERTED)->count(),
             'rejected' => PartnerInquiry::query()->where('status', PartnerInquiry::STATUS_CLOSED)->count(),
         ];
+        $sourceCounts = PartnerInquiry::query()->selectRaw('source, COUNT(*) as n')->groupBy('source')->pluck('n', 'source');
 
         $inquiries = PartnerInquiry::query()
-            ->with('shop')
+            ->with(['shop', 'submitter'])
+            ->when($source, fn ($q) => $q->where('source', $source))
             ->when($status === 'pending', fn ($q) => $q->whereIn('status', [PartnerInquiry::STATUS_NEW, PartnerInquiry::STATUS_CONTACTED]))
             ->when($status === 'accepted', fn ($q) => $q->where('status', PartnerInquiry::STATUS_CONVERTED))
             ->when($status === 'rejected', fn ($q) => $q->where('status', PartnerInquiry::STATUS_CLOSED))
@@ -42,7 +45,7 @@ class PartnerInquiryController extends Controller
             ->paginate(12, ['*'], 'messages_page')
             ->withQueryString();
 
-        return view('admin.partner-inquiries.index', compact('inquiries', 'messages', 'counts'));
+        return view('admin.partner-inquiries.index', compact('inquiries', 'messages', 'counts', 'source', 'sourceCounts'));
     }
 
     public function accept(Request $request, PartnerInquiry $partnerInquiry)
@@ -55,6 +58,40 @@ class PartnerInquiryController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        if ($result['login_by_field']) {
+            return back()->with('success', 'Accepted. Shop '.$result['shop']->code.' is active. '
+                .($partnerInquiry->submitter?->name ?? 'The field officer').' will now create the owner\'s login from the field app.');
+        }
+
+        return $this->withCredentials($request, $result);
+    }
+
+    public function issueLogin(Request $request, PartnerInquiry $partnerInquiry)
+    {
+        abort_unless($request->user()->can('shops.approve'), 403);
+
+        if (! $partnerInquiry->needsLogin()) {
+            return back()->with('error', 'This request already has a portal login.');
+        }
+
+        try {
+            $password = $this->partners->temporaryPassword();
+            $login = $this->partners->setLogin($partnerInquiry, $partnerInquiry->email, $password, $request->user());
+        } catch (Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return $this->withCredentials($request, [
+            'inquiry' => $partnerInquiry->fresh(),
+            'shop' => $login['shop'],
+            'email' => $login['user']->email,
+            'password' => $password,
+            'whatsapp' => $login['whatsapp'],
+        ]);
+    }
+
+    private function withCredentials(Request $request, array $result)
+    {
         // Keep temp password in session so admin can Send WhatsApp again on this page load.
         $request->session()->put('partner_cred_'.$result['inquiry']->id, [
             'email' => $result['email'],
@@ -63,7 +100,7 @@ class PartnerInquiryController extends Controller
         ]);
 
         return back()
-            ->with('success', 'Accepted. Shop '.$result['shop']->code.' created with portal login '.$result['email'].'.')
+            ->with('success', 'Accepted. Shop '.$result['shop']->code.' is active with portal login '.$result['email'].'.')
             ->with('accepted_inquiry_id', $result['inquiry']->id)
             ->with('whatsapp_chat_url', $result['whatsapp']['chat_url'] ?? null)
             ->with('cred_email', $result['email'])
@@ -95,6 +132,9 @@ class PartnerInquiryController extends Controller
 
         if ($partnerInquiry->status !== PartnerInquiry::STATUS_CONVERTED) {
             return back()->with('error', 'Accept the request first, then send WhatsApp.');
+        }
+        if ($partnerInquiry->needsLogin()) {
+            return back()->with('error', 'No portal login yet. Wait for the field officer, or use Issue login.');
         }
 
         $cred = $request->session()->get('partner_cred_'.$partnerInquiry->id);

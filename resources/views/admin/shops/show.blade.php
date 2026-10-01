@@ -30,6 +30,24 @@
         </div>
     @endif
 
+    @if ($shop->creator?->portal === \App\Models\User::PORTAL_SALESMAN)
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid #D97706">
+            <div>
+                <div style="font-weight:700">Added in the field by {{ $shop->creator->name }}</div>
+                <div class="muted" style="font-size:13px;margin-top:2px">
+                    {{ $shop->created_at?->format('d M Y, g:i A') }}
+                    @if ($shop->status === \App\Models\Shop::STATUS_PENDING)
+                        · Set a price group and credit limit, then approve so they can take orders.
+                    @endif
+                    @if ($shop->notes) · “{{ $shop->notes }}” @endif
+                </div>
+            </div>
+            @if ($shop->latitude !== null)
+                <a class="btn btn-ghost" href="{{ $shop->mapUrl() }}" target="_blank" rel="noopener">View GPS location</a>
+            @endif
+        </div>
+    @endif
+
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([
             ['Credit limit', \App\Support\DemoData::taka($shop->credit_limit)],
@@ -84,6 +102,37 @@
                     </div>
                 </form>
             @endcan
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="fa-card-head">
+            <strong>Visits <span class="muted" style="font-weight:500">· {{ $shop->visits_count }} total</span></strong>
+            @if ($shop->visits_count > 0)
+                <a class="link" href="{{ route('visits.index', ['period' => 'all', 'shop_id' => $shop->id]) }}#log">See all visits ›</a>
+            @endif
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <tbody>
+                    @forelse ($recentVisits as $visit)
+                        <tr>
+                            <td style="white-space:nowrap">{{ $visit->checked_in_at?->format('d M Y H:i') }}</td>
+                            <td>{{ $visit->salesman?->name }}</td>
+                            <td><x-badge :status="$visit->outcomeLabel()" /></td>
+                            <td>
+                                @if ($visit->order)
+                                    <a class="link" href="{{ route('orders.show', $visit->order) }}">{{ $visit->order->number }}</a>
+                                @else
+                                    <span class="muted">{{ $visit->notes ? \Illuminate\Support\Str::limit($visit->notes, 60) : '—' }}</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td class="muted" style="padding:16px">No visits recorded yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 @endsection

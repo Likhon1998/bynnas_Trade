@@ -7,6 +7,7 @@ use App\Models\PriceGroup;
 use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -19,12 +20,15 @@ class PartnerInquiryService
     ) {}
 
     /**
-     * Accept lead → create active shop + portal login (email + temp password).
+     * Accept lead → active shop. Website leads get a portal login (email + temp password) right away;
+     * field leads wait for the submitting salesman to create the login with the owner.
      *
-     * @return array{inquiry: PartnerInquiry, shop: Shop, email: string, password: string, whatsapp: array}
+     * @return array{inquiry: PartnerInquiry, shop: Shop, email: ?string, password: ?string, whatsapp: array, login_by_field: bool}
      */
     public function accept(PartnerInquiry $inquiry, User $actor): array
     {
+        $loginByField = $inquiry->isFromField() && $inquiry->submitted_by !== null;
+
         if ($inquiry->status === PartnerInquiry::STATUS_CONVERTED && $inquiry->shop_id) {
             throw new RuntimeException('This request is already accepted.');
         }
@@ -37,33 +41,53 @@ class PartnerInquiryService
             throw new RuntimeException('That email is already used by a non-shop account.');
         }
 
-        $password = $this->temporaryPassword();
+        $password = $loginByField ? null : $this->temporaryPassword();
 
-        return DB::transaction(function () use ($inquiry, $actor, $password) {
+        return DB::transaction(function () use ($inquiry, $actor, $password, $loginByField) {
             $priceGroupId = PriceGroup::query()->where('is_active', true)->orderBy('id')->value('id');
-
-            $shop = $this->shops->create([
-                'name' => $inquiry->business_name,
-                'owner_name' => $inquiry->contact_name ?: $inquiry->business_name,
-                'phone' => $inquiry->phone,
-                'email' => $inquiry->email,
-                'city' => $inquiry->city,
-                'price_group_id' => $priceGroupId,
-                'credit_limit' => 0,
-                'payment_terms_days' => 21,
-                'status' => Shop::STATUS_ACTIVE,
-                'notes' => 'Accepted from partner application #'.$inquiry->id,
-            ], $actor, [
+            $credential = $loginByField ? null : [
                 'email' => $inquiry->email,
                 'password' => $password,
                 'name' => $inquiry->contact_name ?: $inquiry->business_name,
                 'phone' => $inquiry->phone,
-            ]);
+            ];
+
+            $existing = $inquiry->shop_id ? Shop::query()->find($inquiry->shop_id) : null;
+
+            if ($existing) {
+                $existing->update(array_filter([
+                    'owner_name' => $existing->owner_name ?: $inquiry->contact_name,
+                    'phone' => $existing->phone ?: $inquiry->phone,
+                    'email' => $existing->email ?: $inquiry->email,
+                    'city' => $existing->city ?: $inquiry->city,
+                    'price_group_id' => $existing->price_group_id ?: $priceGroupId,
+                ], fn ($v) => $v !== null && $v !== ''));
+
+                $shop = $existing->status === Shop::STATUS_ACTIVE ? $existing : $this->shops->approve($existing, $actor);
+                if ($credential) {
+                    $this->shops->attachShopUser($shop, $credential, $actor);
+                }
+                $shop = $shop->fresh();
+            } else {
+                $shop = $this->shops->create([
+                    'name' => $inquiry->business_name,
+                    'owner_name' => $inquiry->contact_name ?: $inquiry->business_name,
+                    'phone' => $inquiry->phone,
+                    'email' => $inquiry->email,
+                    'city' => $inquiry->city,
+                    'price_group_id' => $priceGroupId,
+                    'assigned_salesman_id' => $inquiry->isFromField() ? $inquiry->submitted_by : null,
+                    'credit_limit' => 0,
+                    'payment_terms_days' => 21,
+                    'status' => Shop::STATUS_ACTIVE,
+                    'notes' => 'Accepted from partner application #'.$inquiry->id,
+                ], $actor, $credential);
+            }
 
             $inquiry->update([
                 'status' => PartnerInquiry::STATUS_CONVERTED,
                 'shop_id' => $shop->id,
-                'portal_email' => $inquiry->email,
+                'portal_email' => $loginByField ? null : $inquiry->email,
                 'reviewed_at' => now(),
                 'reviewed_by' => $actor->id,
                 'admin_notes' => trim(($inquiry->admin_notes ? $inquiry->admin_notes."\n" : '').'Accepted · shop '.$shop->code),
@@ -75,11 +99,11 @@ class PartnerInquiryService
                 "Accepted partner application for {$inquiry->business_name}",
                 $inquiry->fresh(),
                 null,
-                ['shop_id' => $shop->id, 'portal_email' => $inquiry->email],
+                ['shop_id' => $shop->id, 'portal_email' => $loginByField ? null : $inquiry->email, 'login_by_field' => $loginByField],
                 $actor,
             );
 
-            $whatsapp = $this->whatsapp->notifyApproval(
+            $whatsapp = $loginByField ? [] : $this->whatsapp->notifyApproval(
                 $inquiry->phone,
                 $shop->name,
                 $inquiry->email,
@@ -89,11 +113,110 @@ class PartnerInquiryService
             return [
                 'inquiry' => $inquiry->fresh(),
                 'shop' => $shop,
-                'email' => $inquiry->email,
+                'email' => $loginByField ? null : $inquiry->email,
                 'password' => $password,
                 'whatsapp' => $whatsapp,
+                'login_by_field' => $loginByField,
             ];
         });
+    }
+
+    /**
+     * Create or reset the portal login for an accepted shop, then check it works the same way the
+     * partner login does (password, active account, shop portal, linked to an active shop).
+     *
+     * @return array{user: User, shop: Shop, checks: array<string, bool>, ok: bool, whatsapp: array}
+     */
+    public function setLogin(PartnerInquiry $inquiry, string $email, string $password, User $actor): array
+    {
+        $shop = $inquiry->shop;
+
+        if (! $inquiry->isAccepted() || ! $shop) {
+            throw new RuntimeException('The office has not accepted this application yet.');
+        }
+
+        $email = strtolower(trim($email));
+        $current = $inquiry->portal_email
+            ? User::query()->where('email', $inquiry->portal_email)->where('portal', User::PORTAL_SHOP)->first()
+            : null;
+        $taken = User::query()->where('email', $email)->first();
+
+        if ($taken && $taken->portal !== User::PORTAL_SHOP) {
+            throw new RuntimeException('This email belongs to a staff or salesman account. Use the shop owner\'s own email.');
+        }
+        if ($taken && $taken->id !== $current?->id && $taken->shops()->where('shops.id', '!=', $shop->id)->exists()) {
+            throw new RuntimeException('This email is already the login of another shop.');
+        }
+
+        $user = DB::transaction(function () use ($inquiry, $shop, $email, $password, $actor, $current, $taken) {
+            if ($current && ! $taken && $current->email !== $email) {
+                $current->forceFill(['email' => $email])->save();
+            } elseif ($current && $taken && $taken->id !== $current->id) {
+                $shop->users()->detach($current->id);
+                $current->forceFill(['is_active' => false])->save();
+            }
+
+            $user = $this->shops->attachShopUser($shop, [
+                'email' => $email,
+                'password' => $password,
+                'name' => $inquiry->contact_name ?: $shop->owner_name ?: $shop->name,
+                'phone' => $inquiry->phone ?: $shop->phone,
+            ], $actor);
+
+            $inquiry->update(['portal_email' => $email]);
+
+            $this->auditLogger->log(
+                'partners',
+                $current ? 'login_reset' : 'login_created',
+                "Portal login for {$shop->code} set by {$actor->name}",
+                $inquiry->fresh(),
+                null,
+                ['portal_email' => $email],
+                $actor,
+            );
+
+            return $user;
+        });
+
+        $user = $user->fresh();
+        $linked = $user->primaryShop();
+        $checks = [
+            'account' => $user->portal === User::PORTAL_SHOP && $user->is_active,
+            'password' => Hash::check($password, $user->password),
+            'shop' => $linked?->id === $shop->id,
+            'active' => $linked?->status === Shop::STATUS_ACTIVE,
+        ];
+
+        return [
+            'user' => $user,
+            'shop' => $shop->fresh(),
+            'checks' => $checks,
+            'ok' => ! in_array(false, $checks, true),
+            'whatsapp' => $this->whatsapp->notifyApproval($inquiry->phone ?: $shop->phone, $shop->name, $email, $password),
+        ];
+    }
+
+    public function submitFromField(array $data, User $salesman): PartnerInquiry
+    {
+        $inquiry = PartnerInquiry::query()->create([
+            'contact_name' => $data['contact_name'] ?? '',
+        ] + $data + [
+            'status' => PartnerInquiry::STATUS_NEW,
+            'source' => PartnerInquiry::SOURCE_FIELD,
+            'submitted_by' => $salesman->id,
+        ]);
+
+        $this->auditLogger->log(
+            'partners',
+            'submitted',
+            "Field application for {$inquiry->business_name} by {$salesman->name}",
+            $inquiry,
+            null,
+            $inquiry->only(['business_name', 'email', 'phone', 'shop_id']),
+            $salesman,
+        );
+
+        return $inquiry;
     }
 
     public function reject(PartnerInquiry $inquiry, User $actor, ?string $notes = null): PartnerInquiry

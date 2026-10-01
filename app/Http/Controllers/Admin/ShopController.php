@@ -22,7 +22,7 @@ class ShopController extends Controller
         $this->authorize('viewAny', Shop::class);
 
         $shops = Shop::query()
-            ->with(['territory', 'priceGroup', 'assignedSalesman'])
+            ->with(['territory', 'priceGroup', 'assignedSalesman', 'creator'])
             ->latest()
             ->limit(500)
             ->get();
@@ -35,6 +35,9 @@ class ShopController extends Controller
             'city' => $shop->city ?: '',
             'price_group' => $shop->priceGroup?->name ?: '—',
             'salesman' => $shop->assignedSalesman?->name ?: '—',
+            'source' => $shop->creator?->portal === User::PORTAL_SALESMAN ? 'field' : 'office',
+            'added_by' => $shop->creator?->portal === User::PORTAL_SALESMAN ? $shop->creator->name : '',
+            'added_on' => $shop->created_at?->format('d M Y'),
             'credit' => \App\Support\DemoData::taka($shop->credit_limit),
             'outstanding' => \App\Support\DemoData::taka($shop->outstanding_balance),
             'status' => $shop->status,
@@ -51,6 +54,7 @@ class ShopController extends Controller
         $initialFilters = [
             'search' => (string) $request->get('search', ''),
             'status' => (string) $request->get('status', ''),
+            'source' => $request->get('source') === 'field' ? 'field' : '',
         ];
 
         return view('admin.shops.index', compact('rows', 'initialFilters'));
@@ -88,9 +92,11 @@ class ShopController extends Controller
     {
         $this->authorize('view', $shop);
 
-        $shop->load(['territory', 'priceGroup', 'assignedSalesman', 'users']);
+        $shop->load(['territory', 'priceGroup', 'assignedSalesman', 'users', 'creator'])->loadCount('visits');
 
-        return view('admin.shops.show', compact('shop'));
+        $recentVisits = $shop->visits()->with(['salesman', 'order'])->latest('checked_in_at')->limit(8)->get();
+
+        return view('admin.shops.show', compact('shop', 'recentVisits'));
     }
 
     public function edit(Shop $shop)

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Field;
 
+use App\Http\Controllers\Concerns\RedirectsWrongPortal;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class SalesmanAuthController
 {
+    use RedirectsWrongPortal;
+
     public function __construct(private AuditLogger $auditLogger) {}
 
     public function showLogin()
@@ -36,12 +39,16 @@ class SalesmanAuthController
             ]);
         }
 
-        if (! $user->is_active || $user->portal !== User::PORTAL_SALESMAN) {
+        if (! $user->is_active) {
             Auth::logout();
 
             throw ValidationException::withMessages([
-                'email' => 'This account is not authorized for the field app.',
+                'email' => 'This account has been deactivated. Contact your manager.',
             ]);
+        }
+
+        if ($user->portal !== User::PORTAL_SALESMAN) {
+            return $this->wrongPortal($user, 'Field sales app');
         }
 
         if (! $user->salesmanProfile?->is_active) {

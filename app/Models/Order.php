@@ -156,6 +156,28 @@ class Order extends Model
         };
     }
 
+    /**
+     * Plain-language status for salesmen and shops.
+     *
+     * @return array{label: string, tone: string, step: int}
+     */
+    public function simpleStatus(): array
+    {
+        return match ($this->status) {
+            self::STATUS_PENDING_AUDIT, self::STATUS_DRAFT => ['label' => 'Waiting for approval', 'tone' => 'amber', 'step' => 1],
+            self::STATUS_AWAITING_ADVANCE => $this->isAdvancePaid()
+                ? ['label' => 'Advance paid · approving', 'tone' => 'amber', 'step' => 1]
+                : ['label' => 'Needs advance payment', 'tone' => 'amber', 'step' => 1],
+            self::STATUS_APPROVED => ['label' => 'Approved', 'tone' => 'blue', 'step' => 2],
+            self::STATUS_PICKING, self::STATUS_PICKED, self::STATUS_PACKED => ['label' => 'Being packed', 'tone' => 'violet', 'step' => 3],
+            self::STATUS_DISPATCHED => ['label' => 'On the way', 'tone' => 'sky', 'step' => 4],
+            self::STATUS_DELIVERED => ['label' => 'Delivered', 'tone' => 'green', 'step' => 5],
+            self::STATUS_REJECTED => ['label' => 'Rejected', 'tone' => 'red', 'step' => 0],
+            self::STATUS_CANCELLED => ['label' => 'Cancelled', 'tone' => 'gray', 'step' => 0],
+            default => ['label' => $this->statusLabel(), 'tone' => 'gray', 'step' => 0],
+        };
+    }
+
     public function isPendingAudit(): bool
     {
         return $this->status === self::STATUS_PENDING_AUDIT;
