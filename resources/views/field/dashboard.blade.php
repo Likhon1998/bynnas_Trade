@@ -4,7 +4,7 @@
     $hour = (int) now()->format('G');
     $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
     $firstName = \Illuminate\Support\Str::before(auth()->user()->name, ' ') ?: auth()->user()->name;
-    $toGo = max(0, $target - $monthTotal);
+    $toGo = max(0, $target - $achieved);
     $trendMax = max(1, $trend->max('total'));
     $weekTotal = $trend->sum('total');
     $short = fn (float $n) => $n >= 100000 ? round($n / 100000, 1).'L' : ($n >= 1000 ? round($n / 1000).'k' : (string) round($n));
@@ -29,7 +29,7 @@
             <div class="f-kpi-value">{{ \App\Support\DemoData::taka($monthTotal) }}</div>
             <div class="f-kpi-meta">
                 @if ($progress !== null)
-                    Target {{ \App\Support\DemoData::taka($target) }} ·
+                    Delivered {{ \App\Support\DemoData::taka($achieved) }} of {{ \App\Support\DemoData::taka($target) }} ·
                     @if ($toGo > 0)<b>{{ \App\Support\DemoData::taka($toGo) }}</b> to go · {{ $daysLeft }}d left @else <b>Target reached</b> @endif
                 @else
                     No target set for this month

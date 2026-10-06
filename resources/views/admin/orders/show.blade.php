@@ -41,6 +41,15 @@
                 {{ $snapshot['stock_ok'] ? 'Ready to reserve' : 'Shortfall' }}
             </strong>
         </div>
+        @if ($order->isPendingAudit() || $order->isAwaitingAdvance())
+            <div title="Limit {{ \App\Support\DemoData::taka($snapshot['credit_limit']) }} · already owed {{ \App\Support\DemoData::taka($snapshot['credit_exposure']) }}">
+                <span>Credit</span>
+                <strong style="color:{{ $snapshot['credit_ok'] ? '#15803d' : '#b91c1c' }}">
+                    {{ $snapshot['credit_ok'] ? 'Within limit' : 'Over limit' }}
+                    <small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">needs {{ \App\Support\DemoData::taka($snapshot['credit_needed']) }} · free {{ \App\Support\DemoData::taka($snapshot['credit_available']) }}</small>
+                </strong>
+            </div>
+        @endif
         </div>
 
     @php $settlement = $order->settlement(); @endphp
@@ -383,6 +392,7 @@
                                         @unless ($snapshot['stock_ok'])
                                             <p class="order-decide-hint">Stock shortfall — cannot approve.</p>
                                         @endunless
+                                        @include('admin.orders.partials.credit-override')
                                         <button class="btn btn-approve btn-block" type="submit" @disabled(! $snapshot['stock_ok'])>Approve &amp; reserve</button>
                                     </form>
                                 @endif
@@ -409,6 +419,7 @@
                                     @unless ($snapshot['stock_ok'])
                                         <p class="order-decide-hint">Stock shortfall — cannot approve.</p>
                                     @endunless
+                                    @include('admin.orders.partials.credit-override')
                                     <button class="btn btn-approve btn-block" type="submit" @disabled(! $snapshot['stock_ok'])>Approve &amp; reserve</button>
                                 </form>
                             @endif

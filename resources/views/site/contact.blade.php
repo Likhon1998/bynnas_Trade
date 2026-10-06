@@ -1,18 +1,22 @@
 @extends('site.layouts.app')
 @section('title', 'Contact')
+@php
+    $c = $site->section('contact');
+    $g = $site->section('general');
+@endphp
 @section('content')
     <section class="page-hero">
         <div class="site-wrap">
-            <span class="eyebrow">Contact</span>
-            <h1>Get in touch with our team.</h1>
-            <p class="lead">Questions about partnerships, wholesale orders or anything else — send us a message and we'll respond within one business day.</p>
+            @if ($c['hero_eyebrow'])<span class="eyebrow">{{ $c['hero_eyebrow'] }}</span>@endif
+            <h1>{{ $c['hero_title'] }}</h1>
+            @if ($c['hero_lead'])<p class="lead">{{ $c['hero_lead'] }}</p>@endif
         </div>
     </section>
 
     <section class="section">
         <div class="site-wrap split split-form">
             <div class="card">
-                <h2 class="card-title">Send a message</h2>
+                <h2 class="card-title">{{ $c['form_title'] ?: 'Send a message' }}</h2>
                 @if (session('success'))
                     <div class="site-alert site-alert-ok">{{ session('success') }}</div>
                 @endif
@@ -22,11 +26,13 @@
 
                 <form class="site-form" method="post" action="{{ route('site.contact.store') }}">
                     @csrf
+                    <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;opacity:0">
+
                     <div class="site-form-row">
                         <label>Name<input name="name" value="{{ old('name') }}" required></label>
                         <label>Email<input type="email" name="email" value="{{ old('email') }}" required></label>
                     </div>
-                    <label>Subject<input name="subject" value="{{ old('subject') }}" placeholder="Wholesale partnership, order enquiry…"></label>
+                    <label>Subject<input name="subject" value="{{ old('subject') }}" placeholder="{{ $c['subject_placeholder'] }}"></label>
                     <label>Message<textarea name="message" rows="5" required>{{ old('message') }}</textarea></label>
                     <div><button class="btn btn-primary btn-lg" type="submit">Send message</button></div>
                 </form>
@@ -34,28 +40,47 @@
 
             <div class="contact-side">
                 <div class="card">
-                    <h2 class="card-title">Head office</h2>
-                    <p class="muted">Tejgaon Industrial Area, Dhaka</p>
+                    <h2 class="card-title">{{ $c['office_title'] ?: 'Head office' }}</h2>
+                    @if ($g['address'])
+                        <p class="muted">
+                            {{ $g['address'] }}
+                            @if ($g['map_url'])· <a class="link" href="{{ $g['map_url'] }}" target="_blank" rel="noopener">View map</a>@endif
+                        </p>
+                    @endif
                     <div class="contact-list">
-                        <div class="contact-row">
-                            <span class="contact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M22 6l-10 7L2 6"/></svg></span>
-                            <div><span class="contact-label">Email</span>hello@bynnastrade.com</div>
-                        </div>
-                        <div class="contact-row">
-                            <span class="contact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8 9.9a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/></svg></span>
-                            <div><span class="contact-label">Phone</span>+880 1700-000000</div>
-                        </div>
-                        <div class="contact-row">
-                            <span class="contact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
-                            <div><span class="contact-label">Business hours</span>Saturday – Thursday, 10:00 – 18:00</div>
-                        </div>
+                        @if ($g['email'])
+                            <div class="contact-row">
+                                <span class="contact-icon">@include('site.partials.icon', ['name' => 'mail'])</span>
+                                <div><span class="contact-label">Email</span><a href="mailto:{{ $g['email'] }}">{{ $g['email'] }}</a></div>
+                            </div>
+                        @endif
+                        @if ($g['phone'])
+                            <div class="contact-row">
+                                <span class="contact-icon">@include('site.partials.icon', ['name' => 'phone'])</span>
+                                <div><span class="contact-label">Phone</span><a href="{{ $site->telLink($g['phone']) }}">{{ $g['phone'] }}</a></div>
+                            </div>
+                        @endif
+                        @if ($g['whatsapp'])
+                            <div class="contact-row">
+                                <span class="contact-icon">@include('site.partials.icon', ['name' => 'chat'])</span>
+                                <div><span class="contact-label">WhatsApp</span><a href="{{ $site->whatsappLink($g['whatsapp']) }}" target="_blank" rel="noopener">{{ $g['whatsapp'] }}</a></div>
+                            </div>
+                        @endif
+                        @if ($g['hours'])
+                            <div class="contact-row">
+                                <span class="contact-icon">@include('site.partials.icon', ['name' => 'clock'])</span>
+                                <div><span class="contact-label">Business hours</span>{{ $g['hours'] }}</div>
+                            </div>
+                        @endif
                     </div>
                 </div>
-                <div class="card card-soft">
-                    <h3>Want to become a partner?</h3>
-                    <p class="muted">Apply online and our team will review your shop.</p>
-                    <a class="btn btn-outline" href="{{ route('site.partner') }}">Become a partner</a>
-                </div>
+                @if ($g['show_partner_button'] && $c['partner_card_title'])
+                    <div class="card card-soft">
+                        <h3>{{ $c['partner_card_title'] }}</h3>
+                        @if ($c['partner_card_text'])<p class="muted">{{ $c['partner_card_text'] }}</p>@endif
+                        <a class="btn btn-outline" href="{{ route('site.partner') }}">Become a partner</a>
+                    </div>
+                @endif
             </div>
         </div>
     </section>

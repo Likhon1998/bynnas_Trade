@@ -280,7 +280,19 @@ class Order extends Model
     public function canDeleteBeforeApproval(): bool
     {
         return in_array($this->status, [self::STATUS_PENDING_AUDIT, self::STATUS_AWAITING_ADVANCE], true)
-            && ! $this->stock_reserved;
+            && ! $this->stock_reserved
+            && ! $this->hasRecordedPayments();
+    }
+
+    /** Any pending or verified payment against this order's invoices. */
+    public function hasRecordedPayments(): bool
+    {
+        $invoiceIds = array_values(array_filter([$this->advance_invoice_id, $this->invoice_id]));
+
+        return $invoiceIds !== [] && Payment::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->whereIn('status', [Payment::STATUS_PENDING, Payment::STATUS_VERIFIED])
+            ->exists();
     }
 
     public function isApproved(): bool
@@ -302,6 +314,31 @@ class Order extends Model
             return $this->shop?->users()->where('users.id', $user->id)->exists() ?? false;
         }
 
+        if ($this->warehouse_id && $user->accessScopes()
+            ->where('scope_type', UserAccessScope::TYPE_WAREHOUSE)
+            ->where('scope_id', $this->warehouse_id)
+            ->exists()) {
+            return true;
+        }
+
         return $this->shop?->isAccessibleBy($user) ?? false;
+    }
+
+    /** List query matching isAccessibleBy(). */
+    public function scopeVisibleTo(\Illuminate\Database\Eloquent\Builder $query, User $user): \Illuminate\Database\Eloquent\Builder
+    {
+        if ($user->isSuperAdmin() || $user->hasGlobalAccessScope()) {
+            return $query;
+        }
+
+        if ($user->portal === User::PORTAL_SALESMAN) {
+            return $query->where('salesman_id', $user->id);
+        }
+
+        $warehouseIds = $user->accessScopes()->where('scope_type', UserAccessScope::TYPE_WAREHOUSE)->pluck('scope_id')->filter()->all();
+
+        return $query->where(fn ($q) => $q
+            ->whereHas('shop', fn ($s) => $s->visibleTo($user))
+            ->orWhereIn('orders.warehouse_id', $warehouseIds ?: [0]));
     }
 }

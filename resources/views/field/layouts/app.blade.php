@@ -35,6 +35,7 @@
                 <div class="f-top-sub">@yield('subheading', trim(($user?->name ?? '').($fieldProfile?->employee_code ? ' · '.$fieldProfile->employee_code : '')))</div>
             </div>
             <div class="f-top-actions">@yield('actions')</div>
+            <a class="f-icon-btn" href="{{ route('field.account.password') }}" aria-label="Change password" title="Change password"><i data-lucide="key-round"></i></a>
             <form action="{{ route('field.logout') }}" method="post" onsubmit="return confirm('Sign out of the field app?')">
                 @csrf
                 <button type="submit" class="f-icon-btn" aria-label="Sign out" title="Sign out"><i data-lucide="log-out"></i></button>
@@ -82,13 +83,13 @@
             </a>
             <a href="{{ route('field.orders') }}" title="Orders" class="tone-amber {{ request()->routeIs('field.orders*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="receipt-text"></i></span><span class="f-nav-text">Orders</span></a>
             <a href="{{ route('field.partners') }}" title="Partners" class="tone-teal {{ request()->routeIs('field.partners*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="handshake"></i></span><span class="f-nav-text">Partners</span></a>
-            <a href="{{ route('field.earnings') }}" title="Earnings" class="tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
-            <div class="f-nav-user">
+            <a href="{{ route('field.earnings') }}" title="Earnings" class="tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>            <div class="f-nav-user">
                 <div class="f-avatar" aria-hidden="true">{{ strtoupper($initials ?: 'S') }}</div>
                 <div class="f-nav-user-text">
                     <b>{{ $user?->name }}</b>
                     <small>{{ $fieldProfile?->employee_code ?: 'Field salesman' }}</small>
                 </div>
+                <a class="f-icon-btn" href="{{ route('field.account.password') }}" aria-label="Change password" title="Change password"><i data-lucide="key-round"></i></a>
                 <form action="{{ route('field.logout') }}" method="post" onsubmit="return confirm('Sign out of the field app?')">
                     @csrf
                     <button type="submit" class="f-icon-btn" aria-label="Sign out" title="Sign out"><i data-lucide="log-out"></i></button>

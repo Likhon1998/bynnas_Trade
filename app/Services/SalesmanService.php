@@ -114,8 +114,10 @@ class SalesmanService
 
     public function syncAssignedShops(User $salesman, array $shopIds): void
     {
+        // Only shops the form can show (anything not rejected) are unassigned when unticked.
         Shop::query()
             ->where('assigned_salesman_id', $salesman->id)
+            ->where('status', '!=', Shop::STATUS_REJECTED)
             ->whereNotIn('id', $shopIds)
             ->update(['assigned_salesman_id' => null]);
 

@@ -34,6 +34,7 @@
             ['name' => 'notifications.index', 'label' => 'Notifications', 'icon' => 'bell'],
         ]],
         ['label' => 'SETTINGS', 'items' => [
+            ['name' => 'website.edit', 'label' => 'Website', 'icon' => 'globe', 'permission' => 'website.view'],
             ['name' => 'partner-inquiries.index', 'label' => 'Partner Leads', 'icon' => 'handshake', 'permission' => 'shops.view'],
             ['name' => 'users.index', 'label' => 'Users', 'icon' => 'user-cog', 'permission' => 'users.view'],
             ['name' => 'roles.index', 'label' => 'Roles & Permissions', 'icon' => 'shield', 'permission' => 'roles.view'],
@@ -94,7 +95,10 @@
             <div style="color:#fff;font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ $authUser?->name ?? 'Admin' }}</div>
             <div style="font-size:11px;color:#8b93a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ $authUser?->roles?->first()?->name ?? 'Administrator' }}</div>
         </div>
-        <form action="{{ route('logout') }}" method="post" style="margin-left:auto">
+        <a href="{{ route('account.password') }}" class="logout-btn account-link" title="Change password" style="margin-left:auto;margin-right:4px">
+            <i data-lucide="key-round" style="width:16px;height:16px"></i>
+        </a>
+        <form action="{{ route('logout') }}" method="post">
             @csrf
             <button type="submit" class="logout-btn" title="Sign out">
                 <i data-lucide="log-out" style="width:16px;height:16px"></i>

@@ -10,9 +10,15 @@ use App\Models\Product;
 use App\Services\ProductService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
+    private const PRICE_FIELDS = [
+        'cost_price', 'landed_cost', 'wholesale_price', 'dealer_price',
+        'distributor_price', 'retail_price', 'minimum_selling_price',
+    ];
+
     public function __construct(private ProductService $products) {}
 
     public function index(Request $request)
@@ -53,6 +59,11 @@ class ProductController extends Controller
 
         $data = $this->validated($request);
         $groupPrices = $request->input('group_prices', []);
+        $openingStock = (int) ($data['stock_on_hand'] ?? 0);
+        if ($openingStock > 0 && ! $request->user()->can('products.manage_stock')) {
+            throw ValidationException::withMessages(['stock_on_hand' => 'You are not allowed to set stock. Leave it at 0 and receive stock through Inventory.']);
+        }
+        $data['stock_on_hand'] = 0;
 
         $product = $this->products->create(
             $data,
@@ -60,6 +71,10 @@ class ProductController extends Controller
             $groupPrices,
             $request->file('image'),
         );
+
+        if ($openingStock > 0) {
+            $this->products->setTotalStock($product, $openingStock, $request->user());
+        }
 
         return redirect()->route('products.index')->with('success', "Product {$product->sku} created.");
     }
@@ -77,13 +92,35 @@ class ProductController extends Controller
     {
         $this->authorize('update', $product);
 
-        $this->products->update(
-            $product,
-            $this->validated($request, $product),
-            $request->user(),
-            $request->input('group_prices', []),
-            $request->file('image'),
-        );
+        $data = $this->validated($request, $product);
+        $groupPrices = $request->input('group_prices', []);
+        $user = $request->user();
+
+        $product->load('prices');
+        $priceChanged = collect(self::PRICE_FIELDS)
+            ->contains(fn ($f) => array_key_exists($f, $data) && round((float) $data[$f], 2) !== round((float) $product->{$f}, 2));
+        $currentGroup = $product->prices->pluck('wholesale_price', 'price_group_id')->map(fn ($v) => round((float) $v, 2));
+        foreach ($groupPrices as $groupId => $value) {
+            $new = ($value === null || $value === '') ? null : round((float) $value, 2);
+            if ($new !== ($currentGroup[$groupId] ?? null)) {
+                $priceChanged = true;
+            }
+        }
+        if ($priceChanged && ! $user->can('products.manage_price')) {
+            throw ValidationException::withMessages(['wholesale_price' => 'You are not allowed to change product prices.']);
+        }
+
+        $stockChanged = array_key_exists('stock_on_hand', $data) && $data['stock_on_hand'] !== null
+            && (int) $data['stock_on_hand'] !== (int) $product->stock_on_hand;
+        if ($stockChanged && ! $user->can('products.manage_stock')) {
+            throw ValidationException::withMessages(['stock_on_hand' => 'You are not allowed to change stock. Use Inventory.']);
+        }
+
+        $this->products->update($product, $data, $user, $priceChanged ? $groupPrices : null, $request->file('image'));
+
+        if ($stockChanged) {
+            $this->products->setTotalStock($product->fresh(), (int) $data['stock_on_hand'], $user);
+        }
 
         return redirect()->route('products.index')->with('success', 'Product updated.');
     }

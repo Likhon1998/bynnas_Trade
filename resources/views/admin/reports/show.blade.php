@@ -3,7 +3,9 @@
 @section('content')
     <x-page-header title="{{ $report['title'] }}" subtitle="{{ $report['description'] }}">
         <a class="btn btn-ghost" href="{{ route('reports.index') }}">Back</a>
-        <a class="btn btn-primary" href="{{ route('reports.export', ['report' => $key, 'from' => $from, 'to' => $to]) }}">Download CSV</a>
+        @can('reports.export')
+            <a class="btn btn-primary" href="{{ route('reports.export', ['report' => $key, 'from' => $from, 'to' => $to]) }}">Download CSV</a>
+        @endcan
     </x-page-header>
 
     <div class="card" style="padding:14px;margin-bottom:14px">

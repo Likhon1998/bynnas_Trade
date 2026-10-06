@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Commission;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Payment;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use App\Models\Shop;
@@ -20,6 +23,7 @@ class OrderService
         private InventoryService $inventory,
         private FulfilmentService $fulfilment,
         private InvoiceService $invoices,
+        private CreditService $credit,
     ) {}
 
     /**
@@ -144,6 +148,11 @@ class OrderService
 
                 $qty = (int) $line['quantity'];
                 $unit = $product->priceForGroup($shop->priceGroup);
+                if ($unit <= 0) {
+                    throw ValidationException::withMessages([
+                        'items' => "Product {$product->sku} has no price yet. Ask the office to set it before ordering.",
+                    ]);
+                }
                 $lineTotal = round($unit * $qty, 2);
 
                 OrderItem::query()->create([
@@ -391,8 +400,12 @@ class OrderService
                     'order' => 'Only orders pending audit (or with advance paid) can be approved.',
                 ]);
             }
-            $shop = $order->shop;
-            $availableCredit = $shop->availableCredit();
+            $shop = Shop::query()->lockForUpdate()->findOrFail($order->shop_id);
+            $this->credit->recalculateOutstanding($shop);
+            $order->setRelation('shop', $shop->refresh());
+            $creditCheck = $this->credit->creditCheck($order);
+            $availableCredit = $creditCheck['available'];
+            $overrideUsed = $this->credit->assertCanOrder($order, $actor, $creditOverride);
             $warehouse = Warehouse::defaultWarehouse();
 
             if (! $warehouse) {
@@ -450,7 +463,7 @@ class OrderService
                 'stock_reserved' => true,
                 'audit_notes' => $notes,
                 'credit_available_at_audit' => $availableCredit,
-                'credit_override' => false,
+                'credit_override' => $overrideUsed,
                 'rejection_reason' => null,
             ]);
 
@@ -458,7 +471,8 @@ class OrderService
 
             $this->recordHistory($order, $from, Order::STATUS_APPROVED, 'approved_reserved', $notes, [
                 'credit_available' => $availableCredit,
-                'credit_override' => false,
+                'credit_needed' => $creditCheck['needed'],
+                'credit_override' => $overrideUsed,
                 'total' => (float) $order->total,
                 'warehouse_id' => $warehouse->id,
                 'advance_amount' => (float) ($order->advance_amount ?: 0),
@@ -470,7 +484,7 @@ class OrderService
                 "Order {$order->number} approved and stock reserved at {$warehouse->code}",
                 $order,
                 ['status' => $from],
-                ['status' => Order::STATUS_APPROVED, 'stock_reserved' => true],
+                ['status' => Order::STATUS_APPROVED, 'stock_reserved' => true, 'credit_override' => $overrideUsed],
                 $actor,
             );
 
@@ -488,7 +502,13 @@ class OrderService
 
         return DB::transaction(function () use ($order, $actor, $reason) {
             $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if (! in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE], true)) {
+                throw ValidationException::withMessages([
+                    'order' => 'Only orders pending audit or awaiting advance can be rejected.',
+                ]);
+            }
             $from = $order->status;
+            $credited = $this->releaseOrderMoney($order, $actor, 'rejected');
 
             $order->update([
                 'status' => Order::STATUS_REJECTED,
@@ -500,7 +520,7 @@ class OrderService
                 'stock_reserved' => false,
             ]);
 
-            $this->recordHistory($order, $from, Order::STATUS_REJECTED, 'rejected', $reason, null, $actor);
+            $this->recordHistory($order, $from, Order::STATUS_REJECTED, 'rejected', $reason, $credited > 0 ? ['credited_to_shop' => $credited] : null, $actor);
 
             $this->auditLogger->log(
                 'orders',
@@ -532,6 +552,14 @@ class OrderService
                     'order' => 'Only orders waiting for Super Admin audit can be deleted.',
                 ]);
             }
+
+            if ($order->hasRecordedPayments()) {
+                throw ValidationException::withMessages([
+                    'order' => 'A payment is already recorded for this order, so it cannot be deleted. Reject or cancel it instead — the money becomes shop credit.',
+                ]);
+            }
+
+            $this->releaseOrderMoney($order, $actor, 'deleted');
 
             $number = $order->number;
             $from = $order->status;
@@ -565,7 +593,13 @@ class OrderService
         }
 
         return DB::transaction(function () use ($order, $actor, $reason) {
-            $order = Order::query()->lockForUpdate()->with(['items.product', 'warehouse', 'fulfilment'])->findOrFail($order->id);
+            $order = Order::query()->lockForUpdate()->with(['items.product', 'warehouse'])->findOrFail($order->id);
+            if (! in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE, Order::STATUS_APPROVED], true)) {
+                throw ValidationException::withMessages([
+                    'order' => 'Only pending or approved orders can be cancelled.',
+                ]);
+            }
+            $order->setRelation('fulfilment', \App\Models\OrderFulfilment::query()->where('order_id', $order->id)->lockForUpdate()->first());
             $from = $order->status;
 
             if ($order->fulfilment && ! in_array($order->fulfilment->status, [
@@ -591,6 +625,8 @@ class OrderService
                 $order->fulfilment->delete();
             }
 
+            $credited = $this->releaseOrderMoney($order, $actor, 'cancelled');
+
             $order->update([
                 'status' => Order::STATUS_CANCELLED,
                 'cancelled_by' => $actor->id,
@@ -602,6 +638,7 @@ class OrderService
 
             $this->recordHistory($order, $from, Order::STATUS_CANCELLED, 'cancelled', $reason, [
                 'released_reservation' => $from === Order::STATUS_APPROVED,
+                'credited_to_shop' => $credited,
             ], $actor);
 
             $this->auditLogger->log(
@@ -621,17 +658,20 @@ class OrderService
     /**
      * Snapshot stock + credit readiness for the audit screen (no locks).
      *
-     * @return array{credit_ok:bool, credit_available:float, stock_ok:bool, lines:list<array>}
+     * @return array{credit_ok:bool, credit_available:float, credit_needed:float, credit_limit:float, credit_exposure:float, stock_ok:bool, lines:list<array>}
      */
     public function auditSnapshot(Order $order): array
     {
         $order->loadMissing(['items.product', 'shop']);
-        $creditAvailable = $order->shop?->availableCredit() ?? 0.0;
+        $credit = $order->shop
+            ? $this->credit->creditCheck($order)
+            : ['ok' => false, 'available' => 0.0, 'needed' => (float) $order->total, 'limit' => 0.0, 'exposure' => 0.0];
         $lines = [];
         $stockOk = true;
+        $approvalStock = $this->approvalStock($order);
 
         foreach ($order->items as $item) {
-            $available = $item->product?->availableStock() ?? 0;
+            $available = $approvalStock[$item->product_id] ?? 0;
             $ok = $available >= $item->quantity;
             if (! $ok) {
                 $stockOk = false;
@@ -646,18 +686,102 @@ class OrderService
         }
 
         return [
-            'credit_ok' => true,
-            'credit_available' => (float) $creditAvailable,
+            'credit_ok' => $credit['ok'],
+            'credit_available' => (float) $credit['available'],
+            'credit_needed' => (float) $credit['needed'],
+            'credit_limit' => (float) $credit['limit'],
+            'credit_exposure' => (float) $credit['exposure'],
             'stock_ok' => $stockOk,
             'lines' => $lines,
         ];
     }
 
+    /**
+     * Stock approval can actually reserve: free quantity in the default warehouse, per product.
+     *
+     * @return array<int, int>
+     */
+    public function approvalStock(Order $order): array
+    {
+        $warehouse = Warehouse::defaultWarehouse();
+        $productIds = $order->items->pluck('product_id')->filter()->unique()->values();
+        if (! $warehouse || $productIds->isEmpty()) {
+            return [];
+        }
+
+        return \App\Models\WarehouseStock::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->whereIn('product_id', $productIds)
+            ->get()
+            ->mapWithKeys(fn ($s) => [(int) $s->product_id => max(0, (int) $s->qty_on_hand - (int) $s->qty_reserved)])
+            ->all();
+    }
+
+    /**
+     * An order closed without fulfilment must not leave money behind: its invoices are voided, any
+     * payment against them becomes unallocated shop credit, and unpaid commissions on it are rejected.
+     *
+     * @return float amount of verified money moved to shop credit
+     */
+    private function releaseOrderMoney(Order $order, User $actor, string $why): float
+    {
+        $invoiceIds = array_values(array_filter([$order->advance_invoice_id, $order->invoice_id]));
+        if ($invoiceIds === []) {
+            return 0.0;
+        }
+
+        $credited = 0.0;
+        $invoices = Invoice::query()->whereIn('id', $invoiceIds)->lockForUpdate()->get();
+        foreach ($invoices as $invoice) {
+            if ($invoice->status === Invoice::STATUS_VOID) {
+                continue;
+            }
+
+            $payments = Payment::query()
+                ->where('invoice_id', $invoice->id)
+                ->whereIn('status', [Payment::STATUS_PENDING, Payment::STATUS_VERIFIED])
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($payments as $payment) {
+                if ($payment->status === Payment::STATUS_VERIFIED) {
+                    $credited += (float) $payment->amount;
+                }
+                $payment->update([
+                    'invoice_id' => null,
+                    'notes' => trim(($payment->notes ? $payment->notes."\n" : '')."Moved to shop credit — order {$order->number} {$why}."),
+                ]);
+            }
+
+            Commission::query()
+                ->whereIn('payment_id', $payments->pluck('id'))
+                ->whereIn('status', [Commission::STATUS_ACCRUED, Commission::STATUS_APPROVED])
+                ->get()
+                ->each(fn (Commission $commission) => app(CommissionService::class)->reject($commission, "Order {$order->number} {$why}", $actor));
+
+            $invoice->update(['status' => Invoice::STATUS_VOID, 'paid_amount' => 0, 'balance' => 0]);
+        }
+
+        $this->credit->recalculateOutstanding(Shop::query()->findOrFail($order->shop_id));
+
+        if ($credited > 0) {
+            $this->auditLogger->log(
+                'credit',
+                'order_money_released',
+                "৳ ".number_format($credited, 2)." paid on {$order->number} moved to shop credit ({$why})",
+                $order,
+                null,
+                ['credited' => round($credited, 2), 'invoices' => $invoiceIds],
+                $actor,
+            );
+        }
+
+        return round($credited, 2);
+    }
+
     public function nextNumber(): string
     {
-        $seq = Order::withTrashed()->count() + 1;
-
-        return 'ORD-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Order::class, 'ORD-'.now()->format('ymd').'-', 4);
     }
 
     /**
@@ -691,6 +815,15 @@ class OrderService
         return DB::transaction(function () use ($shop, $lines, $actor, $source, $salesmanId, $visit, $notes) {
             $shop->loadMissing('priceGroup');
 
+            if ($visit) {
+                $visit = ShopVisit::query()->lockForUpdate()->findOrFail($visit->id);
+                if (! $visit->isOpen() || $visit->order_id) {
+                    throw ValidationException::withMessages([
+                        'visit' => 'An order was already sent from this visit. Check in again to take a new order.',
+                    ]);
+                }
+            }
+
             $order = Order::query()->create([
                 'number' => $this->nextNumber(),
                 'shop_id' => $shop->id,
@@ -717,6 +850,11 @@ class OrderService
 
                 $qty = (int) $line['quantity'];
                 $unit = $product->priceForGroup($shop->priceGroup);
+                if ($unit <= 0) {
+                    throw ValidationException::withMessages([
+                        'items' => "Product {$product->sku} has no price yet. Ask the office to set it before ordering.",
+                    ]);
+                }
                 $lineTotal = round($unit * $qty, 2);
 
                 OrderItem::query()->create([

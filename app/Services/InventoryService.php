@@ -127,7 +127,7 @@ class InventoryService
             $stock->refresh();
 
             $product = Product::query()->lockForUpdate()->findOrFail($product->id);
-            $product->increment('reserved_stock', $qty);
+            $this->syncProductTotals($product);
 
             $this->writeLedger($warehouse, $product, InventoryLedger::TYPE_RESERVE, $qty, $stock, $order, $order->number, 'Order reservation', $actor);
 
@@ -144,7 +144,7 @@ class InventoryService
             $stock->refresh();
 
             $product = Product::query()->lockForUpdate()->findOrFail($product->id);
-            $product->update(['reserved_stock' => max(0, (int) $product->reserved_stock - $release)]);
+            $this->syncProductTotals($product);
 
             $this->writeLedger($warehouse, $product, InventoryLedger::TYPE_RELEASE, -$release, $stock, $order, $order->number, 'Reservation released', $actor);
 
@@ -163,18 +163,20 @@ class InventoryService
                     'stock' => "{$product->sku}: on-hand {$stock->qty_on_hand} < pick {$qty}",
                 ]);
             }
+            if ((int) $stock->qty_reserved < $qty) {
+                throw ValidationException::withMessages([
+                    'stock' => "{$product->sku}: only {$stock->qty_reserved} reserved at {$warehouse->code}, cannot pick {$qty}",
+                ]);
+            }
 
             $stock->update([
                 'qty_on_hand' => (int) $stock->qty_on_hand - $qty,
-                'qty_reserved' => max(0, (int) $stock->qty_reserved - $qty),
+                'qty_reserved' => (int) $stock->qty_reserved - $qty,
             ]);
             $stock->refresh();
 
             $product = Product::query()->lockForUpdate()->findOrFail($product->id);
-            $product->update([
-                'stock_on_hand' => max(0, (int) $product->stock_on_hand - $qty),
-                'reserved_stock' => max(0, (int) $product->reserved_stock - $qty),
-            ]);
+            $this->syncProductTotals($product);
 
             $this->writeLedger($warehouse, $product, InventoryLedger::TYPE_PICK, -$qty, $stock, $order, $order->number, 'Picked for fulfilment', $actor);
 

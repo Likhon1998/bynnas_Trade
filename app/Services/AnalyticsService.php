@@ -20,7 +20,7 @@ class AnalyticsService
     /**
      * @return array<string, mixed>
      */
-    public function dashboard(): array
+    public function dashboard(?\App\Models\User $user = null): array
     {
         $monthStart = now()->startOfMonth()->copy();
         $monthEnd = now()->endOfMonth()->copy();
@@ -51,11 +51,13 @@ class AnalyticsService
         $products = Product::query()->where('status', Product::STATUS_ACTIVE)->count();
 
         $statusCounts = Order::query()
+            ->when($user, fn ($q) => $q->visibleTo($user))
             ->selectRaw('status, count(*) as c')
             ->groupBy('status')
             ->pluck('c', 'status');
 
         $recentOrders = Order::query()
+            ->when($user, fn ($q) => $q->visibleTo($user))
             ->with(['shop', 'salesman'])
             ->latest('submitted_at')
             ->limit(8)
@@ -121,8 +123,12 @@ class AnalyticsService
             'topProducts' => $topProducts,
             'shipments' => $shipments,
             'pendingAudit' => (int) ($statusCounts[Order::STATUS_PENDING_AUDIT] ?? 0),
-            'pendingPayments' => Payment::query()->where('status', Payment::STATUS_PENDING)->count(),
-            'openInvoices' => Invoice::query()->whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])->count(),
+            'pendingPayments' => Payment::query()
+                ->when($user, fn ($q) => $q->whereHas('shop', fn ($s) => $s->visibleTo($user)))
+                ->where('status', Payment::STATUS_PENDING)->count(),
+            'openInvoices' => Invoice::query()
+                ->when($user, fn ($q) => $q->whereHas('shop', fn ($s) => $s->visibleTo($user)))
+                ->whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])->count(),
         ];
     }
 

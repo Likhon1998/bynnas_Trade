@@ -12,6 +12,7 @@ use App\Services\ShopService;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ShopController extends Controller
 {
@@ -22,6 +23,7 @@ class ShopController extends Controller
         $this->authorize('viewAny', Shop::class);
 
         $shops = Shop::query()
+            ->visibleTo($request->user())
             ->with(['territory', 'priceGroup', 'assignedSalesman', 'creator'])
             ->latest()
             ->limit(500)
@@ -73,19 +75,45 @@ class ShopController extends Controller
 
         $data = $this->validated($request);
         $data['phone'] = BangladeshPhone::normalize($data['phone']);
+        $this->assertPhoneFree($data['phone']);
+        $user = $request->user();
+        if (! $user->can('shops.approve')) {
+            $data['status'] = Shop::STATUS_PENDING;
+        }
+        if (! $user->can('shops.manage_credit')) {
+            unset($data['credit_limit'], $data['payment_terms_days']);
+        }
 
         $shop = $this->shops->create(
             $data,
             $request->user(),
             $request->boolean('issue_credentials') ? [
-                'email' => $request->input('login_email', $data['email']),
-                'password' => $request->input('login_password', '12345678'),
+                'email' => $request->input('login_email') ?: $data['email'],
+                'password' => $request->input('login_password'),
                 'name' => $data['owner_name'],
                 'phone' => $data['phone'] ?? null,
             ] : null,
         );
 
         return redirect()->route('shops.show', $shop)->with('success', 'Shop created successfully.');
+    }
+
+    private function assertPhoneFree(?string $phone, ?Shop $except = null): void
+    {
+        if (! $phone) {
+            return;
+        }
+
+        $existing = Shop::query()
+            ->where('phone', $phone)
+            ->when($except, fn ($q) => $q->whereKeyNot($except->id))
+            ->first();
+
+        if ($existing) {
+            throw ValidationException::withMessages([
+                'phone' => "This phone number already belongs to {$existing->name} ({$existing->code}).",
+            ]);
+        }
     }
 
     public function show(Shop $shop)
@@ -112,8 +140,24 @@ class ShopController extends Controller
 
         $data = $this->validated($request, $shop);
         $data['phone'] = BangladeshPhone::normalize($data['phone']);
+        $this->assertPhoneFree($data['phone'], $shop);
+        $user = $request->user();
+        foreach (['credit_limit', 'payment_terms_days'] as $field) {
+            if (array_key_exists($field, $data) && $data[$field] === null) {
+                unset($data[$field]);
+            }
+        }
 
-        $this->shops->update($shop, $data, $request->user());
+        if ($data['status'] !== $shop->status && ! $user->can('shops.approve')) {
+            throw ValidationException::withMessages(['status' => 'You are not allowed to change the shop status.']);
+        }
+        $creditChanged = (array_key_exists('credit_limit', $data) && round((float) $data['credit_limit'], 2) !== round((float) $shop->credit_limit, 2))
+            || (array_key_exists('payment_terms_days', $data) && $data['payment_terms_days'] !== null && (int) $data['payment_terms_days'] !== (int) $shop->payment_terms_days);
+        if ($creditChanged && ! $user->can('shops.manage_credit')) {
+            throw ValidationException::withMessages(['credit_limit' => 'You are not allowed to change the credit limit or payment terms.']);
+        }
+
+        $this->shops->update($shop, $data, $user);
 
         return redirect()->route('shops.show', $shop)->with('success', 'Shop updated successfully.');
     }
@@ -201,8 +245,11 @@ class ShopController extends Controller
             ])],
             'notes' => ['nullable', 'string'],
             'issue_credentials' => ['sometimes', 'boolean'],
-            'login_email' => ['nullable', 'email'],
-            'login_password' => ['nullable', 'string', 'min:8'],
+            'login_email' => ['nullable', 'email', Rule::requiredIf(fn () => ! $shop && $request->boolean('issue_credentials') && ! $request->filled('email'))],
+            'login_password' => ['nullable', 'string', 'min:8', Rule::requiredIf(fn () => ! $shop && $request->boolean('issue_credentials'))],
+        ], [
+            'login_email.required' => 'Enter a login email (or a shop email) for the shop portal.',
+            'login_password.required' => 'Set a password (8+ characters) for the shop portal login.',
         ]);
     }
 

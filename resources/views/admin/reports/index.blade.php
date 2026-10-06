@@ -14,8 +14,6 @@
                     <a class="btn btn-primary" href="{{ route('reports.show', $key) }}">Open</a>
                     @can('reports.export')
                         <a class="btn btn-ghost" href="{{ route('reports.export', $key) }}">CSV</a>
-                    @else
-                        <a class="btn btn-ghost" href="{{ route('reports.export', $key) }}">CSV</a>
                     @endcan
                 </div>
             </div>

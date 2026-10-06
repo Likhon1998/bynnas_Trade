@@ -6,9 +6,11 @@ use App\Models\PartnerInquiry;
 use App\Models\PriceGroup;
 use App\Models\Shop;
 use App\Models\User;
+use App\Rules\BangladeshPhone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class PartnerInquiryService
@@ -37,13 +39,25 @@ class PartnerInquiryService
             throw new RuntimeException('This request has no email for portal login.');
         }
 
-        if (User::query()->where('email', $inquiry->email)->where('portal', '!=', User::PORTAL_SHOP)->exists()) {
-            throw new RuntimeException('That email is already used by a non-shop account.');
+        if (! $loginByField) {
+            try {
+                $this->shops->assertLoginEmailFree(
+                    ($inquiry->shop_id ? Shop::query()->find($inquiry->shop_id) : null) ?? new Shop(),
+                    $inquiry->email,
+                );
+            } catch (ValidationException $e) {
+                throw new RuntimeException(collect($e->errors())->flatten()->first());
+            }
         }
 
         $password = $loginByField ? null : $this->temporaryPassword();
 
         return DB::transaction(function () use ($inquiry, $actor, $password, $loginByField) {
+            $inquiry = PartnerInquiry::query()->lockForUpdate()->findOrFail($inquiry->id);
+            if ($inquiry->status === PartnerInquiry::STATUS_CONVERTED) {
+                throw new RuntimeException('This request is already accepted.');
+            }
+
             $priceGroupId = PriceGroup::query()->where('is_active', true)->orderBy('id')->value('id');
             $credential = $loginByField ? null : [
                 'email' => $inquiry->email,
@@ -63,16 +77,25 @@ class PartnerInquiryService
                     'price_group_id' => $existing->price_group_id ?: $priceGroupId,
                 ], fn ($v) => $v !== null && $v !== ''));
 
+                if ($existing->status === Shop::STATUS_ON_HOLD) {
+                    throw new RuntimeException("{$existing->name} is on hold. Take it off hold on the shop page before accepting this request.");
+                }
                 $shop = $existing->status === Shop::STATUS_ACTIVE ? $existing : $this->shops->approve($existing, $actor);
                 if ($credential) {
                     $this->shops->attachShopUser($shop, $credential, $actor);
                 }
                 $shop = $shop->fresh();
             } else {
+                $phone = $inquiry->phone ? BangladeshPhone::normalize($inquiry->phone) : null;
+                $samePhone = $phone ? Shop::query()->where('phone', $phone)->first() : null;
+                if ($samePhone) {
+                    throw new RuntimeException("{$phone} already belongs to {$samePhone->name} ({$samePhone->code}). This looks like an existing shop — update that shop instead of creating a duplicate.");
+                }
+
                 $shop = $this->shops->create([
                     'name' => $inquiry->business_name,
                     'owner_name' => $inquiry->contact_name ?: $inquiry->business_name,
-                    'phone' => $inquiry->phone,
+                    'phone' => $phone ?? $inquiry->phone,
                     'email' => $inquiry->email,
                     'city' => $inquiry->city,
                     'price_group_id' => $priceGroupId,
@@ -221,6 +244,10 @@ class PartnerInquiryService
 
     public function reject(PartnerInquiry $inquiry, User $actor, ?string $notes = null): PartnerInquiry
     {
+        if ($inquiry->status === PartnerInquiry::STATUS_CONVERTED) {
+            throw ValidationException::withMessages(['inquiry' => 'This request was already accepted and its shop created — manage the shop instead.']);
+        }
+
         $inquiry->update([
             'status' => PartnerInquiry::STATUS_CLOSED,
             'reviewed_at' => now(),
@@ -235,6 +262,10 @@ class PartnerInquiryService
 
     public function markPending(PartnerInquiry $inquiry, User $actor): PartnerInquiry
     {
+        if ($inquiry->status === PartnerInquiry::STATUS_CONVERTED) {
+            throw ValidationException::withMessages(['inquiry' => 'This request was already accepted and cannot be reopened.']);
+        }
+
         $inquiry->update([
             'status' => PartnerInquiry::STATUS_NEW,
             'reviewed_at' => now(),

@@ -31,7 +31,7 @@ class ProductReturn extends Model
 
     protected $fillable = [
         'number', 'shop_id', 'order_id', 'invoice_id', 'status', 'reason_type',
-        'reason', 'total', 'restock', 'credit_issued', 'approved_at', 'approved_by',
+        'reason', 'total', 'restock', 'credit_issued', 'applied_to_invoice', 'approved_at', 'approved_by',
         'resolution_notes', 'created_by',
     ];
 
@@ -41,6 +41,7 @@ class ProductReturn extends Model
             'total' => 'decimal:2',
             'restock' => 'boolean',
             'credit_issued' => 'boolean',
+            'applied_to_invoice' => 'decimal:2',
             'approved_at' => 'datetime',
         ];
     }

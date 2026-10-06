@@ -80,6 +80,9 @@
                 <a href="{{ route('portal.profile') }}" class="nav-item {{ request()->routeIs('portal.profile') ? 'active' : '' }}" title="My shop">
                     <i data-lucide="store"></i> <span>My shop</span>
                 </a>
+                <a href="{{ route('portal.account.password') }}" class="nav-item {{ request()->routeIs('portal.account.*') ? 'active' : '' }}" title="Password">
+                    <i data-lucide="key-round"></i> <span>Password</span>
+                </a>
             </div>
             <div class="sidebar-user">
                 <div class="avatar">{{ strtoupper(substr(auth()->user()->name ?? 'SH', 0, 2)) }}</div>

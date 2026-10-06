@@ -164,6 +164,12 @@
                         <td>Paid</td>
                         <td class="num">{{ \App\Support\DemoData::taka($invoice->paid_amount) }}</td>
                     </tr>
+                    @if ((float) $invoice->credited_amount > 0)
+                        <tr>
+                            <td>Return credit</td>
+                            <td class="num">-{{ \App\Support\DemoData::taka($invoice->credited_amount) }}</td>
+                        </tr>
+                    @endif
                     <tr class="bal">
                         <td>Balance due</td>
                         <td class="num">{{ \App\Support\DemoData::taka($invoice->balance) }}</td>

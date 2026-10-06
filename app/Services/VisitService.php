@@ -21,27 +21,32 @@ class VisitService
             ]);
         }
 
-        $open = ShopVisit::query()
-            ->where('salesman_id', $salesman->id)
-            ->whereNull('checked_out_at')
-            ->first();
+        $visit = DB::transaction(function () use ($salesman, $shop, $data) {
+            // Serialise check-ins per salesman so a double tap can't open two visits.
+            User::query()->lockForUpdate()->findOrFail($salesman->id);
 
-        if ($open) {
-            throw ValidationException::withMessages([
-                'shop_id' => 'Check out of your current visit before starting another.',
+            $open = ShopVisit::query()
+                ->where('salesman_id', $salesman->id)
+                ->whereNull('checked_out_at')
+                ->first();
+
+            if ($open) {
+                throw ValidationException::withMessages([
+                    'shop_id' => 'Check out of your current visit before starting another.',
+                ]);
+            }
+
+            return ShopVisit::query()->create([
+                'salesman_id' => $salesman->id,
+                'shop_id' => $shop->id,
+                'checked_in_at' => now(),
+                'purpose' => $data['purpose'] ?? 'Order collection',
+                'outcome' => ShopVisit::OUTCOME_IN_PROGRESS,
+                'notes' => $data['notes'] ?? null,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
             ]);
-        }
-
-        $visit = ShopVisit::query()->create([
-            'salesman_id' => $salesman->id,
-            'shop_id' => $shop->id,
-            'checked_in_at' => now(),
-            'purpose' => $data['purpose'] ?? 'Order collection',
-            'outcome' => ShopVisit::OUTCOME_IN_PROGRESS,
-            'notes' => $data['notes'] ?? null,
-            'latitude' => $data['latitude'] ?? null,
-            'longitude' => $data['longitude'] ?? null,
-        ]);
+        });
 
         $this->auditLogger->log(
             'visits',
@@ -58,17 +63,22 @@ class VisitService
 
     public function checkOut(ShopVisit $visit, array $data = [], ?User $actor = null): ShopVisit
     {
-        if (! $visit->isOpen()) {
-            throw ValidationException::withMessages([
-                'visit' => 'This visit is already closed.',
-            ]);
-        }
+        $visit = DB::transaction(function () use ($visit, $data) {
+            $visit = ShopVisit::query()->lockForUpdate()->findOrFail($visit->id);
+            if (! $visit->isOpen()) {
+                throw ValidationException::withMessages([
+                    'visit' => 'This visit is already closed.',
+                ]);
+            }
 
-        $visit->update([
-            'checked_out_at' => now(),
-            'outcome' => $data['outcome'] ?? ($visit->order_id ? ShopVisit::OUTCOME_ORDER_TAKEN : ShopVisit::OUTCOME_NO_ORDER),
-            'notes' => $data['notes'] ?? $visit->notes,
-        ]);
+            $visit->update([
+                'checked_out_at' => now(),
+                'outcome' => $data['outcome'] ?? ($visit->order_id ? ShopVisit::OUTCOME_ORDER_TAKEN : ShopVisit::OUTCOME_NO_ORDER),
+                'notes' => $data['notes'] ?? $visit->notes,
+            ]);
+
+            return $visit;
+        });
 
         $this->auditLogger->log(
             'visits',

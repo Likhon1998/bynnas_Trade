@@ -5,9 +5,7 @@ namespace Database\Seeders;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Product;
 use App\Models\ProductReturn;
-use App\Models\Shop;
 use App\Models\User;
 use App\Services\InvoiceService;
 use App\Services\PaymentService;
@@ -93,28 +91,23 @@ class Phase7Seeder extends Seeder
         }
 
         if (! ProductReturn::query()->exists() && $admin) {
-            $shop = Shop::query()->whereIn('status', [Shop::STATUS_ACTIVE, Shop::STATUS_ON_HOLD])->first();
-            $product = Product::query()->where('status', Product::STATUS_ACTIVE)->first();
-            $order = $shop
-                ? (Order::query()->where('shop_id', $shop->id)->where('status', Order::STATUS_DELIVERED)->first()
-                    ?: Order::query()->where('shop_id', $shop->id)->first())
-                : null;
+            $order = Order::query()
+                ->where('status', Order::STATUS_DELIVERED)
+                ->whereHas('items', fn ($q) => $q->whereNotNull('product_id'))
+                ->with('items')
+                ->first();
+            $item = $order?->items->firstWhere('product_id', '!=', null);
 
-            if ($shop && $product) {
+            if ($order && $item) {
                 try {
                     $returns->create([
-                        'shop_id' => $shop->id,
-                        'order_id' => $order?->id,
-                        'invoice_id' => $order?->invoice_id,
+                        'shop_id' => $order->shop_id,
+                        'order_id' => $order->id,
                         'reason_type' => ProductReturn::REASON_WARRANTY,
                         'reason' => 'Seeded warranty claim — unit DOA on arrival',
                         'restock' => true,
                     ], [
-                        [
-                            'product_id' => $product->id,
-                            'quantity' => 1,
-                            'unit_price' => $product->wholesale_price,
-                        ],
+                        ['product_id' => $item->product_id, 'quantity' => 1],
                     ], $admin);
                 } catch (\Throwable) {
                     // skip

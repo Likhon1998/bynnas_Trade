@@ -91,7 +91,7 @@
                     </div>
                     <div>
                         <label class="label">Password</label>
-                        <input class="input" style="width:100%" type="text" name="login_password" value="12345678" required>
+                        <input class="input" style="width:100%" type="text" name="login_password" minlength="8" value="{{ old('login_password', \Illuminate\Support\Str::password(10, symbols: false)) }}" required>
                     </div>
                     <div class="form-span" style="display:flex;flex-direction:column;gap:10px">
                         <label style="display:flex;align-items:center;gap:8px;font-size:13px">

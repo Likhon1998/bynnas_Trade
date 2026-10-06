@@ -30,6 +30,17 @@ class ShipmentService
         }
 
         return DB::transaction(function () use ($data, $lines, $actor) {
+            foreach ($lines->whereNotNull('purchase_item_id')->groupBy('purchase_item_id') as $purchaseItemId => $group) {
+                $item = PurchaseItem::query()->lockForUpdate()->find($purchaseItemId);
+                $open = $item ? $this->openQuantity($item) : 0;
+                $qty = (int) $group->sum('quantity');
+                if ($qty > $open) {
+                    throw ValidationException::withMessages([
+                        'items' => "Only {$open} unit(s) of this purchase line are still to ship; {$qty} requested.",
+                    ]);
+                }
+            }
+
             $shipment = Shipment::query()->create([
                 'number' => $data['number'] ?? $this->nextNumber(),
                 'supplier_id' => $data['supplier_id'] ?? null,
@@ -91,9 +102,15 @@ class ShipmentService
         $lines = $purchase->items->map(fn (PurchaseItem $item) => [
             'product_id' => $item->product_id,
             'purchase_item_id' => $item->id,
-            'quantity' => $item->remainingQuantity() ?: $item->quantity,
+            'quantity' => $this->openQuantity($item),
             'unit_cost_bdt' => $item->unit_cost_bdt,
         ])->filter(fn ($l) => $l['quantity'] > 0)->values()->all();
+
+        if ($lines === []) {
+            throw ValidationException::withMessages([
+                'purchase' => "Everything on {$purchase->number} is already received or on its way.",
+            ]);
+        }
 
         return $this->create([
             ...$data,
@@ -193,6 +210,10 @@ class ShipmentService
 
         return DB::transaction(function () use ($shipment, $actor, $warehouseId) {
             $shipment = Shipment::query()->lockForUpdate()->with(['items.product', 'items.purchaseItem', 'purchase'])->findOrFail($shipment->id);
+            if ($shipment->status === Shipment::STATUS_RECEIVED) {
+                throw ValidationException::withMessages(['shipment' => 'Shipment already received.']);
+            }
+
             $warehouse = Warehouse::query()->find($warehouseId ?: $shipment->warehouse_id) ?: Warehouse::defaultWarehouse();
 
             if (! $warehouse) {
@@ -230,7 +251,7 @@ class ShipmentService
 
                 $product->update([
                     'landed_cost' => round($avg, 2),
-                    'cost_price' => round($avg * 0.95, 2),
+                    'cost_price' => round($avg, 2),
                 ]);
 
                 if ($item->purchase_item_id) {
@@ -271,11 +292,20 @@ class ShipmentService
         });
     }
 
+    /** Ordered minus received minus already on a shipment that hasn't been received yet. */
+    public function openQuantity(PurchaseItem $item): int
+    {
+        $inTransit = (int) ShipmentItem::query()
+            ->where('purchase_item_id', $item->id)
+            ->whereHas('shipment', fn ($q) => $q->where('status', '!=', Shipment::STATUS_RECEIVED))
+            ->sum('quantity');
+
+        return max(0, $item->remainingQuantity() - $inTransit);
+    }
+
     public function nextNumber(): string
     {
-        $seq = Shipment::withTrashed()->count() + 1;
-
-        return 'SHP-CN-'.now()->format('ymd').'-'.str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Shipment::class, 'SHP-CN-'.now()->format('ymd').'-', 3);
     }
 
     private function refreshPurchaseStatus(?Purchase $purchase): void

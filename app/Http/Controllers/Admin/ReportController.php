@@ -38,7 +38,7 @@ class ReportController extends Controller
 
     public function export(Request $request, string $report)
     {
-        abort_unless($request->user()->can('reports.export') || $request->user()->can('reports.view'), 403);
+        abort_unless($request->user()->can('reports.export'), 403);
 
         $from = $request->filled('from') ? Carbon::parse($request->input('from'))->startOfDay() : now()->startOfMonth();
         $to = $request->filled('to') ? Carbon::parse($request->input('to'))->endOfDay() : now()->endOfDay();

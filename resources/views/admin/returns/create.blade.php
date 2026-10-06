@@ -24,9 +24,9 @@
                 </select>
             </div>
             <div class="field">
-                <label class="label">Related order (optional)</label>
-                <select class="select" name="order_id">
-                    <option value="">None</option>
+                <label class="label">Delivered order</label>
+                <select class="select" name="order_id" required>
+                    <option value="">Select order</option>
                     @foreach ($orders as $order)
                         <option value="{{ $order->id }}" @selected(old('order_id') == $order->id)>{{ $order->number }} · {{ $order->shop?->name }}</option>
                     @endforeach
@@ -49,10 +49,11 @@
             </label>
         </div>
 
-        <div style="font-weight:700;margin-bottom:10px">Return lines</div>
+        <div style="font-weight:700;margin-bottom:4px">Return lines</div>
+        <div class="muted" style="font-size:12px;margin-bottom:10px">Only products on the selected order can be returned, up to the quantity sold. Credit is given at the price charged on that order.</div>
         <div class="table-wrap" style="margin-bottom:16px">
             <table class="data">
-                <thead><tr><th>Product</th><th>Qty</th><th>Unit price (optional)</th></tr></thead>
+                <thead><tr><th>Product</th><th>Qty</th></tr></thead>
                 <tbody>
                     @foreach ($products as $product)
                         <tr>
@@ -61,9 +62,7 @@
                                 <div class="muted" style="font-size:12px">{{ $product->sku }} · {{ \App\Support\DemoData::taka($product->wholesale_price) }}</div>
                                 <input type="hidden" name="items[{{ $loop->index }}][product_id]" value="{{ $product->id }}">
                             </td>
-                            <td><input class="input" style="width:90px" type="number" min="0" name="items[{{ $loop->index }}][quantity]" value="{{ old('items.'.$loop->index.'.quantity', 0) }}"></td>
-                            <td><input class="input" style="width:120px" type="number" step="0.01" min="0" name="items[{{ $loop->index }}][unit_price]" value="{{ old('items.'.$loop->index.'.unit_price', $product->wholesale_price) }}"></td>
-                        </tr>
+                            <td><input class="input" style="width:90px" type="number" min="0" name="items[{{ $loop->index }}][quantity]" value="{{ old('items.'.$loop->index.'.quantity', 0) }}"></td>                        </tr>
                     @endforeach
                 </tbody>
             </table>

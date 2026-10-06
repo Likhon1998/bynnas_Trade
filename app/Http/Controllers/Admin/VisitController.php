@@ -35,7 +35,7 @@ class VisitController extends Controller
             'summary' => $summary,
             'totals' => [
                 'visits' => $summary->sum('visits'),
-                'shops' => $summary->sum('shops'),
+                'shops' => $this->activity->distinctShopsVisited($from),
                 'with_order' => $summary->sum('with_order'),
                 'orders' => $summary->sum('orders'),
                 'order_value' => $summary->sum('order_value'),

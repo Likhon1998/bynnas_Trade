@@ -18,7 +18,7 @@
                     </div>
                     <div>
                         <label class="label">Temporary password</label>
-                        <input class="input" style="width:100%" type="text" name="login_password" value="{{ old('login_password', '12345678') }}">
+                        <input class="input" style="width:100%" type="text" name="login_password" minlength="8" value="{{ old('login_password', \Illuminate\Support\Str::password(10, symbols: false)) }}">
                     </div>
                 </div>
             </div>

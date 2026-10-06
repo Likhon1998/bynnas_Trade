@@ -34,11 +34,11 @@ class ShopPolicy
 
     public function approve(User $user, Shop $shop): bool
     {
-        return $user->can('shops.approve');
+        return $user->can('shops.approve') && $shop->isAccessibleBy($user);
     }
 
     public function manageCredentials(User $user, Shop $shop): bool
     {
-        return $user->can('shops.manage_credentials');
+        return $user->can('shops.manage_credentials') && $shop->isAccessibleBy($user);
     }
 }

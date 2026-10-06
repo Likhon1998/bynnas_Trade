@@ -19,6 +19,7 @@ class ReturnController extends Controller
         abort_unless($request->user()->can('returns.view'), 403);
 
         $returns = ProductReturn::query()
+            ->whereHas('shop', fn ($q) => $q->visibleTo($request->user()))
             ->with(['shop', 'order'])
             ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->latest()
@@ -33,8 +34,8 @@ class ReturnController extends Controller
         abort_unless($request->user()->can('returns.create'), 403);
 
         return view('admin.returns.create', [
-            'shops' => Shop::query()->whereIn('status', [Shop::STATUS_ACTIVE, Shop::STATUS_ON_HOLD])->orderBy('name')->get(),
-            'orders' => Order::query()->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_DISPATCHED])->latest()->limit(50)->get(),
+            'shops' => Shop::query()->visibleTo($request->user())->whereIn('status', [Shop::STATUS_ACTIVE, Shop::STATUS_ON_HOLD])->orderBy('name')->get(),
+            'orders' => Order::query()->visibleTo($request->user())->with('shop:id,name')->where('status', Order::STATUS_DELIVERED)->latest()->limit(100)->get(),
             'products' => Product::query()->where('status', Product::STATUS_ACTIVE)->orderBy('name')->get(),
         ]);
     }
@@ -45,15 +46,17 @@ class ReturnController extends Controller
 
         $data = $request->validate([
             'shop_id' => ['required', 'exists:shops,id'],
-            'order_id' => ['nullable', 'exists:orders,id'],
+            'order_id' => ['required', 'exists:orders,id'],
             'reason_type' => ['required', 'in:warranty,defect,wrong_item,other'],
             'reason' => ['nullable', 'string', 'max:2000'],
             'restock' => ['nullable', 'boolean'],
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0'],
-            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'order_id.required' => 'Pick the delivered order these goods came from.',
         ]);
+        abort_unless(Shop::query()->findOrFail($data['shop_id'])->isAccessibleBy($request->user()), 403);
 
         $return = $this->returns->create($data + [
             'restock' => $request->boolean('restock', true),
@@ -65,6 +68,7 @@ class ReturnController extends Controller
     public function show(Request $request, ProductReturn $productReturn)
     {
         abort_unless($request->user()->can('returns.view'), 403);
+        abort_unless($productReturn->shop?->isAccessibleBy($request->user()), 403);
 
         $productReturn->load(['shop', 'order', 'invoice', 'items.product', 'approver', 'creator']);
 
@@ -74,6 +78,7 @@ class ReturnController extends Controller
     public function approve(Request $request, ProductReturn $productReturn)
     {
         abort_unless($request->user()->can('returns.approve'), 403);
+        abort_unless($productReturn->shop?->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate(['resolution_notes' => ['nullable', 'string', 'max:2000']]);
         $this->returns->approve($productReturn, $request->user(), $data['resolution_notes'] ?? null);
@@ -84,6 +89,7 @@ class ReturnController extends Controller
     public function reject(Request $request, ProductReturn $productReturn)
     {
         abort_unless($request->user()->can('returns.reject'), 403);
+        abort_unless($productReturn->shop?->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate(['resolution_notes' => ['required', 'string', 'max:2000']]);
         $this->returns->reject($productReturn, $data['resolution_notes'], $request->user());

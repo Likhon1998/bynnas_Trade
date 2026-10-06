@@ -71,17 +71,30 @@
                     </div>
                 @endif
 
-                <div>
-                    <label class="label">Access scope</label>
-                    <select class="select" style="width:100%" name="scope_type" required>
-                        @foreach ($scopeTypes as $value => $label)
-                            <option value="{{ $value }}" @selected(old('scope_type', $currentScope?->scope_type ?? 'global') === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="label">Scope label</label>
-                    <input class="input" style="width:100%" name="scope_label" value="{{ old('scope_label', $currentScope?->label) }}" placeholder="e.g. Dhaka North / Dhaka Central Warehouse">
+                <div x-data="{ scopeType: @js(old('scope_type', $currentScope?->scope_type ?? 'global')) }" class="form-span" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div>
+                        <label class="label">Access scope</label>
+                        <select class="select" style="width:100%" name="scope_type" x-model="scopeType" required>
+                            @foreach ($scopeTypes as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @foreach ($scopeOptions as $type => $options)
+                        <div x-show="scopeType === @js($type)" x-cloak>
+                            <label class="label">Which {{ $type }}</label>
+                            <select class="select" style="width:100%" name="scope_id" :disabled="scopeType !== @js($type)" :required="scopeType === @js($type)">
+                                <option value="">Select {{ $type }}</option>
+                                @foreach ($options as $id => $name)
+                                    <option value="{{ $id }}" @selected((string) old('scope_id', $currentScope?->scope_type === $type ? $currentScope?->scope_id : '') === (string) $id)>{{ $name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endforeach
+                    <div x-show="scopeType === 'global'">
+                        <label class="label">Scope</label>
+                        <input class="input" style="width:100%" value="Sees all shops, orders and warehouses" readonly>
+                    </div>
                 </div>
 
                 <div class="form-span">

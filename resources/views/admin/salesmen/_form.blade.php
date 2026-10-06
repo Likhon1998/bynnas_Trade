@@ -1,7 +1,7 @@
 @php
     $salesman = $salesman ?? null;
     $profile = $salesman?->salesmanProfile;
-    $selectedShops = old('shop_ids', $salesman?->assignedShops?->pluck('id')->all() ?? []);
+    $selectedShops = array_map('intval', old('shop_ids', $salesman?->assignedShops?->pluck('id')->all() ?? []));
 @endphp
 
 <div class="form-grid">
@@ -48,7 +48,7 @@
             @foreach ($shops as $shop)
                 <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
                     <input type="checkbox" name="shop_ids[]" value="{{ $shop->id }}" @checked(in_array($shop->id, $selectedShops, true))>
-                    <span>{{ $shop->name }} <span class="muted">({{ $shop->code }})</span></span>
+                    <span>{{ $shop->name }} <span class="muted">({{ $shop->code }}{{ $shop->status !== \App\Models\Shop::STATUS_ACTIVE ? ' · '.$shop->statusLabel() : '' }})</span></span>
                 </label>
             @endforeach
         </div>

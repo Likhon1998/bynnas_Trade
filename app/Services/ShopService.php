@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserAccessScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ShopService
 {
@@ -97,6 +98,8 @@ class ShopService
 
     public function attachShopUser(Shop $shop, array $credential, ?User $actor = null): User
     {
+        $this->assertLoginEmailFree($shop, $credential['email']);
+
         $user = User::query()->updateOrCreate(
             ['email' => $credential['email']],
             [
@@ -135,10 +138,29 @@ class ShopService
         return $user;
     }
 
+    /** A shop login may only reuse an email that is unused or already this shop's own login. */
+    public function assertLoginEmailFree(Shop $shop, string $email): void
+    {
+        $existing = User::query()->where('email', $email)->first();
+        if (! $existing) {
+            return;
+        }
+
+        if ($existing->portal !== User::PORTAL_SHOP) {
+            throw ValidationException::withMessages([
+                'login_email' => "{$email} belongs to a staff or salesman account. Use the shop owner's own email.",
+            ]);
+        }
+
+        if ($existing->shops()->when($shop->exists, fn ($q) => $q->where('shops.id', '!=', $shop->id))->exists()) {
+            throw ValidationException::withMessages([
+                'login_email' => "{$email} is already the login of another shop.",
+            ]);
+        }
+    }
+
     public function nextCode(): string
     {
-        $seq = Shop::withTrashed()->count() + 1;
-
-        return 'SHP-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Shop::class, 'SHP-', 4, 'code');
     }
 }

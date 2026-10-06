@@ -85,15 +85,11 @@ class PurchaseService
 
     public function nextNumber(): string
     {
-        $seq = Purchase::withTrashed()->count() + 1;
-
-        return 'PO-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Purchase::class, 'PO-'.now()->format('ymd').'-', 4);
     }
 
     public function nextSupplierCode(): string
     {
-        $seq = Supplier::withTrashed()->count() + 1;
-
-        return 'SUP-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Supplier::class, 'SUP-', 4, 'code');
     }
 }

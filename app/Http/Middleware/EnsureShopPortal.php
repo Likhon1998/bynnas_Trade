@@ -15,18 +15,24 @@ class EnsureShopPortal
     {
         $user = Auth::user();
 
-        if (! $user || $user->portal !== User::PORTAL_SHOP || ! $user->is_active) {
+        if (! $user) {
             return redirect()->route('portal.login');
         }
 
-        $shop = $user->primaryShop();
+        $shop = $user->portal === User::PORTAL_SHOP ? $user->primaryShop() : null;
+        $problem = match (true) {
+            $user->portal !== User::PORTAL_SHOP => 'Please sign in with a partner (shop) account.',
+            ! $user->is_active => 'This account has been deactivated.',
+            ! $shop || $shop->status !== Shop::STATUS_ACTIVE => 'Your shop access is not active.',
+            default => null,
+        };
 
-        if (! $shop || $shop->status !== Shop::STATUS_ACTIVE) {
+        if ($problem) {
             Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
 
-            return redirect()->route('portal.login')->withErrors([
-                'email' => 'Your shop access is not active.',
-            ]);
+            return redirect()->route('portal.login')->withErrors(['email' => $problem]);
         }
 
         $request->attributes->set('shop', $shop);

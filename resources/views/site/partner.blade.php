@@ -1,18 +1,19 @@
 @extends('site.layouts.app')
 @section('title', 'Become a Partner')
+@php($c = $site->section('partner'))
 @section('content')
     <section class="page-hero">
         <div class="site-wrap">
-            <span class="eyebrow">Become a partner</span>
-            <h1>Apply for wholesale access.</h1>
-            <p class="lead">Tell us about your retail business. After review, you'll receive shop portal access, your partner price list and payment terms.</p>
+            @if ($c['hero_eyebrow'])<span class="eyebrow">{{ $c['hero_eyebrow'] }}</span>@endif
+            <h1>{{ $c['hero_title'] }}</h1>
+            @if ($c['hero_lead'])<p class="lead">{{ $c['hero_lead'] }}</p>@endif
         </div>
     </section>
 
     <section class="section">
         <div class="site-wrap split split-form">
             <div class="card">
-                <h2 class="card-title">Partner application</h2>
+                <h2 class="card-title">{{ $c['form_title'] ?: 'Partner application' }}</h2>
                 @if (session('success'))
                     <div class="site-alert site-alert-ok">{{ session('success') }}</div>
                 @endif
@@ -22,6 +23,8 @@
 
                 <form class="site-form" method="post" action="{{ route('site.partner.store') }}">
                     @csrf
+                    <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;opacity:0">
+
                     <label>Business / shop name<input name="business_name" value="{{ old('business_name') }}" required></label>
                     <div class="site-form-row">
                         <label>Contact person<input name="contact_name" value="{{ old('contact_name') }}" required></label>
@@ -78,26 +81,20 @@
                             </ul>
                         </div>
                     </label>
-                    <label>About your shop<textarea name="message" rows="4" placeholder="Product categories you sell, estimated monthly purchase, shop locations">{{ old('message') }}</textarea></label>
+                    <label>About your shop<textarea name="message" rows="4" placeholder="{{ $c['message_placeholder'] }}">{{ old('message') }}</textarea></label>
                     <div><button class="btn btn-primary btn-lg" type="submit">Submit application</button></div>
                 </form>
             </div>
 
             <aside class="card card-soft">
-                <h2 class="card-title">What happens next</h2>
+                <h2 class="card-title">{{ $c['steps_title'] ?: 'What happens next' }}</h2>
                 <ol class="next-steps">
-                    <li>
-                        <strong>We review your application</strong>
-                        <span>Our team checks your shop details, usually within 1–2 business days.</span>
-                    </li>
-                    <li>
-                        <strong>We contact you</strong>
-                        <span>A representative calls to confirm details and discuss pricing and terms.</span>
-                    </li>
-                    <li>
-                        <strong>You get portal access</strong>
-                        <span>Log in to see your price list, place orders and manage invoices.</span>
-                    </li>
+                    @foreach ($c['steps'] as $step)
+                        <li>
+                            <strong>{{ $step['title'] }}</strong>
+                            <span>{{ $step['text'] }}</span>
+                        </li>
+                    @endforeach
                 </ol>
                 <p class="muted small">Questions? <a class="link" href="{{ route('site.contact') }}">Contact our team</a>.</p>
             </aside>

@@ -57,7 +57,7 @@ class AccessControlTest extends TestCase
             'name' => 'Nobody', 'email' => 'nobody@bt.test', 'password' => '12345678',
             'portal' => User::PORTAL_ADMIN, 'is_active' => true,
         ]);
-        $allowed = ['/admin', '/admin/dashboard', '/admin/notifications', '/admin/notifications/read-all'];
+        $allowed = ['/admin', '/admin/dashboard', '/admin/notifications', '/admin/notifications/read-all', '/admin/account/password'];
 
         $leaks = [];
         foreach ($this->routes('admin') as [$method, $uri]) {
@@ -89,7 +89,7 @@ class AccessControlTest extends TestCase
                 }
                 $response = $this->call('GET', $uri);
                 $this->assertTrue($response->isRedirect(), "{$uri} should redirect guests, got {$response->status()}");
-                $this->assertStringContainsString('/login', (string) $response->headers->get('Location'), "{$uri} should go to a login page");
+                $this->assertStringEndsWith($login, (string) $response->headers->get('Location'), "{$uri} should go to {$login}");
             }
         }
     }

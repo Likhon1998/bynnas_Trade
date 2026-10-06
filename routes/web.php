@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountPasswordController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Admin\RewardController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SalesmanController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\WebsiteController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\SupplierController;
@@ -43,9 +45,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [SiteController::class, 'home'])->name('site.home');
 Route::get('/about', [SiteController::class, 'about'])->name('site.about');
 Route::get('/contact', [SiteController::class, 'contact'])->name('site.contact');
-Route::post('/contact', [SiteController::class, 'storeContact'])->name('site.contact.store');
+Route::post('/contact', [SiteController::class, 'storeContact'])->middleware('throttle:5,1')->name('site.contact.store');
 Route::get('/become-a-partner', [SiteController::class, 'partner'])->name('site.partner');
-Route::post('/become-a-partner', [SiteController::class, 'storePartner'])->name('site.partner.store');
+Route::post('/become-a-partner', [SiteController::class, 'storePartner'])->middleware('throttle:5,1')->name('site.partner.store');
 
 Route::prefix('portal')->name('portal.')->group(function () {
     Route::middleware('guest')->group(function () {
@@ -66,6 +68,8 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::delete('/orders/{order}', [ShopPortalController::class, 'destroyOrder'])->name('orders.destroy');
         Route::get('/orders/{order}', [ShopPortalController::class, 'showOrder'])->name('orders.show');
         Route::get('/profile', [ShopPortalController::class, 'profile'])->name('profile');
+        Route::get('/account/password', [AccountPasswordController::class, 'edit'])->name('account.password');
+        Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:6,1')->name('account.password.update');
     });
 });
 
@@ -94,6 +98,8 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::post('/partners', [FieldPortalController::class, 'storePartner'])->middleware('throttle:20,1')->name('partners.store');
         Route::get('/partners/{inquiry}/login', [FieldPortalController::class, 'partnerLogin'])->name('partners.login');
         Route::post('/partners/{inquiry}/login', [FieldPortalController::class, 'storePartnerLogin'])->middleware('throttle:20,1')->name('partners.login.store');
+        Route::get('/account/password', [AccountPasswordController::class, 'edit'])->name('account.password');
+        Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:6,1')->name('account.password.update');
     });
 });
 
@@ -108,6 +114,8 @@ Route::prefix('admin')->group(function () {
 
         Route::get('/', fn () => redirect()->route('dashboard'));
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+        Route::get('/account/password', [AccountPasswordController::class, 'edit'])->name('account.password');
+        Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:6,1')->name('account.password.update');
 
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
@@ -272,5 +280,9 @@ Route::prefix('admin')->group(function () {
         Route::get('/reports/{report}/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+
+        Route::get('/website', [WebsiteController::class, 'edit'])->name('website.edit');
+        Route::put('/website', [WebsiteController::class, 'update'])->name('website.update');
+        Route::post('/website/reset', [WebsiteController::class, 'reset'])->name('website.reset');
     });
 });

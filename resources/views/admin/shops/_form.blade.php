@@ -53,19 +53,24 @@
 </div>
 <div>
     <label class="label">Credit limit (৳)</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="credit_limit" value="{{ old('credit_limit', $shop?->credit_limit ?? 150000) }}">
+    <input class="input" style="width:100%" type="number" step="0.01" name="credit_limit" value="{{ old('credit_limit', $shop?->credit_limit ?? 150000) }}" @cannot('shops.manage_credit') readonly title="Needs the manage credit permission" @endcannot>
 </div>
 <div>
     <label class="label">Payment terms (days)</label>
-    <input class="input" style="width:100%" type="number" name="payment_terms_days" value="{{ old('payment_terms_days', $shop?->payment_terms_days ?? 21) }}">
+    <input class="input" style="width:100%" type="number" name="payment_terms_days" value="{{ old('payment_terms_days', $shop?->payment_terms_days ?? 21) }}" @cannot('shops.manage_credit') readonly @endcannot>
 </div>
 <div>
     <label class="label">Status</label>
-    <select class="select" style="width:100%" name="status" required>
-        @foreach (['pending' => 'Pending Approval', 'active' => 'Active', 'on_hold' => 'On Hold', 'rejected' => 'Rejected'] as $value => $label)
-            <option value="{{ $value }}" @selected(old('status', $shop?->status ?? 'pending') === $value)>{{ $label }}</option>
-        @endforeach
-    </select>
+    @can('shops.approve')
+        <select class="select" style="width:100%" name="status" required>
+            @foreach (['pending' => 'Pending Approval', 'active' => 'Active', 'on_hold' => 'On Hold', 'rejected' => 'Rejected'] as $value => $label)
+                <option value="{{ $value }}" @selected(old('status', $shop?->status ?? 'pending') === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+    @else
+        <input type="hidden" name="status" value="{{ $shop?->status ?? 'pending' }}">
+        <input class="input" style="width:100%" value="{{ $shop?->statusLabel() ?? 'Pending Approval' }}" readonly>
+    @endcan
 </div>
 <div class="form-span">
     <label class="label">Business address</label>

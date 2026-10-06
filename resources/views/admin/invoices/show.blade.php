@@ -34,6 +34,9 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Shop</div><div style="font-weight:700">{{ $invoice->shop?->name }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($invoice->total) }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Paid</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($invoice->paid_amount) }}</div></div>
+        @if ((float) $invoice->credited_amount > 0)
+            <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Return credit</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($invoice->credited_amount) }}</div></div>
+        @endif
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Balance</div><div style="font-weight:700;color:{{ $invoice->balance > 0 ? '#b91c1c' : '#15803d' }}">{{ \App\Support\DemoData::taka($invoice->balance) }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Due</div><div style="font-weight:700">{{ $invoice->due_at?->format('d M Y') ?: '—' }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Issued</div><div style="font-weight:700">{{ $invoice->issued_at?->format('d M Y H:i') ?: '—' }}</div></div>

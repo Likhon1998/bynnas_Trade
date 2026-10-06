@@ -14,18 +14,24 @@ class EnsureSalesmanPortal
     {
         $user = Auth::user();
 
-        if (! $user || $user->portal !== User::PORTAL_SALESMAN || ! $user->is_active) {
+        if (! $user) {
             return redirect()->route('field.login');
         }
 
         $profile = $user->salesmanProfile;
+        $problem = match (true) {
+            $user->portal !== User::PORTAL_SALESMAN => 'Please sign in with a field officer account.',
+            ! $user->is_active => 'This account has been deactivated.',
+            ! $profile || ! $profile->is_active => 'Your salesman profile is not active.',
+            default => null,
+        };
 
-        if (! $profile || ! $profile->is_active) {
+        if ($problem) {
             Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
 
-            return redirect()->route('field.login')->withErrors([
-                'email' => 'Your salesman profile is not active.',
-            ]);
+            return redirect()->route('field.login')->withErrors(['email' => $problem]);
         }
 
         view()->share('salesmanProfile', $profile);

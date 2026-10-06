@@ -27,9 +27,15 @@ class UpdateUserRequest extends FormRequest
             'roles' => ['nullable', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
             'scope_type' => ['required', Rule::in(['global', 'territory', 'warehouse', 'shop'])],
+            'scope_id' => ['nullable', 'integer', 'required_unless:scope_type,global', ...StoreUserRequest::scopeExistsRule($this->input('scope_type'))],
             'scope_label' => ['nullable', 'string', 'max:190'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['string', 'exists:permissions,name'],
         ];
+    }
+
+    public function messages(): array
+    {
+        return ['scope_id.required_unless' => 'Pick which territory, warehouse or shop this user is limited to.'];
     }
 }

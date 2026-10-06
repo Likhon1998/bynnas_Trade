@@ -121,6 +121,24 @@ class Shop extends Model
         };
     }
 
+    /** List query matching isAccessibleBy(). */
+    public function scopeVisibleTo(\Illuminate\Database\Eloquent\Builder $query, User $user): \Illuminate\Database\Eloquent\Builder
+    {
+        if ($user->isSuperAdmin() || $user->hasGlobalAccessScope()) {
+            return $query;
+        }
+
+        if ($user->portal === User::PORTAL_SHOP) {
+            return $query->whereHas('users', fn ($q) => $q->where('users.id', $user->id));
+        }
+
+        $scopes = $user->accessScopes()->get();
+        $shopIds = $scopes->where('scope_type', UserAccessScope::TYPE_SHOP)->pluck('scope_id')->filter()->all();
+        $territoryIds = $scopes->where('scope_type', UserAccessScope::TYPE_TERRITORY)->pluck('scope_id')->filter()->all();
+
+        return $query->where(fn ($q) => $q->whereIn('shops.id', $shopIds ?: [0])->orWhereIn('shops.territory_id', $territoryIds ?: [0]));
+    }
+
     public function isAccessibleBy(User $user): bool
     {
         if ($user->isSuperAdmin() || $user->hasGlobalAccessScope()) {

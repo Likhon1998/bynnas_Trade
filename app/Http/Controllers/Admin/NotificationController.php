@@ -38,21 +38,18 @@ class NotificationController extends Controller
         $notification->markAsRead();
 
         $url = $notification->data['url'] ?? null;
-        if (! $url) {
+        if (! is_string($url) || $url === '') {
             return back();
         }
 
-        if (str_starts_with($url, '/')) {
-            return redirect()->to($url);
-        }
-
+        // Only ever follow a path inside this admin site (no external or protocol-relative URLs).
         $path = parse_url($url, PHP_URL_PATH);
         $query = parse_url($url, PHP_URL_QUERY);
-        if (is_string($path) && str_starts_with($path, '/admin')) {
+        if (is_string($path) && preg_match('#^/admin(/|$)#', $path) && ! str_starts_with($path, '//')) {
             return redirect()->to($path.($query ? '?'.$query : ''));
         }
 
-        return redirect()->away($url);
+        return redirect()->route('notifications.index');
     }
 
     public function markAllRead(Request $request)

@@ -41,6 +41,7 @@ class PermissionCatalog
                 'delete' => 'Delete shops',
                 'approve' => 'Approve shops',
                 'manage_credentials' => 'Manage shop credentials',
+                'manage_credit' => 'Change shop credit limit and payment terms',
             ],
             'categories' => [
                 'view' => 'View categories',
@@ -68,6 +69,7 @@ class PermissionCatalog
                 'create' => 'Create orders',
                 'edit' => 'Edit orders',
                 'approve' => 'Approve orders',
+                'credit_override' => 'Approve orders over the shop credit limit',
                 'reject' => 'Reject orders',
                 'cancel' => 'Cancel orders',
                 'delete' => 'Delete orders',
@@ -168,6 +170,10 @@ class PermissionCatalog
                 'view' => 'View settings',
                 'manage' => 'Manage settings',
             ],
+            'website' => [
+                'view' => 'View public website content',
+                'manage' => 'Edit public website content',
+            ],
         ];
     }
 
@@ -239,7 +245,7 @@ class PermissionCatalog
             'Finance Manager' => [
                 'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.export',
                 'payments.view', 'payments.create', 'payments.verify',
-                'orders.view', 'shops.view', 'returns.view', 'returns.approve',
+                'orders.view', 'shops.view', 'shops.edit', 'shops.manage_credit', 'returns.view', 'returns.approve',
                 'reports.view', 'analytics.view', 'commissions.view', 'commissions.approve', 'commissions.manage',
                 'targets.view', 'targets.manage', 'rewards.view', 'rewards.manage', 'rewards.approve',
             ],

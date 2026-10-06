@@ -11,6 +11,7 @@ use App\Policies\OrderPolicy;
 use App\Policies\ProductPolicy;
 use App\Policies\ShopPolicy;
 use App\Policies\ShopVisitPolicy;
+use App\Support\SiteContent;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(SiteContent::class);
     }
 
     public function boot(): void
@@ -59,6 +60,8 @@ class AppServiceProvider extends ServiceProvider
 
             return null;
         });
+
+        View::composer('site.*', fn ($view) => $view->with('site', app(SiteContent::class)));
 
         View::composer('field.layouts.app', function ($view) {
             $user = auth()->user();

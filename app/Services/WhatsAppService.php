@@ -76,7 +76,7 @@ class WhatsAppService
             } else {
                 Log::info('WhatsApp approval message (log driver)', [
                     'to' => $digits,
-                    'message' => $message,
+                    'message' => str_replace($password, str_repeat('•', 8), $message),
                 ]);
             }
 

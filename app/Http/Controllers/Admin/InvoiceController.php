@@ -18,6 +18,7 @@ class InvoiceController extends Controller
         abort_unless($request->user()->can('invoices.view'), 403);
 
         $invoices = Invoice::query()
+            ->whereHas('shop', fn ($q) => $q->visibleTo($request->user()))
             ->with(['shop', 'order'])
             ->latest('issued_at')
             ->limit(500)
@@ -57,6 +58,7 @@ class InvoiceController extends Controller
     public function show(Request $request, Invoice $invoice)
     {
         abort_unless($request->user()->can('invoices.view'), 403);
+        abort_unless($invoice->shop?->isAccessibleBy($request->user()), 403);
 
         $invoice->load([
             'shop',
@@ -73,6 +75,7 @@ class InvoiceController extends Controller
     public function download(Request $request, Invoice $invoice)
     {
         abort_unless($request->user()->can('invoices.view'), 403);
+        abort_unless($invoice->shop?->isAccessibleBy($request->user()), 403);
 
         $invoice->load([
             'shop',

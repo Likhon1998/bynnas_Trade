@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\ProductPrice;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -62,7 +64,7 @@ class ProductService
                 'name', 'sku', 'barcode', 'category_id', 'brand_id', 'model', 'variant',
                 'description', 'image_path', 'cost_price', 'landed_cost', 'wholesale_price',
                 'dealer_price', 'distributor_price', 'retail_price', 'minimum_selling_price',
-                'warranty', 'minimum_stock', 'stock_on_hand', 'status', 'is_published',
+                'warranty', 'minimum_stock', 'status', 'is_published',
             ])->all());
 
             if ($groupPrices !== null) {
@@ -81,6 +83,33 @@ class ProductService
 
             return $product->fresh(['category', 'brand', 'prices']);
         });
+    }
+
+    /**
+     * Move the product's total on-hand to $total through the inventory ledger, adjusting the
+     * default warehouse by the difference.
+     */
+    public function setTotalStock(Product $product, int $total, ?User $actor = null): void
+    {
+        $warehouse = Warehouse::defaultWarehouse();
+        if (! $warehouse) {
+            throw ValidationException::withMessages(['stock_on_hand' => 'Configure a warehouse before setting stock.']);
+        }
+
+        $inventory = app(InventoryService::class);
+        $delta = $total - (int) $product->stock_on_hand;
+        if ($delta === 0) {
+            return;
+        }
+
+        $current = (int) $inventory->stockFor($warehouse, $product)->qty_on_hand;
+        if ($current + $delta < 0) {
+            throw ValidationException::withMessages([
+                'stock_on_hand' => "Only {$current} unit(s) are in {$warehouse->code}; move stock with Inventory → Transfer or Adjust instead.",
+            ]);
+        }
+
+        $inventory->adjust($warehouse, $product, $current + $delta, $actor, 'Set from product form');
     }
 
     public function syncGroupPrices(Product $product, array $groupPrices): void

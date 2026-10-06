@@ -80,6 +80,18 @@ class InvoiceService
                         'line_total' => $item->line_total,
                     ]);
                 }
+                $linesTotal = round((float) $order->items->sum('line_total'), 2);
+                if (abs($linesTotal - $remaining) > 0.009) {
+                    InvoiceItem::query()->create([
+                        'invoice_id' => $invoice->id,
+                        'product_id' => null,
+                        'product_name' => $advancePaid > 0 ? 'Advance already paid on '.$order->number : 'Order adjustment',
+                        'product_sku' => $advancePaid > 0 ? 'ADVANCE' : 'ADJUST',
+                        'quantity' => 1,
+                        'unit_price' => round($remaining - $linesTotal, 2),
+                        'line_total' => round($remaining - $linesTotal, 2),
+                    ]);
+                }
             } else {
                 InvoiceItem::query()->create([
                     'invoice_id' => $invoice->id,
@@ -180,15 +192,39 @@ class InvoiceService
     public function applyPayment(Invoice $invoice, float $amount): Invoice
     {
         $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
-        $paid = round((float) $invoice->paid_amount + $amount, 2);
-        $balance = max(0, round((float) $invoice->total - $paid, 2));
+        $paid = min(round((float) $invoice->paid_amount + $amount, 2), (float) $invoice->total);
 
+        return $this->settle($invoice, $paid, (float) $invoice->credited_amount);
+    }
+
+    /** Return credit lowers what is owed on the invoice. Returns the amount actually applied. */
+    public function applyCredit(Invoice $invoice, float $amount): float
+    {
+        $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+        if (! in_array($invoice->status, [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL], true)) {
+            return 0.0;
+        }
+
+        $applied = round(min($amount, (float) $invoice->balance), 2);
+        if ($applied <= 0) {
+            return 0.0;
+        }
+
+        $this->settle($invoice, (float) $invoice->paid_amount, round((float) $invoice->credited_amount + $applied, 2));
+
+        return $applied;
+    }
+
+    private function settle(Invoice $invoice, float $paid, float $credited): Invoice
+    {
+        $balance = max(0, round((float) $invoice->total - $paid - $credited, 2));
         $status = $balance <= 0.009
             ? Invoice::STATUS_PAID
-            : ($paid > 0 ? Invoice::STATUS_PARTIAL : Invoice::STATUS_ISSUED);
+            : ($paid + $credited > 0 ? Invoice::STATUS_PARTIAL : Invoice::STATUS_ISSUED);
 
         $invoice->update([
-            'paid_amount' => min($paid, (float) $invoice->total),
+            'paid_amount' => $paid,
+            'credited_amount' => $credited,
             'balance' => $balance,
             'status' => $status,
         ]);
@@ -198,8 +234,6 @@ class InvoiceService
 
     public function nextNumber(): string
     {
-        $seq = Invoice::withTrashed()->count() + 1;
-
-        return 'INV-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Invoice::class, 'INV-'.now()->format('ymd').'-', 4);
     }
 }

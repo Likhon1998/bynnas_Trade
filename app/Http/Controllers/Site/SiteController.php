@@ -7,6 +7,7 @@ use App\Models\ContactMessage;
 use App\Models\PartnerInquiry;
 use App\Rules\BangladeshPhone;
 use App\Services\AppNotificationService;
+use App\Support\SiteContent;
 use Illuminate\Http\Request;
 
 class SiteController extends Controller
@@ -26,8 +27,13 @@ class SiteController extends Controller
         return view('site.contact');
     }
 
-    public function storeContact(Request $request, AppNotificationService $notifications)
+    public function storeContact(Request $request, AppNotificationService $notifications, SiteContent $site)
     {
+        $thanks = $site->get('contact.success_message') ?: 'Thanks — we received your message and will reply soon.';
+        if ($request->filled('website')) {
+            return back()->with('success', $thanks);
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:180'],
@@ -49,16 +55,29 @@ class SiteController extends Controller
             // non-blocking
         }
 
-        return back()->with('success', 'Thanks — we received your message and will reply soon.');
+        return back()->with('success', $thanks);
     }
 
-    public function partner()
+    public function partner(SiteContent $site)
     {
+        if (! $site->enabled('general.show_partner_button')) {
+            return redirect()->route('site.contact');
+        }
+
         return view('site.partner');
     }
 
-    public function storePartner(Request $request, AppNotificationService $notifications)
+    public function storePartner(Request $request, AppNotificationService $notifications, SiteContent $site)
     {
+        if (! $site->enabled('general.show_partner_button')) {
+            return redirect()->route('site.contact');
+        }
+
+        $received = $site->get('partner.success_message') ?: 'Application received. Our team will review and contact you with next steps.';
+        if ($request->filled('website')) {
+            return redirect()->route('site.partner')->with('success', $received);
+        }
+
         $data = $request->validate([
             'business_name' => ['required', 'string', 'max:180'],
             'contact_name' => ['required', 'string', 'max:120'],
@@ -70,6 +89,15 @@ class SiteController extends Controller
         ]);
 
         $data['phone'] = BangladeshPhone::normalize($data['phone']);
+        $data['email'] = strtolower(trim($data['email']));
+
+        $alreadyOpen = PartnerInquiry::query()
+            ->whereIn('status', [PartnerInquiry::STATUS_NEW, PartnerInquiry::STATUS_CONTACTED])
+            ->where(fn ($q) => $q->where('email', $data['email'])->orWhere('phone', $data['phone']))
+            ->exists();
+        if ($alreadyOpen) {
+            return redirect()->route('site.partner')->with('success', 'We already have your application and will contact you soon.');
+        }
 
         $inquiry = PartnerInquiry::query()->create($data + ['status' => PartnerInquiry::STATUS_NEW]);
 
@@ -85,6 +113,6 @@ class SiteController extends Controller
             // non-blocking
         }
 
-        return redirect()->route('site.partner')->with('success', 'Application received. Our team will review and contact you with next steps.');
+        return redirect()->route('site.partner')->with('success', $received);
     }
 }

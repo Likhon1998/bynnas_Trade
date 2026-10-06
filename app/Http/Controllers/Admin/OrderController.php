@@ -24,10 +24,12 @@ class OrderController extends Controller
         $this->authorize('viewAny', Order::class);
 
         $pendingCount = Order::query()
+            ->visibleTo($request->user())
             ->whereIn('status', [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE])
             ->count();
 
         $orders = Order::query()
+            ->visibleTo($request->user())
             ->with(['shop', 'salesman', 'auditor', 'items.product', 'advanceInvoice'])
             ->latest('submitted_at')
             ->limit(500)
@@ -68,6 +70,7 @@ class OrderController extends Controller
 
         return view('admin.orders.create', [
             'shops' => Shop::query()
+                ->visibleTo($request->user())
                 ->with(['priceGroup', 'assignedSalesman'])
                 ->where('status', Shop::STATUS_ACTIVE)
                 ->orderBy('name')
@@ -100,6 +103,7 @@ class OrderController extends Controller
         ]);
 
         $shop = Shop::query()->findOrFail($data['shop_id']);
+        abort_unless($shop->isAccessibleBy($request->user()), 403, 'This shop is outside your access scope.');
 
         if ($shop->status !== Shop::STATUS_ACTIVE) {
             return back()
@@ -230,7 +234,7 @@ class OrderController extends Controller
     public function collectAdvance(Request $request, Order $order)
     {
         abort_unless(
-            $request->user()->can('orders.approve') && $order->isAwaitingAdvance() && ! $order->isAdvancePaid(),
+            $request->user()->can('orders.approve') && $order->isAccessibleBy($request->user()) && $order->isAwaitingAdvance() && ! $order->isAdvancePaid(),
             403
         );
 
@@ -351,6 +355,7 @@ class OrderController extends Controller
             'auditor', 'creator', 'canceller',
         ]);
         $snapshot = $this->orders->auditSnapshot($order);
+        $approvalStock = $this->orders->approvalStock($order);
 
         $statusTone = match ($order->status) {
             Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE => 'pending',
@@ -424,8 +429,8 @@ class OrderController extends Controller
             ],
             'purchase' => $dossier,
             'payment_history' => $dossier['payments'],
-            'items' => $order->items->map(function ($item) {
-                $available = $item->product?->availableStock() ?? ($item->available_at_audit ?? 0);
+            'items' => $order->items->map(function ($item) use ($approvalStock) {
+                $available = $approvalStock[$item->product_id] ?? ($item->available_at_audit ?? 0);
                 $ok = $available >= $item->quantity || $item->reserved_quantity > 0;
 
                 return [

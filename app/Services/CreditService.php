@@ -3,8 +3,13 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use App\Models\Order;
+use App\Models\Payment;
 use App\Models\ProductReturn;
 use App\Models\Shop;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreditService
 {
@@ -17,14 +22,8 @@ class CreditService
             ->whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])
             ->sum('balance');
 
-        $returnCredits = (float) ProductReturn::query()
-            ->where('shop_id', $shop->id)
-            ->where('status', ProductReturn::STATUS_APPROVED)
-            ->where('credit_issued', true)
-            ->sum('total');
-
         $shop->update([
-            'outstanding_balance' => max(0, round($openInvoices - $returnCredits, 2)),
+            'outstanding_balance' => max(0, round($openInvoices - $this->unappliedCredit($shop), 2)),
         ]);
 
         $this->enforceCreditHold($shop->fresh());
@@ -51,15 +50,99 @@ class CreditService
         return $this->enforceCreditHold($shop->fresh());
     }
 
+    /** Money the shop has paid or been credited that is not tied to an invoice. */
+    public function unappliedCredit(Shop $shop): float
+    {
+        $returnCredits = (float) ProductReturn::query()
+            ->where('shop_id', $shop->id)
+            ->where('status', ProductReturn::STATUS_APPROVED)
+            ->where('credit_issued', true)
+            ->sum(DB::raw('total - applied_to_invoice'));
+
+        $unallocatedPayments = (float) Payment::query()
+            ->where('shop_id', $shop->id)
+            ->where('status', Payment::STATUS_VERIFIED)
+            ->whereNull('invoice_id')
+            ->sum('amount');
+
+        return round($returnCredits + $unallocatedPayments, 2);
+    }
+
+    /**
+     * The shop is never put on hold automatically; the credit limit is enforced when an order is
+     * approved (see creditCheck / assertCanOrder).
+     */
     public function enforceCreditHold(Shop $shop): Shop
     {
-        // Credit limit is informational only — shops are not blocked from buying.
         return $shop;
     }
 
-    public function assertCanOrder(Shop $shop, float $orderTotal, bool $override = false): void
+    /**
+     * Owed now (open invoices) plus owed soon (approved orders not invoiced yet), excluding one order.
+     */
+    public function exposure(Shop $shop, ?int $exceptOrderId = null): float
     {
-        // No available-balance gate: any shop may order any quantity.
+        $pipeline = Order::query()
+            ->where('shop_id', $shop->id)
+            ->whereIn('status', [
+                Order::STATUS_APPROVED, Order::STATUS_PICKING, Order::STATUS_PICKED,
+                Order::STATUS_PACKED, Order::STATUS_DISPATCHED, Order::STATUS_DELIVERED,
+            ])
+            ->whereNull('invoice_id')
+            ->when($exceptOrderId, fn ($q) => $q->whereKeyNot($exceptOrderId))
+            ->with('advanceInvoice')
+            ->get()
+            ->sum(fn (Order $order) => $order->settlement()['remaining_due']);
+
+        return round((float) $shop->outstanding_balance + $pipeline, 2);
+    }
+
+    /**
+     * @return array{limit: float, exposure: float, available: float, needed: float, ok: bool}
+     */
+    public function creditCheck(Order $order): array
+    {
+        $shop = $order->shop;
+        $limit = round((float) $shop->credit_limit, 2);
+        $exposure = $this->exposure($shop, $order->id);
+        $available = max(0, round($limit - $exposure, 2));
+        $needed = round($order->settlement()['remaining_due'], 2);
+
+        return [
+            'limit' => $limit,
+            'exposure' => $exposure,
+            'available' => $available,
+            'needed' => $needed,
+            'ok' => $needed <= $available + 0.009,
+        ];
+    }
+
+    /**
+     * Block an approval that would take the shop past its credit limit unless an authorised
+     * user overrides it. Returns true when the override was used.
+     */
+    public function assertCanOrder(Order $order, User $actor, bool $override = false): bool
+    {
+        $check = $this->creditCheck($order);
+        if ($check['ok']) {
+            return false;
+        }
+
+        $taka = fn (float $v) => '৳ '.number_format($v, 2);
+        if (! $override) {
+            throw ValidationException::withMessages([
+                'credit' => "Over credit limit: this order needs {$taka($check['needed'])} of credit but only {$taka($check['available'])} is available "
+                    ."(limit {$taka($check['limit'])}, already owed {$taka($check['exposure'])}). Request an advance, or tick \"Override credit limit\".",
+            ]);
+        }
+
+        if (! $actor->can('orders.credit_override')) {
+            throw ValidationException::withMessages([
+                'credit' => 'You are not allowed to approve orders over the credit limit. Ask an admin.',
+            ]);
+        }
+
+        return true;
     }
 
     public function syncAllShops(): void

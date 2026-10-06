@@ -12,7 +12,7 @@ class DashboardController extends Controller
 
     public function __invoke(Request $request)
     {
-        $data = $this->analytics->dashboard();
+        $data = $this->analytics->dashboard($request->user());
 
         return view('admin.dashboard', $data);
     }

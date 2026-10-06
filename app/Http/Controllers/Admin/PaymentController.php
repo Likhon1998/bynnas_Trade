@@ -18,6 +18,7 @@ class PaymentController extends Controller
         abort_unless($request->user()->can('payments.view'), 403);
 
         $payments = Payment::query()
+            ->whereHas('shop', fn ($q) => $q->visibleTo($request->user()))
             ->with(['shop', 'invoice', 'verifier'])
             ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->when($request->search, function ($q, $search) {
@@ -60,6 +61,7 @@ class PaymentController extends Controller
             $invoice = Invoice::query()->findOrFail($data['invoice_id']);
             $data['shop_id'] = $invoice->shop_id;
         }
+        abort_unless(Shop::query()->findOrFail($data['shop_id'])->isAccessibleBy($request->user()), 403);
 
         $payment = $this->payments->record($data, $request->user());
 
@@ -91,6 +93,7 @@ class PaymentController extends Controller
     public function verify(Request $request, Payment $payment)
     {
         abort_unless($request->user()->can('payments.verify'), 403);
+        abort_unless($payment->shop?->isAccessibleBy($request->user()), 403);
         $this->payments->verify($payment, $request->user());
 
         return back()
@@ -101,6 +104,7 @@ class PaymentController extends Controller
     public function reject(Request $request, Payment $payment)
     {
         abort_unless($request->user()->can('payments.verify'), 403);
+        abort_unless($payment->shop?->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate(['rejection_reason' => ['required', 'string', 'max:1000']]);
         $this->payments->reject($payment, $data['rejection_reason'], $request->user());
@@ -115,10 +119,12 @@ class PaymentController extends Controller
     {
         return [
             'shops' => Shop::query()
+                ->visibleTo($request->user())
                 ->where('status', '!=', Shop::STATUS_REJECTED)
                 ->orderBy('name')
                 ->get(['id', 'name', 'code', 'outstanding_balance']),
             'openInvoices' => Invoice::query()
+                ->whereHas('shop', fn ($q) => $q->visibleTo($request->user()))
                 ->whereIn('status', [Invoice::STATUS_ISSUED, Invoice::STATUS_PARTIAL])
                 ->with(['shop:id,name', 'order:id,number,advance_invoice_id'])
                 ->latest()

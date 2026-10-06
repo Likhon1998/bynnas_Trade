@@ -23,7 +23,7 @@ class Invoice extends Model
 
     protected $fillable = [
         'number', 'shop_id', 'order_id', 'status', 'subtotal', 'discount_total',
-        'total', 'paid_amount', 'balance', 'issued_at', 'due_at', 'notes', 'created_by',
+        'total', 'paid_amount', 'credited_amount', 'balance', 'issued_at', 'due_at', 'notes', 'created_by',
     ];
 
     protected function casts(): array
@@ -33,6 +33,7 @@ class Invoice extends Model
             'discount_total' => 'decimal:2',
             'total' => 'decimal:2',
             'paid_amount' => 'decimal:2',
+            'credited_amount' => 'decimal:2',
             'balance' => 'decimal:2',
             'issued_at' => 'datetime',
             'due_at' => 'date',

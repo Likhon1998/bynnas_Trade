@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionService
 {
+    private const AUTO_WITHDRAWN = '[auto] Target no longer met';
+
     public function __construct(
         private AuditLogger $auditLogger,
         private TargetService $targets,
@@ -87,7 +89,6 @@ class CommissionService
             ]);
 
             $this->targets->recalculate($target);
-            $this->maybeAccrueTargetBonus($target->fresh(), $actor);
 
             $this->auditLogger->log(
                 'commissions',
@@ -156,13 +157,8 @@ class CommissionService
             $existing = Commission::query()
                 ->where('sales_target_id', $target->id)
                 ->where('type', Commission::TYPE_TARGET_BONUS)
-                ->whereNotIn('status', [Commission::STATUS_REJECTED])
                 ->lockForUpdate()
                 ->first();
-
-            if ($existing) {
-                return $existing;
-            }
 
             $rule = CommissionRule::activeDefault();
             $rate = (float) ($rule?->target_bonus_percent ?? 1.0);
@@ -171,6 +167,26 @@ class CommissionService
                 $base = (float) $target->achieved_amount;
             }
             $amount = round($base * $rate / 100, 2);
+
+            if ($existing) {
+                if ($existing->status === Commission::STATUS_REJECTED && str_contains((string) $existing->notes, self::AUTO_WITHDRAWN) && $amount > 0) {
+                    $existing->update([
+                        'status' => Commission::STATUS_ACCRUED,
+                        'base_amount' => $base,
+                        'rate_percent' => $rate,
+                        'commission_amount' => $amount,
+                        'approved_by' => null,
+                        'approved_at' => null,
+                        'notes' => trim(str_replace(self::AUTO_WITHDRAWN, '', (string) $existing->notes))."\nRestored: target met again",
+                    ]);
+                    $this->auditLogger->log('commissions', 'bonus', "Target bonus {$existing->number} restored", $existing, null, ['amount' => $amount], $actor);
+                } elseif ($existing->status === Commission::STATUS_ACCRUED && abs((float) $existing->commission_amount - $amount) >= 0.01 && $amount > 0) {
+                    $existing->update(['base_amount' => $base, 'commission_amount' => $amount, 'rate_percent' => $rate]);
+                }
+
+                return $existing->fresh();
+            }
+
             if ($amount <= 0) {
                 return null;
             }
@@ -193,6 +209,35 @@ class CommissionService
             $this->auditLogger->log('commissions', 'bonus', "Target bonus {$commission->number}", $commission, null, ['amount' => $amount], $actor);
 
             return $commission;
+        });
+    }
+
+    /** Reject a not-yet-approved target bonus once the salesman drops back under target. */
+    public function withdrawTargetBonus(SalesTarget $target, ?User $actor = null): ?Commission
+    {
+        if ($target->target_met) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($target, $actor) {
+            $bonus = Commission::query()
+                ->where('sales_target_id', $target->id)
+                ->where('type', Commission::TYPE_TARGET_BONUS)
+                ->where('status', Commission::STATUS_ACCRUED)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $bonus) {
+                return null;
+            }
+
+            $bonus->update([
+                'status' => Commission::STATUS_REJECTED,
+                'notes' => trim(($bonus->notes ? $bonus->notes."\n" : '').self::AUTO_WITHDRAWN),
+            ]);
+            $this->auditLogger->log('commissions', 'rejected', "Target bonus {$bonus->number} withdrawn — target no longer met", $bonus, null, null, $actor);
+
+            return $bonus;
         });
     }
 
@@ -270,9 +315,7 @@ class CommissionService
 
     public function nextNumber(): string
     {
-        $seq = Commission::withTrashed()->count() + 1;
-
-        return 'COM-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Commission::class, 'COM-'.now()->format('ymd').'-', 4);
     }
 
     /**

@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Commission;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\ProductReturn;
 use App\Models\SalesTarget;
 use App\Models\SalesmanProfile;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Validation\ValidationException;
 
 class TargetService
@@ -77,13 +80,28 @@ class TargetService
         return $target->fresh(['salesman', 'territory']);
     }
 
-    public function recalculate(SalesTarget $target): SalesTarget
+    /** Recalculate the salesman's existing target for the month containing $when (never creates one). */
+    public function recalculateFor(?int $salesmanId, ?CarbonInterface $when = null): ?SalesTarget
     {
-        $start = now()->setDate($target->year, $target->month, 1)->startOfMonth();
-        $end = (clone $start)->endOfMonth();
+        if (! $salesmanId) {
+            return null;
+        }
+        $when ??= now();
 
-        $achieved = (float) Order::query()
-            ->where('salesman_id', $target->salesman_id)
+        $target = SalesTarget::query()
+            ->where('salesman_id', $salesmanId)
+            ->where('year', $when->year)
+            ->where('month', $when->month)
+            ->first();
+
+        return $target ? $this->recalculate($target) : null;
+    }
+
+    /** Delivered sales in the window minus returns approved in the same window. */
+    public function achievedAmount(int $salesmanId, CarbonInterface $start, CarbonInterface $end): float
+    {
+        $delivered = (float) Order::query()
+            ->where('salesman_id', $salesmanId)
             ->where('status', Order::STATUS_DELIVERED)
             ->where(function ($q) use ($start, $end) {
                 $q->whereHas('statusHistories', function ($h) use ($start, $end) {
@@ -96,31 +114,54 @@ class TargetService
             })
             ->sum('total');
 
+        $returned = (float) ProductReturn::query()
+            ->whereIn('status', [ProductReturn::STATUS_APPROVED, ProductReturn::STATUS_COMPLETED])
+            ->whereBetween('approved_at', [$start, $end])
+            ->whereHas('order', fn ($o) => $o->where('salesman_id', $salesmanId))
+            ->sum('total');
+
+        return max(0, round($delivered - $returned, 2));
+    }
+
+    public function recalculate(SalesTarget $target): SalesTarget
+    {
+        $start = now()->setDate($target->year, $target->month, 1)->startOfMonth();
+        $end = (clone $start)->endOfMonth();
+
+        $achieved = $this->achievedAmount((int) $target->salesman_id, $start, $end);
+
+        $sid = (int) $target->salesman_id;
+        $collection = fn ($c) => $c->where('type', Commission::TYPE_COLLECTION)->where('status', '!=', Commission::STATUS_REJECTED);
+
+        // Live attribution for payments without a collection commission:
+        // the order's salesman first, the shop's assigned salesman only when the order has none.
+        $liveAttribution = function ($q) use ($sid) {
+            $q->whereHas('invoice.order', fn ($o) => $o->where('salesman_id', $sid))
+                ->orWhere(function ($fallback) use ($sid) {
+                    $fallback->where(function ($noOrderSalesman) {
+                        $noOrderSalesman
+                            ->whereDoesntHave('invoice')
+                            ->orWhereHas('invoice', function ($inv) {
+                                $inv->where(function ($i) {
+                                    $i->whereNull('order_id')
+                                        ->orWhereHas('order', fn ($o) => $o->whereNull('salesman_id'));
+                                });
+                            });
+                    })->where(function ($shopAttr) use ($sid) {
+                        $shopAttr
+                            ->whereHas('invoice.shop', fn ($s) => $s->where('assigned_salesman_id', $sid))
+                            ->orWhereHas('shop', fn ($s) => $s->where('assigned_salesman_id', $sid));
+                    });
+                });
+        };
+
         $collected = (float) Payment::query()
             ->where('status', Payment::STATUS_VERIFIED)
             ->whereBetween('verified_at', [$start, $end])
-            ->where(function ($q) use ($target) {
-                $sid = $target->salesman_id;
-
-                // Prefer order salesman when present (exclusive attribution).
-                $q->whereHas('invoice.order', fn ($o) => $o->where('salesman_id', $sid))
-                    ->orWhere(function ($fallback) use ($sid) {
-                        // Shop / payment shop only when the linked order has no salesman.
-                        $fallback->where(function ($noOrderSalesman) {
-                            $noOrderSalesman
-                                ->whereDoesntHave('invoice')
-                                ->orWhereHas('invoice', function ($inv) {
-                                    $inv->where(function ($i) {
-                                        $i->whereNull('order_id')
-                                            ->orWhereHas('order', fn ($o) => $o->whereNull('salesman_id'));
-                                    });
-                                });
-                        })->where(function ($shopAttr) use ($sid) {
-                            $shopAttr
-                                ->whereHas('invoice.shop', fn ($s) => $s->where('assigned_salesman_id', $sid))
-                                ->orWhereHas('shop', fn ($s) => $s->where('assigned_salesman_id', $sid));
-                        });
-                    });
+            ->where(function ($q) use ($sid, $collection, $liveAttribution) {
+                // A collection commission freezes who collected the money, so a later shop reassignment doesn't move it.
+                $q->whereHas('commissions', fn ($c) => $collection($c)->where('salesman_id', $sid))
+                    ->orWhere(fn ($live) => $live->whereDoesntHave('commissions', $collection)->where($liveAttribution));
             })
             ->sum('amount');
 
@@ -132,8 +173,14 @@ class TargetService
             'target_met' => $met,
         ]);
 
+        // Resolved lazily: CommissionService itself depends on this service.
+        $commissions = app(CommissionService::class);
         if ($met) {
             $this->rewards->ensureTargetHitReward($target->fresh());
+            $commissions->maybeAccrueTargetBonus($target->fresh());
+        } else {
+            $this->rewards->withdrawTargetHitReward($target->fresh());
+            $commissions->withdrawTargetBonus($target->fresh());
         }
 
         return $target->fresh();

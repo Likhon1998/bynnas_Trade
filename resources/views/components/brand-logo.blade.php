@@ -1,12 +1,13 @@
 @props([
     'size' => 36,
     'showWordmark' => false,
-    'wordmark' => 'Bynnas Trade',
+    'wordmark' => null,
 ])
+@php($brand = app(\App\Support\SiteContent::class))
 
 <span {{ $attributes->class('brand-logo') }}>
-    <img src="{{ asset('images/logo.png') }}" alt="Bynnas" width="{{ $size }}" height="{{ $size }}">
+    <img src="{{ $brand->logoUrl() }}" alt="{{ $brand->siteName() }}" width="{{ $size }}" height="{{ $size }}" style="object-fit:contain">
     @if ($showWordmark)
-        <span class="brand-wordmark">{{ $wordmark }}</span>
+        <span class="brand-wordmark">{{ $wordmark ?? $brand->siteName() }}</span>
     @endif
 </span>

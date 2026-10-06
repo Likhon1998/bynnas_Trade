@@ -1,120 +1,145 @@
 @extends('site.layouts.app')
 @section('title', 'Home')
-@section('meta', 'Bynnas Trade — B2B wholesale distribution for retail partners in Bangladesh.')
+@php
+    $c = $site->section('home');
+    $showPartner = $site->enabled('general.show_partner_button');
+    $heroImage = $site->imageUrl($c['hero_image']);
+    $rows = $c['status_card_rows'];
+    $categories = $c['show_categories'] ? $site->categories() : collect();
+    $stats = $c['show_stats'] ? $site->stats() : [];
+@endphp
 @section('content')
     <section class="hero">
         <div class="site-wrap hero-grid">
             <div class="hero-copy">
-                <span class="eyebrow">B2B wholesale distribution · Bangladesh</span>
-                <h1>Reliable wholesale supply for your retail shop.</h1>
-                <p class="lead">We import, store and deliver products to approved retail partners — with partner pricing, clear invoices and a dedicated sales team.</p>
+                @if ($c['hero_eyebrow'])<span class="eyebrow">{{ $c['hero_eyebrow'] }}</span>@endif
+                <h1>{{ $c['hero_title'] }}</h1>
+                @if ($c['hero_lead'])<p class="lead">{{ $c['hero_lead'] }}</p>@endif
                 <div class="hero-actions">
-                    <a class="btn btn-primary btn-lg" href="{{ route('site.partner') }}">Become a partner</a>
-                    <a class="btn btn-outline btn-lg" href="{{ route('site.about') }}">Learn more</a>
+                    @if ($showPartner && $c['primary_button'])
+                        <a class="btn btn-primary btn-lg" href="{{ route('site.partner') }}">{{ $c['primary_button'] }}</a>
+                    @endif
+                    @if ($c['secondary_button'])
+                        <a class="btn btn-outline btn-lg" href="{{ route('site.about') }}">{{ $c['secondary_button'] }}</a>
+                    @endif
                 </div>
-                <ul class="hero-points">
-                    <li>Partner pricing</li>
-                    <li>Reviewed orders</li>
-                    <li>Online invoices</li>
-                </ul>
+                @if ($c['hero_points'])
+                    <ul class="hero-points">
+                        @foreach ($c['hero_points'] as $point)
+                            <li>{{ $point }}</li>
+                        @endforeach
+                    </ul>
+                @endif
             </div>
-            <div class="hero-media">
-                <img src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80" alt="Bynnas Trade warehouse" loading="eager">
-                <div class="hero-card">
-                    <div class="hero-card-title">Order status</div>
-                    <div class="hero-card-row"><span class="dot dot-done"></span>Order approved</div>
-                    <div class="hero-card-row"><span class="dot dot-done"></span>Packed at warehouse</div>
-                    <div class="hero-card-row"><span class="dot dot-active"></span>Out for delivery</div>
+            @if ($heroImage)
+                <div class="hero-media">
+                    <img src="{{ $heroImage }}" alt="{{ $site->siteName() }}" loading="eager">
+                    @if ($c['show_status_card'] && $rows)
+                        <div class="hero-card">
+                            @if ($c['status_card_title'])<div class="hero-card-title">{{ $c['status_card_title'] }}</div>@endif
+                            @foreach ($rows as $row)
+                                <div class="hero-card-row"><span class="dot {{ $loop->last ? 'dot-active' : 'dot-done' }}"></span>{{ $row }}</div>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
-            </div>
+            @endif
         </div>
     </section>
 
-    <section class="section">
-        <div class="site-wrap">
-            <div class="section-head">
-                <span class="eyebrow">How it works</span>
-                <h2>From import to your shop, in four steps.</h2>
-                <p class="lead">One team handles the full supply chain, so you can focus on selling.</p>
+    @if ($stats)
+        <section class="site-stats-band">
+            <div class="site-wrap site-stats">
+                @foreach ($stats as $stat)
+                    <div class="site-stat">
+                        <strong>{{ number_format($stat['value']) }}</strong>
+                        <span>{{ $stat['label'] }}</span>
+                    </div>
+                @endforeach
             </div>
-            <div class="steps">
-                <div class="step">
-                    <span class="step-num">1</span>
-                    <h3>Import</h3>
-                    <p>Products are sourced and brought into Bangladesh by our team.</p>
-                </div>
-                <div class="step">
-                    <span class="step-num">2</span>
-                    <h3>Warehouse</h3>
-                    <p>Stock is checked, stored and prepared at our Dhaka warehouse.</p>
-                </div>
-                <div class="step">
-                    <span class="step-num">3</span>
-                    <h3>Order</h3>
-                    <p>Approved shops order online or through their sales representative.</p>
-                </div>
-                <div class="step">
-                    <span class="step-num">4</span>
-                    <h3>Deliver &amp; invoice</h3>
-                    <p>Orders are delivered to your shop with a clear invoice and payment record.</p>
-                </div>
-            </div>
-        </div>
-    </section>
+        </section>
+    @endif
 
-    <section class="section section-soft">
-        <div class="site-wrap">
-            <div class="section-head">
-                <span class="eyebrow">Why partner with us</span>
-                <h2>Built for shops that buy regularly.</h2>
-            </div>
-            <div class="features">
-                <div class="feature">
-                    <span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>
-                    <h3>Partner pricing</h3>
-                    <p>Each shop gets a price list based on its partnership level and volume.</p>
+    @if ($c['steps'])
+        <section class="section">
+            <div class="site-wrap">
+                <div class="section-head">
+                    @if ($c['steps_eyebrow'])<span class="eyebrow">{{ $c['steps_eyebrow'] }}</span>@endif
+                    @if ($c['steps_title'])<h2>{{ $c['steps_title'] }}</h2>@endif
+                    @if ($c['steps_lead'])<p class="lead">{{ $c['steps_lead'] }}</p>@endif
                 </div>
-                <div class="feature">
-                    <span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></span>
-                    <h3>Verified stock</h3>
-                    <p>See what is available before ordering — no surprises after you place an order.</p>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>
-                    <h3>Reviewed orders</h3>
-                    <p>Every order is checked by our team before stock is reserved and dispatched.</p>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
-                    <h3>Clear invoices</h3>
-                    <p>Download invoices and track payments and balances from your shop portal.</p>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                    <h3>Dedicated sales rep</h3>
-                    <p>A field representative visits your shop and helps with orders and collections.</p>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
-                    <h3>Doorstep delivery</h3>
-                    <p>Orders are packed at our warehouse and delivered directly to your shop.</p>
+                <div class="steps">
+                    @foreach ($c['steps'] as $step)
+                        <div class="step">
+                            <span class="step-num">{{ $loop->iteration }}</span>
+                            <h3>{{ $step['title'] }}</h3>
+                            <p>{{ $step['text'] }}</p>
+                        </div>
+                    @endforeach
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+    @endif
 
-    <section class="section">
-        <div class="site-wrap">
-            <div class="cta-band">
-                <div>
-                    <h2>Ready to buy wholesale from Bynnas Trade?</h2>
-                    <p>Apply as a partner. Once approved, you can log in to view products, place orders and manage invoices.</p>
+    @if ($categories->isNotEmpty())
+        <section class="section section-soft">
+            <div class="site-wrap">
+                <div class="section-head">
+                    @if ($c['categories_eyebrow'])<span class="eyebrow">{{ $c['categories_eyebrow'] }}</span>@endif
+                    @if ($c['categories_title'])<h2>{{ $c['categories_title'] }}</h2>@endif
+                    @if ($c['categories_lead'])<p class="lead">{{ $c['categories_lead'] }}</p>@endif
                 </div>
-                <div class="cta-band-actions">
-                    <a class="btn btn-white btn-lg" href="{{ route('site.partner') }}">Become a partner</a>
-                    <a class="btn btn-ghost-light btn-lg" href="{{ route('site.contact') }}">Contact sales</a>
+                <div class="site-categories">
+                    @foreach ($categories as $category)
+                        <div class="site-category">
+                            <span class="feature-icon">@include('site.partials.icon', ['name' => 'box'])</span>
+                            <div>
+                                <h3>{{ $category->name }}</h3>
+                                <p>{{ $category->products_count }} {{ \Illuminate\Support\Str::plural('product', $category->products_count) }}</p>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+    @endif
+
+    @if ($c['features'])
+        <section class="section {{ $categories->isNotEmpty() ? '' : 'section-soft' }}">
+            <div class="site-wrap">
+                <div class="section-head">
+                    @if ($c['features_eyebrow'])<span class="eyebrow">{{ $c['features_eyebrow'] }}</span>@endif
+                    @if ($c['features_title'])<h2>{{ $c['features_title'] }}</h2>@endif
+                </div>
+                <div class="features">
+                    @foreach ($c['features'] as $feature)
+                        <div class="feature">
+                            <span class="feature-icon">@include('site.partials.icon', ['name' => $feature['icon'] ?? 'check'])</span>
+                            <h3>{{ $feature['title'] }}</h3>
+                            <p>{{ $feature['text'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
+    @if ($c['cta_title'])
+        <section class="section">
+            <div class="site-wrap">
+                <div class="cta-band">
+                    <div>
+                        <h2>{{ $c['cta_title'] }}</h2>
+                        @if ($c['cta_text'])<p>{{ $c['cta_text'] }}</p>@endif
+                    </div>
+                    <div class="cta-band-actions">
+                        @if ($showPartner)
+                            <a class="btn btn-white btn-lg" href="{{ route('site.partner') }}">Become a partner</a>
+                        @endif
+                        <a class="btn btn-ghost-light btn-lg" href="{{ route('site.contact') }}">Contact sales</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    @endif
 @endsection

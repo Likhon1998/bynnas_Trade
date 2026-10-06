@@ -29,24 +29,26 @@ class OrderPolicy
 
     public function approve(User $user, Order $order): bool
     {
-        return $user->can('orders.approve') && $order->canApproveNow();
+        return $user->can('orders.approve') && $order->canApproveNow() && $order->isAccessibleBy($user);
     }
 
     public function requestAdvance(User $user, Order $order): bool
     {
-        return $user->can('orders.approve') && $order->isPendingAudit();
+        return $user->can('orders.approve') && $order->isPendingAudit() && $order->isAccessibleBy($user);
     }
 
     public function reject(User $user, Order $order): bool
     {
         return $user->can('orders.reject')
-            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE], true);
+            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE], true)
+            && $order->isAccessibleBy($user);
     }
 
     public function cancel(User $user, Order $order): bool
     {
         return $user->can('orders.cancel')
-            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE, Order::STATUS_APPROVED], true);
+            && in_array($order->status, [Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE, Order::STATUS_APPROVED], true)
+            && $order->isAccessibleBy($user);
     }
 
     public function delete(User $user, Order $order): bool
@@ -59,6 +61,6 @@ class OrderPolicy
             return $order->isAccessibleBy($user);
         }
 
-        return $user->can('orders.cancel') || $user->can('orders.edit');
+        return $user->can('orders.delete') && $order->isAccessibleBy($user);
     }
 }

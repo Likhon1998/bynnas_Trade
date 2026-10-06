@@ -52,8 +52,8 @@ class PaymentService
             return $payment->fresh(['shop', 'invoice']);
         });
 
-        // Advance invoice payments are applied immediately — order status updates everywhere.
-        if ($payment->invoice_id && $this->isAdvanceInvoice((int) $payment->invoice_id)) {
+        // Advance payments recorded by someone who may verify are applied immediately.
+        if ($payment->invoice_id && $actor?->can('payments.verify') && $this->isAdvanceInvoice((int) $payment->invoice_id)) {
             return $this->verify($payment, $actor);
         }
 
@@ -80,6 +80,13 @@ class PaymentService
 
         return DB::transaction(function () use ($payment, $actor) {
             $payment = Payment::query()->lockForUpdate()->with(['invoice', 'shop'])->findOrFail($payment->id);
+
+            if ($payment->status === Payment::STATUS_VERIFIED) {
+                return $payment->fresh(['shop', 'invoice', 'verifier']);
+            }
+            if ($payment->status !== Payment::STATUS_PENDING) {
+                throw ValidationException::withMessages(['payment' => 'Only pending payments can be verified.']);
+            }
 
             if ($payment->invoice_id) {
                 $invoice = Invoice::query()->lockForUpdate()->findOrFail($payment->invoice_id);
@@ -137,22 +144,27 @@ class PaymentService
             throw ValidationException::withMessages(['payment' => 'Only pending payments can be rejected.']);
         }
 
-        $payment->update([
-            'status' => Payment::STATUS_REJECTED,
-            'rejection_reason' => $reason,
-            'verified_by' => $actor?->id,
-            'verified_at' => now(),
-        ]);
+        return DB::transaction(function () use ($payment, $reason, $actor) {
+            $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+            if ($payment->status !== Payment::STATUS_PENDING) {
+                throw ValidationException::withMessages(['payment' => 'Only pending payments can be rejected.']);
+            }
 
-        $this->auditLogger->log('payments', 'rejected', "Payment {$payment->number} rejected", $payment, null, ['reason' => $reason], $actor);
+            $payment->update([
+                'status' => Payment::STATUS_REJECTED,
+                'rejection_reason' => $reason,
+                'verified_by' => $actor?->id,
+                'verified_at' => now(),
+            ]);
 
-        return $payment->fresh();
+            $this->auditLogger->log('payments', 'rejected', "Payment {$payment->number} rejected", $payment, null, ['reason' => $reason], $actor);
+
+            return $payment->fresh();
+        });
     }
 
     public function nextNumber(): string
     {
-        $seq = Payment::withTrashed()->count() + 1;
-
-        return 'PAY-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Payment::class, 'PAY-'.now()->format('ymd').'-', 4);
     }
 }

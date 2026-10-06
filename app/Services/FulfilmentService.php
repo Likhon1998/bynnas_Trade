@@ -17,6 +17,7 @@ class FulfilmentService
         private InventoryService $inventory,
         private AuditLogger $auditLogger,
         private InvoiceService $invoices,
+        private TargetService $targets,
     ) {}
 
     public function createForApprovedOrder(Order $order, ?Warehouse $warehouse = null, ?User $actor = null): OrderFulfilment
@@ -44,6 +45,7 @@ class FulfilmentService
         $this->assertStatus($fulfilment, [OrderFulfilment::STATUS_AWAITING_PICK]);
 
         return DB::transaction(function () use ($fulfilment, $actor) {
+            $fulfilment = $this->lockInStatus($fulfilment, [OrderFulfilment::STATUS_AWAITING_PICK]);
             $fulfilment->update([
                 'status' => OrderFulfilment::STATUS_PICKING,
                 'picker_id' => $actor->id,
@@ -64,7 +66,11 @@ class FulfilmentService
         $this->assertStatus($fulfilment, [OrderFulfilment::STATUS_PICKING, OrderFulfilment::STATUS_AWAITING_PICK]);
 
         return DB::transaction(function () use ($fulfilment, $actor, $notes) {
-            $fulfilment = OrderFulfilment::query()->lockForUpdate()->with(['order.items.product', 'warehouse'])->findOrFail($fulfilment->id);
+            $fulfilment = $this->lockInStatus(
+                $fulfilment,
+                [OrderFulfilment::STATUS_PICKING, OrderFulfilment::STATUS_AWAITING_PICK],
+                ['order.items.product', 'warehouse'],
+            );
             $order = $fulfilment->order;
             $warehouse = $fulfilment->warehouse;
 
@@ -107,6 +113,7 @@ class FulfilmentService
         $this->assertStatus($fulfilment, [OrderFulfilment::STATUS_PICKED]);
 
         return DB::transaction(function () use ($fulfilment, $actor, $notes) {
+            $fulfilment = $this->lockInStatus($fulfilment, [OrderFulfilment::STATUS_PICKED]);
             $fulfilment->update([
                 'status' => OrderFulfilment::STATUS_PACKED,
                 'packer_id' => $actor->id,
@@ -128,7 +135,7 @@ class FulfilmentService
         $this->assertStatus($fulfilment, [OrderFulfilment::STATUS_PACKED]);
 
         return DB::transaction(function () use ($fulfilment, $actor, $deliveryData) {
-            $fulfilment = OrderFulfilment::query()->lockForUpdate()->with(['order.shop', 'warehouse'])->findOrFail($fulfilment->id);
+            $fulfilment = $this->lockInStatus($fulfilment, [OrderFulfilment::STATUS_PACKED], ['order.shop', 'warehouse']);
             $order = $fulfilment->order;
             $shop = $order->shop;
 
@@ -171,6 +178,9 @@ class FulfilmentService
 
         return DB::transaction(function () use ($delivery, $actor, $notes) {
             $delivery = Delivery::query()->lockForUpdate()->with(['fulfilment', 'order'])->findOrFail($delivery->id);
+            if ($delivery->status === Delivery::STATUS_DELIVERED) {
+                throw ValidationException::withMessages(['delivery' => 'Already delivered.']);
+            }
 
             $delivery->update([
                 'status' => Delivery::STATUS_DELIVERED,
@@ -193,6 +203,8 @@ class FulfilmentService
                 $this->invoices->createFromOrder($order->fresh('items'), $actor);
             }
 
+            $this->targets->recalculateFor($order->salesman_id);
+
             $this->auditLogger->log('deliveries', 'delivered', "Delivery {$delivery->number} completed", $delivery, null, null, $actor);
 
             return $delivery->fresh(['order.invoice', 'shop', 'fulfilment']);
@@ -201,9 +213,7 @@ class FulfilmentService
 
     public function nextDeliveryNumber(): string
     {
-        $seq = Delivery::query()->count() + 1;
-
-        return 'DLV-'.now()->format('ymd').'-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocumentNumber::next(Delivery::class, 'DLV-'.now()->format('ymd').'-');
     }
 
     private function assertStatus(OrderFulfilment $fulfilment, array $allowed): void
@@ -213,6 +223,20 @@ class FulfilmentService
                 'fulfilment' => 'Invalid fulfilment step for status '.$fulfilment->statusLabel().'.',
             ]);
         }
+    }
+
+    /** Re-read the fulfilment under a row lock and re-check its status (call inside a transaction). */
+    private function lockInStatus(OrderFulfilment $fulfilment, array $allowed, array $with = ['order']): OrderFulfilment
+    {
+        // Same lock order as OrderService::cancel (order, then fulfilment) so the two never interleave.
+        Order::query()->lockForUpdate()->findOrFail($fulfilment->order_id);
+        $fulfilment = OrderFulfilment::query()->lockForUpdate()->with($with)->findOrFail($fulfilment->id);
+        if ($fulfilment->order?->status === Order::STATUS_CANCELLED) {
+            throw ValidationException::withMessages(['fulfilment' => 'This order was cancelled.']);
+        }
+        $this->assertStatus($fulfilment, $allowed);
+
+        return $fulfilment;
     }
 
     private function history(Order $order, ?string $from, string $to, string $event, ?string $notes, ?User $actor): void

@@ -18,10 +18,12 @@ use App\Services\AppNotificationService;
 use App\Services\OrderService;
 use App\Services\PartnerInquiryService;
 use App\Services\ShopService;
+use App\Services\TargetService;
 use App\Services\VisitService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -40,6 +42,7 @@ class FieldPortalController extends Controller
         private ShopService $shops,
         private AppNotificationService $notifications,
         private PartnerInquiryService $partnerInquiries,
+        private TargetService $targets,
     ) {}
 
     public function dashboard(Request $request)
@@ -60,6 +63,8 @@ class FieldPortalController extends Controller
             ->where('month', now()->month)
             ->first();
         $target = (float) ($salesTarget?->target_amount ?? $user->salesmanProfile?->monthly_target ?? 0);
+        // Same rule as targets and rewards: delivered this month minus approved returns.
+        $achieved = $this->targets->achievedAmount($user->id, now()->startOfMonth(), now()->endOfMonth());
 
         $shops = $this->shopsWithVisits($user);
         $openVisit = $this->openVisit($user);
@@ -82,7 +87,8 @@ class FieldPortalController extends Controller
             'routeShops' => $shops->sortBy(fn (Shop $s) => [$openVisit?->shop_id === $s->id ? 0 : 1, $s->visited_today ? 1 : 0, $s->name])->values(),
             'monthTotal' => $monthTotal,
             'target' => $target,
-            'progress' => $target > 0 ? min(100, round($monthTotal / $target * 100)) : null,
+            'achieved' => $achieved,
+            'progress' => $target > 0 ? min(100, round($achieved / $target * 100)) : null,
             'daysLeft' => (int) now()->diffInDays(now()->endOfMonth()) + 1,
             'todayVisits' => ShopVisit::query()->where('salesman_id', $user->id)->whereDate('checked_in_at', today())->count(),
             'todayOrderCount' => (clone $todayOrders)->count(),
@@ -219,6 +225,10 @@ class FieldPortalController extends Controller
             return redirect()->route('field.partners')->with('error', 'The office has not accepted '.$inquiry->business_name.' yet.');
         }
 
+        if (! $request->session()->has('login_result') && ! $this->canSetPartnerLogin($request, $inquiry)) {
+            return redirect()->route('field.partners')->with('error', 'The login for '.$inquiry->business_name.' is already set. Ask the office to reset it.');
+        }
+
         return view('field.partner-login', [
             'inquiry' => $inquiry->load('shop'),
             'result' => $request->session()->get('login_result'),
@@ -228,6 +238,7 @@ class FieldPortalController extends Controller
     public function storePartnerLogin(Request $request, PartnerInquiry $inquiry)
     {
         abort_unless($inquiry->submitted_by === $request->user()->id, 403);
+        abort_unless($this->canSetPartnerLogin($request, $inquiry), 403, 'The login is already set. Ask the office to reset it.');
 
         $data = $request->validate([
             'email' => ['required', 'email', 'max:180'],
@@ -241,6 +252,8 @@ class FieldPortalController extends Controller
         } catch (RuntimeException $e) {
             throw ValidationException::withMessages(['email' => $e->getMessage()]);
         }
+
+        $request->session()->put("partner_login_set.{$inquiry->id}", now()->timestamp);
 
         return redirect()->route('field.partners.login', $inquiry)->with('login_result', [
             'ok' => $login['ok'],
@@ -395,15 +408,19 @@ class FieldPortalController extends Controller
             'items.*.quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ]);
 
-        $order = $this->orders->collectFromSalesman(
-            $request->user(),
-            $visit->shop,
-            $data['items'],
-            $visit,
-            $data['notes'] ?? null,
-        );
+        $order = DB::transaction(function () use ($request, $visit, $data) {
+            $order = $this->orders->collectFromSalesman(
+                $request->user(),
+                $visit->shop,
+                $data['items'],
+                $visit,
+                $data['notes'] ?? null,
+            );
 
-        $this->visits->checkOut($visit->fresh(), ['outcome' => ShopVisit::OUTCOME_ORDER_TAKEN], $request->user());
+            $this->visits->checkOut($visit->fresh(), ['outcome' => ShopVisit::OUTCOME_ORDER_TAKEN], $request->user());
+
+            return $order;
+        });
 
         return redirect()
             ->route('field.orders.show', $order)
@@ -490,6 +507,25 @@ class FieldPortalController extends Controller
     }
 
     /** @return Collection<int, PartnerInquiry> accepted applications still waiting for this salesman to create the owner's login */
+    /**
+     * A salesman sets the first login for a shop they still look after. Changing it later is an
+     * office job, except for fixing a typo on the same device shortly after setting it.
+     */
+    private function canSetPartnerLogin(Request $request, PartnerInquiry $inquiry): bool
+    {
+        if (! $inquiry->shop || $inquiry->shop->assigned_salesman_id !== $request->user()->id) {
+            return false;
+        }
+
+        if ($inquiry->needsLogin()) {
+            return true;
+        }
+
+        $setAt = $request->session()->get("partner_login_set.{$inquiry->id}");
+
+        return $setAt && now()->timestamp - $setAt < 30 * 60;
+    }
+
     private function loginsToCreate(User $user): Collection
     {
         return PartnerInquiry::query()

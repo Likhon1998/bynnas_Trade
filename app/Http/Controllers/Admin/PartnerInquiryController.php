@@ -8,6 +8,7 @@ use App\Models\PartnerInquiry;
 use App\Models\User;
 use App\Services\PartnerInquiryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Throwable;
 
 class PartnerInquiryController extends Controller
@@ -92,8 +93,7 @@ class PartnerInquiryController extends Controller
 
     private function withCredentials(Request $request, array $result)
     {
-        // Keep temp password in session so admin can Send WhatsApp again on this page load.
-        $request->session()->put('partner_cred_'.$result['inquiry']->id, [
+        $this->rememberCredentials($request, $result['inquiry']->id, [
             'email' => $result['email'],
             'password' => $result['password'],
             'shop' => $result['shop']->code,
@@ -108,11 +108,24 @@ class PartnerInquiryController extends Controller
             ->with('cred_shop', $result['shop']->code);
     }
 
+    /** Lets the admin re-send the same WhatsApp for a short while; stored encrypted, never in plain text. */
+    private function rememberCredentials(Request $request, int $inquiryId, array $cred): void
+    {
+        $request->session()->put('partner_cred_'.$inquiryId, [
+            'payload' => Crypt::encryptString(json_encode($cred)),
+            'expires' => now()->addMinutes(15)->timestamp,
+        ]);
+    }
+
     public function reject(Request $request, PartnerInquiry $partnerInquiry)
     {
         abort_unless($request->user()->can('shops.approve'), 403);
 
-        $this->partners->reject($partnerInquiry, $request->user(), $request->input('admin_notes'));
+        try {
+            $this->partners->reject($partnerInquiry, $request->user(), $request->input('admin_notes'));
+        } catch (Throwable $e) {
+            return back()->with('error', $e instanceof \Illuminate\Validation\ValidationException ? collect($e->errors())->flatten()->first() : $e->getMessage());
+        }
 
         return back()->with('success', 'Request marked as rejected.');
     }
@@ -121,7 +134,11 @@ class PartnerInquiryController extends Controller
     {
         abort_unless($request->user()->can('shops.approve'), 403);
 
-        $this->partners->markPending($partnerInquiry, $request->user());
+        try {
+            $this->partners->markPending($partnerInquiry, $request->user());
+        } catch (Throwable $e) {
+            return back()->with('error', $e instanceof \Illuminate\Validation\ValidationException ? collect($e->errors())->flatten()->first() : $e->getMessage());
+        }
 
         return back()->with('success', 'Request kept as pending.');
     }
@@ -137,8 +154,15 @@ class PartnerInquiryController extends Controller
             return back()->with('error', 'No portal login yet. Wait for the field officer, or use Issue login.');
         }
 
-        $cred = $request->session()->get('partner_cred_'.$partnerInquiry->id);
-
+        $stored = $request->session()->get('partner_cred_'.$partnerInquiry->id);
+        $cred = null;
+        if (is_array($stored) && ($stored['expires'] ?? 0) > now()->timestamp) {
+            try {
+                $cred = json_decode(Crypt::decryptString($stored['payload']), true);
+            } catch (Throwable) {
+                $cred = null;
+            }
+        }
         if (! $cred || empty($cred['password'])) {
             // Regenerate password and update portal user
             $password = $this->partners->temporaryPassword();
@@ -149,7 +173,7 @@ class PartnerInquiryController extends Controller
             }
             $user->forceFill(['password' => $password])->save();
             $cred = ['email' => $email, 'password' => $password, 'shop' => $partnerInquiry->shop?->code];
-            $request->session()->put('partner_cred_'.$partnerInquiry->id, $cred);
+            $this->rememberCredentials($request, $partnerInquiry->id, $cred);
         }
 
         $result = $this->partners->whatsappPayload($partnerInquiry, $cred['password']);

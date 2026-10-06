@@ -35,11 +35,16 @@ class FieldActivityService
      */
     public function summary(?Carbon $from, ?int $salesmanId = null): Collection
     {
+        // "With order" only counts orders that are still alive (not rejected or cancelled).
         $visitStats = ShopVisit::query()
-            ->when($from, fn ($q) => $q->where('checked_in_at', '>=', $from))
-            ->when($salesmanId, fn ($q) => $q->where('salesman_id', $salesmanId))
-            ->selectRaw('salesman_id, COUNT(*) as visits, COUNT(DISTINCT shop_id) as shops, SUM(CASE WHEN order_id IS NOT NULL THEN 1 ELSE 0 END) as with_order, MAX(checked_in_at) as last_at')
-            ->groupBy('salesman_id')
+            ->leftJoin('orders as o', function ($join) {
+                $join->on('o.id', '=', 'shop_visits.order_id')
+                    ->whereNotIn('o.status', [Order::STATUS_REJECTED, Order::STATUS_CANCELLED]);
+            })
+            ->when($from, fn ($q) => $q->where('shop_visits.checked_in_at', '>=', $from))
+            ->when($salesmanId, fn ($q) => $q->where('shop_visits.salesman_id', $salesmanId))
+            ->selectRaw('shop_visits.salesman_id, COUNT(*) as visits, COUNT(DISTINCT shop_visits.shop_id) as shops, SUM(CASE WHEN o.id IS NOT NULL THEN 1 ELSE 0 END) as with_order, MAX(shop_visits.checked_in_at) as last_at')
+            ->groupBy('shop_visits.salesman_id')
             ->get()
             ->keyBy('salesman_id');
 
@@ -95,5 +100,14 @@ class FieldActivityService
             })
             ->sortBy([['visits', 'desc'], ['order_value', 'desc'], ['name', 'asc']])
             ->values();
+    }
+
+    /** Distinct shops visited by anyone (a shop seen by two salesmen counts once). */
+    public function distinctShopsVisited(?Carbon $from): int
+    {
+        return (int) ShopVisit::query()
+            ->when($from, fn ($q) => $q->where('checked_in_at', '>=', $from))
+            ->distinct()
+            ->count('shop_id');
     }
 }

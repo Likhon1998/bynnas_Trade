@@ -112,7 +112,7 @@ class SalesmanController extends Controller
     {
         return [
             'territories' => Territory::query()->where('is_active', true)->orderBy('name')->get(),
-            'shops' => Shop::query()->where('status', Shop::STATUS_ACTIVE)->orderBy('name')->get(['id', 'name', 'code', 'assigned_salesman_id']),
+            'shops' => Shop::query()->where('status', '!=', Shop::STATUS_REJECTED)->orderBy('name')->get(['id', 'name', 'code', 'status', 'assigned_salesman_id']),
         ];
     }
 

@@ -80,9 +80,9 @@ class WorkflowSmokeTest extends TestCase
         $eq = fn ($a, $b) => abs((float) $a - (float) $b) < 0.01;
         $issues = [];
 
-        foreach (DB::table('invoices')->get() as $inv) {
+        foreach (DB::table('invoices')->where('status', '!=', 'void')->get() as $inv) {
             $verified = (float) DB::table('payments')->where('invoice_id', $inv->id)->where('status', 'verified')->sum('amount');
-            if (! $eq($inv->balance, max(0, $inv->total - $inv->paid_amount))) {
+            if (! $eq($inv->balance, max(0, $inv->total - $inv->paid_amount - $inv->credited_amount))) {
                 $issues[] = "invoice {$inv->number} balance {$inv->balance} vs total-paid";
             }
             if (! $eq($inv->paid_amount, min($verified, $inv->total))) {
@@ -91,7 +91,8 @@ class WorkflowSmokeTest extends TestCase
         }
         foreach (Shop::all() as $shop) {
             $open = (float) DB::table('invoices')->where('shop_id', $shop->id)->whereIn('status', ['issued', 'partial'])->sum('balance');
-            $credits = (float) DB::table('returns')->where('shop_id', $shop->id)->where('status', 'approved')->where('credit_issued', true)->sum('total');
+            $credits = (float) DB::table('returns')->where('shop_id', $shop->id)->where('status', 'approved')->where('credit_issued', true)->sum(DB::raw('total - applied_to_invoice'))
+                + (float) DB::table('payments')->where('shop_id', $shop->id)->where('status', 'verified')->whereNull('invoice_id')->sum('amount');
             if (! $eq($shop->outstanding_balance, max(0, round($open - $credits, 2)))) {
                 $issues[] = "shop {$shop->code} outstanding {$shop->outstanding_balance} vs ".max(0, round($open - $credits, 2));
             }
@@ -184,6 +185,7 @@ class WorkflowSmokeTest extends TestCase
 
         $this->ok($this->post(route('returns.store'), [
             'shop_id' => $this->shop->id,
+            'order_id' => $order->id,
             'reason_type' => 'other',
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
         ]), 'create return 2');
