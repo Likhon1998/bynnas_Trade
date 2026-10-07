@@ -113,10 +113,13 @@ grep -q '^APP_KEY=base64:' .env || "${PHPX[@]}" artisan key:generate --force
 
 step "Clearing stale caches"
 rm -f bootstrap/cache/config.php bootstrap/cache/routes-*.php
-"${PHPX[@]}" artisan optimize:clear
+"${PHPX[@]}" artisan config:clear
+"${PHPX[@]}" artisan route:clear
+"${PHPX[@]}" artisan view:clear
 
 step "Running migrations"
 "${PHPX[@]}" artisan migrate --force
+"${PHPX[@]}" artisan cache:clear
 
 SEED_MARKER="storage/app/.rbac_seeded"
 if [ ! -f "$SEED_MARKER" ]; then
