@@ -148,6 +148,10 @@ else
   ln -s "$APP_DIR/public" "$DOC_ROOT"
 fi
 
+step "Granting web server read access to public files"
+chmod o+x "$HOME/repositories" "$APP_DIR" "$APP_DIR/storage" "$APP_DIR/storage/app"
+chmod -R o+rX "$APP_DIR/public" "$APP_DIR/storage/app/public"
+
 step "Building production caches"
 "${PHPX[@]}" artisan config:cache
 "${PHPX[@]}" artisan route:cache
