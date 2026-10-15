@@ -15,6 +15,7 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Assigned shops</div><div style="font-weight:700">{{ $salesman->assignedShops->count() }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Monthly target</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($salesman->salesmanProfile?->monthly_target ?? 0) }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">This month collected</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($monthOrders) }}</div></div>
+        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Grade / rating</div><div style="font-weight:700">{{ $salesman->salesmanProfile?->grade ?: '—' }} · {{ $salesman->salesmanProfile?->rating !== null ? $salesman->salesmanProfile->rating.'/5' : '—' }}</div></div>
     </div>
 
     @php
@@ -45,10 +46,27 @@
         </a>
     </div>
 
-    <div class="card" style="padding:16px;margin-bottom:14px">
+    <div class="card" style="padding:16px;margin-bottom:14px" x-data="{ copied: false }">
         <div style="font-weight:700;margin-bottom:8px">Field login</div>
-        <div class="muted">URL: <a class="link" href="{{ url('/field/login') }}">{{ url('/field/login') }}</a></div>
-        <div class="muted">Email: {{ $salesman->email }}</div>
+        <div class="muted" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <span>URL:</span>
+            <code id="salesman-login-url">{{ url('/field/login') }}</code>
+            <button type="button" class="btn btn-ghost btn-sm"
+                @click="navigator.clipboard.writeText('{{ url('/field/login') }}'); copied = true; setTimeout(() => copied = false, 1500)">
+                <span x-text="copied ? 'Copied' : 'Copy link'"></span>
+            </button>
+            <a class="link" href="{{ route('salesmen.login-logs', $salesman) }}">Login activity</a>
+        </div>
+        <div class="muted">Email / username: {{ $salesman->email }}</div>
+        <div class="muted">Status: {{ $salesman->is_active ? 'Active' : 'Inactive' }}</div>
+        @can('users.reset_password')
+            <form method="post" action="{{ route('salesmen.reset-password', $salesman) }}" style="margin-top:10px"
+                onsubmit="return confirm('Generate a temporary password? The current password cannot be viewed.')">
+                @csrf
+                <button class="btn btn-ghost btn-sm" type="submit">Generate temporary password</button>
+            </form>
+        @endcan
+        <div class="muted" style="font-size:12px;margin-top:8px">Existing passwords are hashed and cannot be viewed. Use reset to issue a temporary password.</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">

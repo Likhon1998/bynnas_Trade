@@ -54,6 +54,20 @@ class Product extends Model
         return $this->hasMany(ProductPrice::class);
     }
 
+    public function offers(): HasMany
+    {
+        return $this->hasMany(ProductOffer::class);
+    }
+
+    public function activeOffer(): ?ProductOffer
+    {
+        if ($this->relationLoaded('offers')) {
+            return $this->offers->first(fn (ProductOffer $offer) => $offer->isCurrentlyActive());
+        }
+
+        return $this->offers()->currentlyActive()->orderByDesc('id')->first();
+    }
+
     public function availableStock(): int
     {
         return max(0, (int) $this->stock_on_hand - (int) $this->reserved_stock);
@@ -74,6 +88,11 @@ class Product extends Model
 
     public function priceForGroup(?PriceGroup $group = null): float
     {
+        $offer = $this->activeOffer();
+        if ($offer && (float) $offer->offer_price > 0) {
+            return (float) $offer->offer_price;
+        }
+
         if ($group) {
             $override = $this->prices->firstWhere('price_group_id', $group->id);
 

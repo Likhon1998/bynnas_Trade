@@ -103,6 +103,93 @@ class AppNotificationService
         );
     }
 
+    public function notifyUser(?User $user, string $title, string $body, ?string $url = null, string $category = 'system', string $level = 'info'): void
+    {
+        if (! $user || ! $user->is_active) {
+            return;
+        }
+
+        $user->notify(new SystemAlert($title, $body, $url, $category, $level));
+    }
+
+    public function orderApproved(Order $order): void
+    {
+        $order->loadMissing(['shop', 'salesman']);
+        $this->notifyUser(
+            $order->salesman,
+            "Order {$order->number} approved",
+            ($order->shop?->name ?: 'Shop').' · ৳ '.number_format((float) $order->total, 2).' · stock reserved',
+            '/field/orders/'.$order->id,
+            'orders',
+            'success',
+        );
+    }
+
+    public function orderDelivered(Order $order): void
+    {
+        $order->loadMissing(['shop.users', 'salesman']);
+        $this->notifyUser(
+            $order->salesman,
+            "Order {$order->number} delivered",
+            ($order->shop?->name ?: 'Shop').' · delivery completed',
+            '/field/orders/'.$order->id,
+            'deliveries',
+            'success',
+        );
+
+        foreach ($order->shop?->users ?? [] as $shopUser) {
+            $this->notifyUser(
+                $shopUser,
+                "Order {$order->number} delivered",
+                'Your order has been delivered. Check your account statement for the invoice.',
+                '/portal/orders/'.$order->id,
+                'deliveries',
+                'success',
+            );
+        }
+    }
+
+    public function paymentVerified(Payment $payment): void
+    {
+        $payment->loadMissing(['shop.users', 'shop.assignedSalesman']);
+        $shop = $payment->shop;
+        if (! $shop) {
+            return;
+        }
+
+        foreach ($shop->users as $shopUser) {
+            $this->notifyUser(
+                $shopUser,
+                "Payment {$payment->number} verified",
+                '৳ '.number_format((float) $payment->amount, 2).' applied · outstanding ৳ '.number_format((float) $shop->fresh()->outstanding_balance, 2),
+                '/portal/statement',
+                'payments',
+                'success',
+            );
+        }
+
+        $this->notifyUser(
+            $shop->assignedSalesman,
+            "Payment collected · {$shop->name}",
+            '৳ '.number_format((float) $payment->amount, 2).' verified',
+            '/field/shops',
+            'payments',
+            'info',
+        );
+    }
+
+    public function targetAchieved(User $salesman, float $achieved, float $target): void
+    {
+        $this->notifyUser(
+            $salesman,
+            'Congratulations — monthly target achieved!',
+            'Sales ৳ '.number_format($achieved, 2).' of ৳ '.number_format($target, 2),
+            '/field/dashboard',
+            'targets',
+            'success',
+        );
+    }
+
     public function seedOperationalAlerts(): int
     {
         $count = 0;

@@ -9,9 +9,11 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductReturn;
 use App\Models\Purchase;
+use App\Models\SalaryPayment;
 use App\Models\SalesTarget;
 use App\Models\Shipment;
 use App\Models\Shop;
+use App\Models\User;
 use App\Models\WarehouseStock;
 use Illuminate\Support\Carbon;
 
@@ -49,6 +51,20 @@ class AnalyticsService
             ->count();
         $outstanding = (float) Shop::query()->sum('outstanding_balance');
         $products = Product::query()->where('status', Product::STATUS_ACTIVE)->count();
+        $salesmenCount = User::query()->where('portal', User::PORTAL_SALESMAN)->where('is_active', true)->count();
+        $salaryPaidMonth = (float) SalaryPayment::query()
+            ->where('year', now()->year)
+            ->where('month', now()->month)
+            ->where('status', SalaryPayment::STATUS_PAID)
+            ->selectRaw('COALESCE(SUM(amount + bonus), 0) as total')
+            ->value('total');
+        $commissionMonth = (float) Commission::query()
+            ->where('year', now()->year)
+            ->where('month', now()->month)
+            ->where('status', '!=', Commission::STATUS_REJECTED)
+            ->sum('commission_amount');
+        $gradedShops = Shop::query()->whereNotNull('grade')->count();
+        $gradedSalesmen = \App\Models\SalesmanProfile::query()->whereNotNull('grade')->count();
 
         $statusCounts = Order::query()
             ->when($user, fn ($q) => $q->visibleTo($user))
@@ -109,6 +125,21 @@ class AnalyticsService
                     'up' => true,
                     'color' => '#14b8a6',
                     'raw' => true,
+                ],
+                [
+                    'title' => 'Active Salesmen',
+                    'value' => $salesmenCount,
+                    'delta' => $gradedSalesmen.' graded · '.$gradedShops.' graded shops',
+                    'up' => true,
+                    'color' => '#0ea5e9',
+                    'raw' => true,
+                ],
+                [
+                    'title' => 'Salary paid (month)',
+                    'value' => $salaryPaidMonth,
+                    'delta' => 'Commissions ৳ '.number_format($commissionMonth, 0),
+                    'up' => true,
+                    'color' => '#22c55e',
                 ],
             ],
             'salesSeries' => $this->dailySalesSeries(14),

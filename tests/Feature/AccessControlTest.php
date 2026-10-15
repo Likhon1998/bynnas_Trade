@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Announcement;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductOffer;
 use App\Models\Shop;
 use App\Models\ShopVisit;
 use App\Models\User;
@@ -25,11 +28,25 @@ class AccessControlTest extends TestCase
             'productReturn' => 'returns', 'visit' => 'shop_visits', 'target' => 'sales_targets',
             'priceGroup' => 'price_groups', 'partnerInquiry' => 'partner_inquiries', 'contactMessage' => 'contact_messages',
             'fulfilment' => 'order_fulfilments', 'id' => 'notifications',
+            'offer' => 'product_offers', 'announcement' => 'announcements', 'brand' => 'brands',
         ];
         $value = function (string $name) use ($tables) {
             return match ($name) {
                 'report' => 'sales',
                 'salesman' => User::where('portal', 'salesman')->value('id'),
+                'offer' => ProductOffer::query()->value('id') ?? ProductOffer::query()->create([
+                    'product_id' => Product::query()->value('id'),
+                    'title' => 'ACL stub',
+                    'offer_price' => 1,
+                    'is_active' => false,
+                ])->id,
+                'announcement' => Announcement::query()->value('id') ?? Announcement::query()->create([
+                    'title' => 'ACL stub',
+                    'body' => 'stub',
+                    'send_to_all' => true,
+                    'is_active' => false,
+                    'published_at' => now(),
+                ])->id,
                 default => DB::table($tables[$name] ?? Str::snake(Str::plural($name)))->value('id') ?? 1,
             };
         };

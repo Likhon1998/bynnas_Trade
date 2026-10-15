@@ -63,7 +63,15 @@
         <a class="f-btn f-btn-primary f-btn-block f-btn-lg" style="margin-top:12px" href="{{ route('field.shops') }}">Back to my shops</a>
     @elseif (! $canOrder)
         <div class="f-warn" style="margin:0 0 12px">
-            <b>{{ $shop?->name }} is waiting for office approval.</b> Orders open once the office sets its prices and credit. Record how this visit went.
+            @if ($shop?->status === \App\Models\Shop::STATUS_PENDING)
+                <b>{{ $shop->name }} is not approved yet.</b> Approve it to take orders on this visit.
+                <form method="post" action="{{ route('field.shops.approve', $shop) }}" style="margin-top:10px">
+                    @csrf
+                    <button class="f-btn f-btn-primary f-btn-lg f-btn-block" type="submit"><i data-lucide="check"></i> Approve shop &amp; take orders</button>
+                </form>
+            @else
+                <b>{{ $shop?->name }} cannot take orders</b> ({{ strtolower($shop?->statusLabel() ?? 'unavailable') }}). Ask the office if it was deactivated.
+            @endif
         </div>
         <form class="f-card" method="post" action="{{ route('field.visit.checkout', $visit) }}">
             @csrf

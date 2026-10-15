@@ -6,8 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class CommissionRule extends Model
 {
+    public const BASIS_COLLECTION = 'collection';
+
+    public const BASIS_SALES = 'sales';
+
+    public const BASIS_PRODUCT = 'product';
+
     protected $fillable = [
-        'name', 'collection_rate_percent', 'target_bonus_percent',
+        'name', 'basis', 'product_id', 'collection_rate_percent', 'sales_rate_percent',
+        'product_rate_percent', 'target_bonus_percent',
         'is_default', 'is_active', 'notes',
     ];
 
@@ -15,6 +22,8 @@ class CommissionRule extends Model
     {
         return [
             'collection_rate_percent' => 'decimal:4',
+            'sales_rate_percent' => 'decimal:4',
+            'product_rate_percent' => 'decimal:4',
             'target_bonus_percent' => 'decimal:4',
             'is_default' => 'boolean',
             'is_active' => 'boolean',

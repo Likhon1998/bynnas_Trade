@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Field;
 
 use App\Http\Controllers\Controller;
+use App\Models\Announcement;
 use App\Models\Commission;
 use App\Models\CommissionRule;
+use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\PartnerInquiry;
 use App\Models\Product;
@@ -13,6 +15,7 @@ use App\Models\SalesTarget;
 use App\Models\Shop;
 use App\Models\ShopVisit;
 use App\Models\User;
+use App\Services\SalaryService;
 use App\Rules\BangladeshPhone;
 use App\Services\AppNotificationService;
 use App\Services\OrderService;
@@ -43,6 +46,7 @@ class FieldPortalController extends Controller
         private AppNotificationService $notifications,
         private PartnerInquiryService $partnerInquiries,
         private TargetService $targets,
+        private SalaryService $salaries,
     ) {}
 
     public function dashboard(Request $request)
@@ -107,6 +111,8 @@ class FieldPortalController extends Controller
             'shopsAddedMonth' => Shop::query()->where('created_by', $user->id)->where('created_at', '>=', now()->startOfMonth())->count(),
             'shopsPending' => Shop::query()->where('created_by', $user->id)->where('status', Shop::STATUS_PENDING)->count(),
             'loginsToCreate' => $this->loginsToCreate($user),
+            'shopsOutstanding' => (float) $shops->sum('outstanding_balance'),
+            'targetMet' => $salesTarget?->target_met || ($target > 0 && $achieved >= $target),
         ]);
     }
 
@@ -168,9 +174,11 @@ class FieldPortalController extends Controller
         unset($data['sells'], $data['interest']);
 
         $shop = $this->shops->create($data + [
-            'status' => Shop::STATUS_PENDING,
+            'status' => Shop::STATUS_ACTIVE,
             'assigned_salesman_id' => $user->id,
             'territory_id' => $user->salesmanProfile?->territory_id,
+            // Match admin form default so orders are not blocked by a zero credit limit.
+            'credit_limit' => $data['credit_limit'] ?? 150000,
         ], $user);
 
         try {
@@ -187,11 +195,26 @@ class FieldPortalController extends Controller
             ]);
 
             return redirect()->route('field.visit.show', $visit)
-                ->with('success', $shop->name.' added and visit started. The office will approve it before orders can be taken.');
+                ->with('success', $shop->name.' added and approved. You can take orders now.');
         }
 
         return redirect()->route('field.shops')
-            ->with('success', $shop->name.' added and sent to the office for approval.');
+            ->with('success', $shop->name.' added and approved. You can take orders now.');
+    }
+
+    public function approveShop(Request $request, Shop $shop)
+    {
+        abort_unless($this->shops->salesmanCanManage($shop, $request->user()), 403);
+
+        if ($shop->status === Shop::STATUS_ON_HOLD || $shop->status === Shop::STATUS_REJECTED) {
+            throw ValidationException::withMessages([
+                'shop' => $shop->name.' was deactivated by the office. Ask admin to reactivate it.',
+            ]);
+        }
+
+        $this->shops->approve($shop, $request->user());
+
+        return back()->with('success', $shop->fresh()->name.' approved. You can take orders now.');
     }
 
     public function partners(Request $request)
@@ -354,20 +377,27 @@ class FieldPortalController extends Controller
         $group = $visit->shop?->priceGroup;
 
         $catalog = Product::query()
-            ->with(['prices', 'category'])
+            ->with(['prices', 'category', 'offers'])
             ->where('status', Product::STATUS_ACTIVE)
             ->where('is_published', true)
             ->orderBy('name')
             ->get()
-            ->map(fn (Product $p) => [
-                'id' => $p->id,
-                'name' => $p->name,
-                'sku' => $p->sku,
-                'category' => $p->category?->name ?? 'Other',
-                'price' => $p->priceForGroup($group),
-                'stock' => $p->availableStock(),
-                'image' => $p->imageUrl(),
-            ])
+            ->map(function (Product $p) use ($group) {
+                $offer = $p->activeOffer();
+
+                return [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'sku' => $p->sku,
+                    'category' => $p->category?->name ?? 'Other',
+                    'price' => $p->priceForGroup($group),
+                    'list_price' => (float) $p->wholesale_price,
+                    'offer_title' => $offer?->title,
+                    'on_offer' => (bool) $offer,
+                    'stock' => $p->availableStock(),
+                    'image' => $p->imageUrl(),
+                ];
+            })
             ->values();
 
         return view('field.visit', [
@@ -467,6 +497,7 @@ class FieldPortalController extends Controller
         $user = $request->user();
         $base = Commission::query()->where('salesman_id', $user->id)->where('status', '!=', Commission::STATUS_REJECTED);
         $month = (clone $base)->where('year', now()->year)->where('month', now()->month);
+        $salary = $this->salaries->summaryFor($user);
 
         return view('field.earnings', [
             'rule' => CommissionRule::activeDefault(),
@@ -477,7 +508,59 @@ class FieldPortalController extends Controller
             'commissions' => (clone $base)->with(['payment.shop', 'order.shop'])->latest()->limit(30)->get(),
             'rewards' => Reward::query()->where('salesman_id', $user->id)
                 ->where('status', '!=', Reward::STATUS_CANCELLED)->latest()->limit(10)->get(),
+            'salary' => $salary,
         ]);
+    }
+
+    public function deliveries(Request $request)
+    {
+        $user = $request->user();
+        $shopIds = $user->assignedShops()->pluck('shops.id');
+
+        $deliveries = Delivery::query()
+            ->with(['shop', 'order', 'assignee'])
+            ->where(function ($q) use ($user, $shopIds) {
+                $q->whereHas('order', fn ($o) => $o->where('salesman_id', $user->id))
+                    ->orWhereIn('shop_id', $shopIds);
+            })
+            ->latest('dispatched_at')
+            ->paginate(25);
+
+        return view('field.deliveries', compact('deliveries'));
+    }
+
+    public function announcements(Request $request)
+    {
+        $user = $request->user();
+
+        $announcements = Announcement::query()
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+            })
+            ->where(function ($q) use ($user) {
+                $q->where('send_to_all', true)
+                    ->orWhereHas('salesmen', fn ($s) => $s->where('users.id', $user->id));
+            })
+            ->latest('published_at')
+            ->paginate(20);
+
+        return view('field.announcements', compact('announcements'));
+    }
+
+    public function notifications(Request $request)
+    {
+        $notifications = $request->user()->notifications()->latest()->paginate(30);
+
+        return view('field.notifications', compact('notifications'));
+    }
+
+    public function markNotificationRead(Request $request, string $id)
+    {
+        $notification = $request->user()->notifications()->where('id', $id)->firstOrFail();
+        $notification->markAsRead();
+
+        return back();
     }
 
     private function openVisit(User $user): ?ShopVisit

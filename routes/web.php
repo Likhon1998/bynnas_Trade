@@ -2,11 +2,16 @@
 
 use App\Http\Controllers\AccountPasswordController;
 use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CommissionController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DeliveryController;
+use App\Http\Controllers\Admin\DueManagementController;
+use App\Http\Controllers\Admin\ProductOfferController;
+use App\Http\Controllers\Admin\SalaryController;
 use App\Http\Controllers\Admin\FulfilmentController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\InvoiceController;
@@ -68,6 +73,7 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::delete('/orders/{order}', [ShopPortalController::class, 'destroyOrder'])->name('orders.destroy');
         Route::get('/orders/{order}', [ShopPortalController::class, 'showOrder'])->name('orders.show');
         Route::get('/profile', [ShopPortalController::class, 'profile'])->name('profile');
+        Route::get('/statement', [ShopPortalController::class, 'statement'])->name('statement');
         Route::get('/account/password', [AccountPasswordController::class, 'edit'])->name('account.password');
         Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:6,1')->name('account.password.update');
     });
@@ -86,6 +92,7 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/shops', [FieldPortalController::class, 'shops'])->name('shops');
         Route::get('/shops/new', [FieldPortalController::class, 'createShop'])->name('shops.create');
         Route::post('/shops', [FieldPortalController::class, 'storeShop'])->middleware('throttle:30,1')->name('shops.store');
+        Route::post('/shops/{shop}/approve', [FieldPortalController::class, 'approveShop'])->name('shops.approve');
         Route::post('/shops/{shop}/check-in', [FieldPortalController::class, 'checkIn'])->name('shops.check-in');
         Route::get('/visits/{visit}', [FieldPortalController::class, 'showVisit'])->name('visit.show');
         Route::post('/visits/{visit}/order', [FieldPortalController::class, 'submitOrder'])->name('visit.order');
@@ -93,6 +100,10 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/orders', [FieldPortalController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}', [FieldPortalController::class, 'showOrder'])->name('orders.show');
         Route::get('/earnings', [FieldPortalController::class, 'earnings'])->name('earnings');
+        Route::get('/deliveries', [FieldPortalController::class, 'deliveries'])->name('deliveries');
+        Route::get('/announcements', [FieldPortalController::class, 'announcements'])->name('announcements');
+        Route::get('/notifications', [FieldPortalController::class, 'notifications'])->name('notifications');
+        Route::post('/notifications/{id}/read', [FieldPortalController::class, 'markNotificationRead'])->name('notifications.read');
         Route::get('/partners', [FieldPortalController::class, 'partners'])->name('partners');
         Route::get('/partners/apply', [FieldPortalController::class, 'createPartner'])->name('partners.create');
         Route::post('/partners', [FieldPortalController::class, 'storePartner'])->middleware('throttle:20,1')->name('partners.store');
@@ -148,7 +159,9 @@ Route::prefix('admin')->group(function () {
         Route::get('/shops/{shop}/edit', [ShopController::class, 'edit'])->name('shops.edit');
         Route::put('/shops/{shop}', [ShopController::class, 'update'])->name('shops.update');
         Route::post('/shops/{shop}/approve', [ShopController::class, 'approve'])->name('shops.approve');
+        Route::post('/shops/{shop}/deactivate', [ShopController::class, 'deactivate'])->name('shops.deactivate');
         Route::post('/shops/{shop}/credentials', [ShopController::class, 'issueCredentials'])->name('shops.credentials');
+        Route::get('/shops/{shop}/statement', [ShopController::class, 'statement'])->name('shops.statement');
 
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
@@ -156,10 +169,31 @@ Route::prefix('admin')->group(function () {
         Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
         Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
 
+        Route::get('/offers', [ProductOfferController::class, 'index'])->name('offers.index');
+        Route::post('/offers', [ProductOfferController::class, 'store'])->name('offers.store');
+        Route::put('/offers/{offer}', [ProductOfferController::class, 'update'])->name('offers.update');
+        Route::delete('/offers/{offer}', [ProductOfferController::class, 'destroy'])->name('offers.destroy');
+
+        Route::get('/dues', [DueManagementController::class, 'index'])->name('dues.index');
+        Route::get('/dues/export', [DueManagementController::class, 'export'])->name('dues.export');
+
+        Route::get('/salaries', [SalaryController::class, 'index'])->name('salaries.index');
+        Route::post('/salaries', [SalaryController::class, 'storeSalary'])->name('salaries.store');
+        Route::post('/salaries/pay', [SalaryController::class, 'pay'])->name('salaries.pay');
+
+        Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
+        Route::post('/announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
+        Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
+
         Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+        Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
+        Route::post('/brands', [BrandController::class, 'store'])->name('brands.store');
+        Route::put('/brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
+        Route::delete('/brands/{brand}', [BrandController::class, 'destroy'])->name('brands.destroy');
 
         Route::get('/price-groups', [PriceGroupController::class, 'index'])->name('price-groups.index');
         Route::post('/price-groups', [PriceGroupController::class, 'store'])->name('price-groups.store');
@@ -172,6 +206,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/salesmen/{salesman}', [SalesmanController::class, 'show'])->name('salesmen.show');
         Route::get('/salesmen/{salesman}/edit', [SalesmanController::class, 'edit'])->name('salesmen.edit');
         Route::put('/salesmen/{salesman}', [SalesmanController::class, 'update'])->name('salesmen.update');
+        Route::post('/salesmen/{salesman}/reset-password', [SalesmanController::class, 'resetPassword'])->name('salesmen.reset-password');
+        Route::get('/salesmen/{salesman}/login-logs', [SalesmanController::class, 'loginLogs'])->name('salesmen.login-logs');
 
         Route::get('/visits', [VisitController::class, 'index'])->name('visits.index');
 
@@ -208,6 +244,7 @@ Route::prefix('admin')->group(function () {
 
         Route::get('/deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
         Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])->name('deliveries.show');
+        Route::get('/deliveries/{delivery}/challan', [DeliveryController::class, 'challan'])->name('deliveries.challan');
         Route::post('/deliveries/{delivery}/deliver', [DeliveryController::class, 'markDelivered'])->name('deliveries.deliver');
 
         // Phase 6 — Suppliers, purchases, China shipments, landed cost

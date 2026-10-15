@@ -207,7 +207,17 @@ class FulfilmentService
 
             $this->auditLogger->log('deliveries', 'delivered', "Delivery {$delivery->number} completed", $delivery, null, null, $actor);
 
-            return $delivery->fresh(['order.invoice', 'shop', 'fulfilment']);
+            $fresh = $delivery->fresh(['order.invoice', 'order.salesman', 'shop', 'fulfilment']);
+
+            DB::afterCommit(function () use ($fresh) {
+                try {
+                    app(AppNotificationService::class)->orderDelivered($fresh->order);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            });
+
+            return $fresh;
         });
     }
 

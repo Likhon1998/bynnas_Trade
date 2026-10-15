@@ -167,7 +167,7 @@
                 <button class="f-btn f-btn-primary f-btn-lg f-btn-block" type="submit" :disabled="saving">
                     <i data-lucide="check"></i> <span x-text="saving ? 'Saving…' : 'Save shop'"></span>
                 </button>
-                <p class="as-foot"><i data-lucide="shield-check"></i> The office approves new shops and sets prices &amp; credit before orders.</p>
+                <p class="as-foot"><i data-lucide="shield-check"></i> New shops are approved immediately so you can take orders. Admin can still edit or deactivate later.</p>
             </section>
         </aside>
 

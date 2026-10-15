@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Services\FulfilmentService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class DeliveryController extends Controller
@@ -32,6 +33,20 @@ class DeliveryController extends Controller
         $delivery->load(['order.items', 'shop', 'warehouse', 'assignee', 'fulfilment']);
 
         return view('admin.deliveries.show', compact('delivery'));
+    }
+
+    public function challan(Request $request, Delivery $delivery)
+    {
+        abort_unless($request->user()->can('deliveries.view'), 403);
+
+        $delivery->load(['order.items', 'shop', 'warehouse', 'assignee']);
+
+        $pdf = Pdf::loadView('admin.deliveries.challan', [
+            'delivery' => $delivery,
+            'generatedAt' => now(),
+        ]);
+
+        return $pdf->download($delivery->number.'-challan.pdf');
     }
 
     public function markDelivered(Request $request, Delivery $delivery)

@@ -19,6 +19,12 @@
 @section('content')
     @include('field.partials.login-todo')
 
+    @if (!empty($targetMet))
+        <div class="card" style="padding:14px 16px;margin-bottom:14px;background:linear-gradient(90deg,#ecfdf5,#f0fdf4);color:#166534;font-weight:600">
+            Congratulations — you achieved your monthly sales target!
+        </div>
+    @endif
+
     <div class="f-kpis five">
         <div class="f-kpi tone-violet f-kpi-wide">
             <div class="f-kpi-top">
@@ -56,6 +62,11 @@
             <div class="f-kpi-top"><span class="f-ico"><i data-lucide="hourglass"></i></span><span class="f-kpi-label">Awaiting approval</span></div>
             <div class="f-kpi-value">{{ $waitingApproval }}</div>
             <div class="f-kpi-meta">Orders with the office</div>
+        </a>
+        <a class="f-kpi tone-amber" href="{{ route('field.shops') }}">
+            <div class="f-kpi-top"><span class="f-ico"><i data-lucide="scale"></i></span><span class="f-kpi-label">Shop dues</span></div>
+            <div class="f-kpi-value">{{ \App\Support\DemoData::taka($shopsOutstanding ?? 0) }}</div>
+            <div class="f-kpi-meta">Outstanding under your shops</div>
         </a>
     </div>
 

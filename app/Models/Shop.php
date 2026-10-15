@@ -24,7 +24,7 @@ class Shop extends Model
         'code', 'name', 'owner_name', 'phone', 'email', 'address', 'city',
         'latitude', 'longitude', 'territory_id', 'price_group_id', 'assigned_salesman_id',
         'credit_limit', 'outstanding_balance', 'payment_terms_days',
-        'status', 'notes', 'created_by', 'approved_at',
+        'status', 'notes', 'grade', 'rating', 'created_by', 'approved_at',
     ];
 
     protected function casts(): array
@@ -32,6 +32,7 @@ class Shop extends Model
         return [
             'credit_limit' => 'decimal:2',
             'outstanding_balance' => 'decimal:2',
+            'rating' => 'decimal:1',
             'approved_at' => 'datetime',
             'latitude' => 'float',
             'longitude' => 'float',

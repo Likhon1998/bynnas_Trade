@@ -127,7 +127,17 @@ class PaymentService
                 $actor,
             );
 
-            return $payment->fresh(['shop', 'invoice', 'verifier']);
+            $fresh = $payment->fresh(['shop', 'invoice', 'verifier']);
+
+            DB::afterCommit(function () use ($fresh) {
+                try {
+                    app(AppNotificationService::class)->paymentVerified($fresh);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            });
+
+            return $fresh;
         });
     }
 

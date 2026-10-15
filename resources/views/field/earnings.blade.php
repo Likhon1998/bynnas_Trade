@@ -12,6 +12,11 @@
 @endphp
 @section('content')
     <div class="f-kpis">
+        <div class="f-kpi tone-violet">
+            <div class="f-kpi-top"><span class="f-ico"><i data-lucide="banknote"></i></span><span class="f-kpi-label">Monthly salary</span></div>
+            <div class="f-kpi-value">{{ $salary['current'] ? \App\Support\DemoData::taka($salary['current']->monthly_salary) : '—' }}</div>
+            <div class="f-kpi-meta">{{ ($salary['outstanding_months'] ?? 0) }} unpaid month(s)</div>
+        </div>
         <div class="f-kpi tone-green">
             <div class="f-kpi-top"><span class="f-ico"><i data-lucide="trending-up"></i></span><span class="f-kpi-label">Earned this month</span></div>
             <div class="f-kpi-value">{{ \App\Support\DemoData::taka($monthEarned) }}</div>
@@ -88,6 +93,28 @@
                         <i data-lucide="wallet"></i>
                         <strong>No commission yet</strong>
                         You earn commission when your shops pay their invoices.
+                    </div>
+                @endforelse
+            </div>
+        </section>
+
+        <section class="f-panel">
+            <div class="f-panel-head">
+                <h2><span class="f-ico tone-violet"><i data-lucide="banknote"></i></span>Salary payments</h2>
+            </div>
+            <div class="f-panel-body">
+                @forelse ($salary['payments'] as $payment)
+                    <div class="f-kv" style="align-items:center">
+                        <span>
+                            <b style="display:block">{{ $payment->periodLabel() }}</b>
+                            <span class="f-muted f-small">{{ $payment->method ?: 'Salary' }} · {{ ucfirst($payment->status) }}</span>
+                        </span>
+                        <span>{{ \App\Support\DemoData::taka($payment->total()) }}</span>
+                    </div>
+                @empty
+                    <div class="f-empty" style="padding:16px 8px">
+                        <i data-lucide="banknote"></i>
+                        <strong>No salary payments yet</strong>
                     </div>
                 @endforelse
             </div>

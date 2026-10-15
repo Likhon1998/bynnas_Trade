@@ -55,8 +55,22 @@ class CommissionService
             }
 
             $rule = CommissionRule::activeDefault();
+            $payment->loadMissing(['invoice.items', 'invoice.order']);
+            $basis = $rule?->basis ?: CommissionRule::BASIS_COLLECTION;
+            $baseAmount = (float) $payment->amount;
             $rate = (float) ($rule?->collection_rate_percent ?? 3.5);
-            $amount = round(((float) $payment->amount) * $rate / 100, 2);
+
+            if ($basis === CommissionRule::BASIS_SALES) {
+                $rate = (float) ($rule?->sales_rate_percent ?? $rule?->collection_rate_percent ?? 3.5);
+                $baseAmount = (float) ($payment->invoice?->order?->total ?? $payment->invoice?->total ?? $payment->amount);
+            } elseif ($basis === CommissionRule::BASIS_PRODUCT && $rule?->product_id) {
+                $rate = (float) ($rule?->product_rate_percent ?? $rule?->collection_rate_percent ?? 3.5);
+                $baseAmount = (float) ($payment->invoice?->items
+                    ?->where('product_id', $rule->product_id)
+                    ->sum('line_total') ?? 0);
+            }
+
+            $amount = round($baseAmount * $rate / 100, 2);
 
             if ($amount <= 0) {
                 return null;

@@ -49,6 +49,12 @@ class PermissionCatalog
                 'edit' => 'Edit categories',
                 'delete' => 'Delete categories',
             ],
+            'brands' => [
+                'view' => 'View brands',
+                'create' => 'Create brands',
+                'edit' => 'Edit brands',
+                'delete' => 'Delete brands',
+            ],
             'price_groups' => [
                 'view' => 'View price groups',
                 'manage' => 'Manage price groups and product prices',
@@ -159,6 +165,18 @@ class PermissionCatalog
                 'manage' => 'Manage rewards',
                 'approve' => 'Approve / award rewards',
             ],
+            'dues' => [
+                'view' => 'View due management',
+                'export' => 'Export due management reports',
+            ],
+            'salaries' => [
+                'view' => 'View salesman salaries',
+                'manage' => 'Manage salary and payroll',
+            ],
+            'announcements' => [
+                'view' => 'View announcements',
+                'manage' => 'Send announcements to salesmen',
+            ],
             'reports' => [
                 'view' => 'View reports',
                 'export' => 'Export reports',
@@ -220,11 +238,15 @@ class PermissionCatalog
                 'salesmen.view', 'salesmen.create', 'salesmen.edit',
                 'visits.view', 'visits.create', 'visits.edit',
                 'orders.view', 'orders.create', 'orders.edit', 'orders.approve', 'orders.reject', 'orders.cancel', 'orders.export',
-                'products.view', 'products.create', 'products.edit', 'categories.view', 'categories.create',
-                'price_groups.view', 'reports.view', 'analytics.view', 'targets.view', 'targets.manage', 'commissions.view', 'rewards.view',
+                'products.view', 'products.create', 'products.edit',
+                'categories.view', 'categories.create', 'categories.edit', 'categories.delete',
+                'brands.view', 'brands.create', 'brands.edit', 'brands.delete',
+                'price_groups.view', 'dues.view', 'dues.export', 'announcements.view', 'announcements.manage',
+                'reports.view', 'analytics.view', 'targets.view', 'targets.manage', 'commissions.view', 'rewards.view',
             ],
             'Salesman' => [
-                'shops.view', 'visits.view', 'visits.create', 'visits.edit',
+                'shops.view', 'shops.create', 'shops.approve',
+                'visits.view', 'visits.create', 'visits.edit',
                 'orders.view', 'orders.create', 'products.view',
                 'targets.view', 'commissions.view', 'rewards.view', 'deliveries.view',
             ],
@@ -246,6 +268,7 @@ class PermissionCatalog
                 'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.export',
                 'payments.view', 'payments.create', 'payments.verify',
                 'orders.view', 'shops.view', 'shops.edit', 'shops.manage_credit', 'returns.view', 'returns.approve',
+                'dues.view', 'dues.export', 'salaries.view', 'salaries.manage',
                 'reports.view', 'analytics.view', 'commissions.view', 'commissions.approve', 'commissions.manage',
                 'targets.view', 'targets.manage', 'rewards.view', 'rewards.manage', 'rewards.approve',
             ],
@@ -263,6 +286,7 @@ class PermissionCatalog
             ],
             'Accountant' => [
                 'invoices.view', 'invoices.export', 'payments.view', 'payments.verify',
+                'dues.view', 'dues.export', 'salaries.view',
                 'reports.view', 'analytics.view', 'shops.view', 'orders.view',
             ],
         ];

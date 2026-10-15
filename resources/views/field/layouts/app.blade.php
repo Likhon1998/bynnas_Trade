@@ -82,8 +82,12 @@
                 @if ($fieldOpenVisit)<span class="badge-dot" aria-label="Visit in progress">1</span>@endif
             </a>
             <a href="{{ route('field.orders') }}" title="Orders" class="tone-amber {{ request()->routeIs('field.orders*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="receipt-text"></i></span><span class="f-nav-text">Orders</span></a>
+            <a href="{{ route('field.deliveries') }}" title="Deliveries" class="tone-sky {{ request()->routeIs('field.deliveries') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="truck"></i></span><span class="f-nav-text">Deliveries</span></a>
             <a href="{{ route('field.partners') }}" title="Partners" class="tone-teal {{ request()->routeIs('field.partners*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="handshake"></i></span><span class="f-nav-text">Partners</span></a>
-            <a href="{{ route('field.earnings') }}" title="Earnings" class="tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>            <div class="f-nav-user">
+            <a href="{{ route('field.earnings') }}" title="Earnings" class="tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
+            <a href="{{ route('field.announcements') }}" title="Announcements" class="tone-violet {{ request()->routeIs('field.announcements') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="megaphone"></i></span><span class="f-nav-text">News</span></a>
+            <a href="{{ route('field.notifications') }}" title="Notifications" class="tone-rose {{ request()->routeIs('field.notifications*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="bell"></i></span><span class="f-nav-text">Alerts</span></a>
+            <div class="f-nav-user">
                 <div class="f-avatar" aria-hidden="true">{{ strtoupper($initials ?: 'S') }}</div>
                 <div class="f-nav-user-text">
                     <b>{{ $user?->name }}</b>

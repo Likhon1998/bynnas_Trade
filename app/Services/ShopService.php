@@ -33,6 +33,8 @@ class ShopService
                 'payment_terms_days' => $data['payment_terms_days'] ?? 21,
                 'status' => $data['status'] ?? Shop::STATUS_PENDING,
                 'notes' => $data['notes'] ?? null,
+                'grade' => $data['grade'] ?? null,
+                'rating' => $data['rating'] ?? null,
                 'created_by' => $actor?->id,
                 'approved_at' => ($data['status'] ?? null) === Shop::STATUS_ACTIVE ? now() : null,
             ]);
@@ -63,7 +65,7 @@ class ShopService
             $shop->update(collect($data)->only([
                 'name', 'owner_name', 'phone', 'email', 'address', 'city',
                 'territory_id', 'price_group_id', 'assigned_salesman_id',
-                'credit_limit', 'payment_terms_days', 'status', 'notes',
+                'credit_limit', 'payment_terms_days', 'status', 'notes', 'grade', 'rating',
             ])->all());
 
             if (($data['status'] ?? null) === Shop::STATUS_ACTIVE && ! $shop->approved_at) {
@@ -86,14 +88,55 @@ class ShopService
 
     public function approve(Shop $shop, ?User $actor = null): Shop
     {
-        $shop->update([
+        if ($shop->status === Shop::STATUS_ACTIVE && $shop->approved_at) {
+            return $shop->fresh(['territory', 'priceGroup', 'assignedSalesman', 'users']);
+        }
+
+        $from = $shop->status;
+
+        $shop->forceFill([
             'status' => Shop::STATUS_ACTIVE,
-            'approved_at' => now(),
-        ]);
+            'approved_at' => $shop->approved_at ?? now(),
+        ])->save();
 
-        $this->auditLogger->log('shops', 'approved', "Approved shop {$shop->code}", $shop, null, null, $actor);
+        $this->auditLogger->log(
+            'shops',
+            'approved',
+            "Approved shop {$shop->code}".($actor ? " by {$actor->name}" : ''),
+            $shop,
+            ['status' => $from],
+            ['status' => Shop::STATUS_ACTIVE, 'approved_at' => (string) $shop->approved_at],
+            $actor,
+        );
 
-        return $shop;
+        return $shop->fresh(['territory', 'priceGroup', 'assignedSalesman', 'users']);
+    }
+
+    public function deactivate(Shop $shop, ?User $actor = null): Shop
+    {
+        $from = $shop->status;
+        $shop->forceFill(['status' => Shop::STATUS_ON_HOLD])->save();
+
+        $this->auditLogger->log(
+            'shops',
+            'deactivated',
+            "Deactivated shop {$shop->code}",
+            $shop,
+            ['status' => $from],
+            ['status' => Shop::STATUS_ON_HOLD],
+            $actor,
+        );
+
+        return $shop->fresh(['territory', 'priceGroup', 'assignedSalesman', 'users']);
+    }
+
+    public function salesmanCanManage(Shop $shop, User $salesman): bool
+    {
+        return $salesman->portal === User::PORTAL_SALESMAN
+            && (
+                (int) $shop->assigned_salesman_id === (int) $salesman->id
+                || (int) $shop->created_by === (int) $salesman->id
+            );
     }
 
     public function attachShopUser(Shop $shop, array $credential, ?User $actor = null): User

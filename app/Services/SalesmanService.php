@@ -40,6 +40,8 @@ class SalesmanService
                 'monthly_target' => $data['monthly_target'] ?? 0,
                 'joined_at' => $data['joined_at'] ?? now()->toDateString(),
                 'notes' => $data['notes'] ?? null,
+                'grade' => $data['grade'] ?? null,
+                'rating' => $data['rating'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
             ]);
 
@@ -91,6 +93,8 @@ class SalesmanService
                 'monthly_target' => $data['monthly_target'] ?? $profile->monthly_target,
                 'joined_at' => $data['joined_at'] ?? $profile->joined_at,
                 'notes' => $data['notes'] ?? $profile->notes,
+                'grade' => $data['grade'] ?? $profile->grade,
+                'rating' => array_key_exists('rating', $data) ? $data['rating'] : $profile->rating,
                 'is_active' => $data['is_active'] ?? $profile->is_active,
             ]);
 

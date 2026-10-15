@@ -5,6 +5,12 @@
         <div class="page-kicker"><strong>Dashboard</strong> / Welcome, {{ auth()->user()->name }}</div>
         <a class="btn btn-primary" href="{{ route('portal.products') }}">Shop catalogue</a>
     </div>
+    @if (!empty($dueReminder))
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff7ed;color:#c2410c">
+            You have an outstanding balance of <strong>{{ \App\Support\DemoData::taka($shop->outstanding_balance) }}</strong>.
+            <a class="link" href="{{ route('portal.statement') }}">View statement</a>
+        </div>
+    @endif
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([
             ['Outstanding due', \App\Support\DemoData::taka($shop->outstanding_balance)],
@@ -24,6 +30,7 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap">
             <a class="btn btn-primary" href="{{ route('portal.products') }}">Browse products</a>
             <a class="btn btn-ghost" href="{{ route('portal.orders') }}">Track orders</a>
+            <a class="btn btn-ghost" href="{{ route('portal.statement') }}">Account statement</a>
         </div>
     </div>
     <div class="card">

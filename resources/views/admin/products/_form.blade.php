@@ -16,23 +16,51 @@
     <label class="label">Barcode</label>
     <input class="input" style="width:100%" name="barcode" value="{{ old('barcode', $product?->barcode) }}">
 </div>
-<div>
+<div x-data="quickCatalogSelect({
+        selected: @js(old('category_id', $product?->category_id) ? (string) old('category_id', $product?->category_id) : ''),
+        options: @js($categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()),
+        storeUrl: @js(route('categories.store')),
+        canCreate: @js(auth()->user()?->can('categories.create') ?? false),
+        label: 'category',
+        field: 'category_id',
+    })">
     <label class="label">Category</label>
-    <select class="select" style="width:100%" name="category_id">
+    <select class="select" style="width:100%" name="category_id" x-model="selected" @change="onChange()">
         <option value="">Select</option>
-        @foreach ($categories as $category)
-            <option value="{{ $category->id }}" @selected(old('category_id', $product?->category_id) == $category->id)>{{ $category->name }}</option>
-        @endforeach
+        <template x-for="opt in options" :key="opt.id">
+            <option :value="String(opt.id)" x-text="opt.name"></option>
+        </template>
+        <option value="__new__" x-show="canCreate">+ Add new category…</option>
     </select>
+    <div x-show="adding" x-cloak style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <input class="input" style="flex:1" x-model="newName" @keydown.enter.prevent="create()" placeholder="New category name">
+        <button class="btn btn-primary btn-sm" type="button" @click="create()" :disabled="saving">Save</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="cancel()">Cancel</button>
+    </div>
+    <p class="muted" x-show="error" x-text="error" style="color:#b91c1c;margin:6px 0 0;font-size:12px"></p>
 </div>
-<div>
+<div x-data="quickCatalogSelect({
+        selected: @js(old('brand_id', $product?->brand_id) ? (string) old('brand_id', $product?->brand_id) : ''),
+        options: @js($brands->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values()),
+        storeUrl: @js(route('brands.store')),
+        canCreate: @js(auth()->user()?->can('brands.create') ?? false),
+        label: 'brand',
+        field: 'brand_id',
+    })">
     <label class="label">Brand</label>
-    <select class="select" style="width:100%" name="brand_id">
+    <select class="select" style="width:100%" name="brand_id" x-model="selected" @change="onChange()">
         <option value="">Select</option>
-        @foreach ($brands as $brand)
-            <option value="{{ $brand->id }}" @selected(old('brand_id', $product?->brand_id) == $brand->id)>{{ $brand->name }}</option>
-        @endforeach
+        <template x-for="opt in options" :key="opt.id">
+            <option :value="String(opt.id)" x-text="opt.name"></option>
+        </template>
+        <option value="__new__" x-show="canCreate">+ Add new brand…</option>
     </select>
+    <div x-show="adding" x-cloak style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <input class="input" style="flex:1" x-model="newName" @keydown.enter.prevent="create()" placeholder="New brand name">
+        <button class="btn btn-primary btn-sm" type="button" @click="create()" :disabled="saving">Save</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="cancel()">Cancel</button>
+    </div>
+    <p class="muted" x-show="error" x-text="error" style="color:#b91c1c;margin:6px 0 0;font-size:12px"></p>
 </div>
 <div>
     <label class="label">Model / variant</label>

@@ -165,6 +165,7 @@ class TargetService
             })
             ->sum('amount');
 
+        $wasMet = (bool) $target->target_met;
         $met = (float) $target->target_amount > 0 && $achieved >= (float) $target->target_amount;
 
         $target->update([
@@ -178,6 +179,17 @@ class TargetService
         if ($met) {
             $this->rewards->ensureTargetHitReward($target->fresh());
             $commissions->maybeAccrueTargetBonus($target->fresh());
+            if (! $wasMet) {
+                try {
+                    app(AppNotificationService::class)->targetAchieved(
+                        User::query()->find($target->salesman_id),
+                        (float) $achieved,
+                        (float) $target->target_amount,
+                    );
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            }
         } else {
             $this->rewards->withdrawTargetHitReward($target->fresh());
             $commissions->withdrawTargetBonus($target->fresh());

@@ -72,6 +72,19 @@
         <input class="input" style="width:100%" value="{{ $shop?->statusLabel() ?? 'Pending Approval' }}" readonly>
     @endcan
 </div>
+<div>
+    <label class="label">Grade</label>
+    <select class="select" style="width:100%" name="grade">
+        <option value="">No grade</option>
+        @foreach (['A+', 'A', 'B', 'C', 'D'] as $grade)
+            <option value="{{ $grade }}" @selected(old('grade', $shop?->grade) === $grade)>{{ $grade }}</option>
+        @endforeach
+    </select>
+</div>
+<div>
+    <label class="label">Rating (0–5)</label>
+    <input class="input" style="width:100%" type="number" step="0.1" min="0" max="5" name="rating" value="{{ old('rating', $shop?->rating) }}">
+</div>
 <div class="form-span">
     <label class="label">Business address</label>
     <textarea class="textarea" name="address" rows="3">{{ old('address', $shop?->address) }}</textarea>

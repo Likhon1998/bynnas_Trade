@@ -8,6 +8,7 @@ use App\Models\Shop;
 use App\Models\Territory;
 use App\Models\User;
 use App\Rules\BangladeshPhone;
+use App\Services\ShopLedgerService;
 use App\Services\ShopService;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
@@ -16,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class ShopController extends Controller
 {
-    public function __construct(private ShopService $shops) {}
+    public function __construct(
+        private ShopService $shops,
+        private ShopLedgerService $ledger,
+    ) {}
 
     public function index(Request $request)
     {
@@ -51,6 +55,8 @@ class ShopController extends Controller
                 default => 'badge-pending',
             },
             'url' => route('shops.show', $shop),
+            'approve_url' => $shop->status !== Shop::STATUS_ACTIVE ? route('shops.approve', $shop) : null,
+            'can_approve' => $request->user()->can('shops.approve') && $shop->status !== Shop::STATUS_ACTIVE,
         ])->values();
 
         $initialFilters = [
@@ -127,6 +133,15 @@ class ShopController extends Controller
         return view('admin.shops.show', compact('shop', 'recentVisits'));
     }
 
+    public function statement(Shop $shop)
+    {
+        $this->authorize('view', $shop);
+
+        $statement = $this->ledger->statement($shop);
+
+        return view('admin.shops.statement', $statement);
+    }
+
     public function edit(Shop $shop)
     {
         $this->authorize('update', $shop);
@@ -164,11 +179,26 @@ class ShopController extends Controller
 
     public function approve(Request $request, Shop $shop)
     {
+        abort_unless($request->user()->can('shops.approve'), 403);
         $this->authorize('approve', $shop);
 
-        $this->shops->approve($shop, $request->user());
+        if ($shop->status === Shop::STATUS_ACTIVE) {
+            return back()->with('success', 'Shop is already active.');
+        }
 
-        return back()->with('success', 'Shop approved and activated.');
+        $this->shops->approve($shop->fresh(), $request->user());
+
+        return back()->with('success', $shop->fresh()->name.' approved and activated. Orders can be taken now.');
+    }
+
+    public function deactivate(Request $request, Shop $shop)
+    {
+        abort_unless($request->user()->can('shops.approve'), 403);
+        $this->authorize('approve', $shop);
+
+        $this->shops->deactivate($shop->fresh(), $request->user());
+
+        return back()->with('success', $shop->fresh()->name.' deactivated (on hold).');
     }
 
     public function issueCredentials(Request $request, Shop $shop)
@@ -244,6 +274,8 @@ class ShopController extends Controller
                 Shop::STATUS_PENDING, Shop::STATUS_ACTIVE, Shop::STATUS_ON_HOLD, Shop::STATUS_REJECTED,
             ])],
             'notes' => ['nullable', 'string'],
+            'grade' => ['nullable', 'string', 'max:20'],
+            'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'issue_credentials' => ['sometimes', 'boolean'],
             'login_email' => ['nullable', 'email', Rule::requiredIf(fn () => ! $shop && $request->boolean('issue_credentials') && ! $request->filled('email'))],
             'login_password' => ['nullable', 'string', 'min:8', Rule::requiredIf(fn () => ! $shop && $request->boolean('issue_credentials'))],

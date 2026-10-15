@@ -50,6 +50,7 @@
                             <th>Credit</th>
                             <th>Outstanding</th>
                             <th>Status</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -69,10 +70,19 @@
                                 <td x-text="row.credit"></td>
                                 <td x-text="row.outstanding"></td>
                                 <td><span class="badge" :class="row.status_badge" x-text="row.status_label"></span></td>
+                                <td>
+                                    <template x-if="row.can_approve && row.approve_url">
+                                        <form :action="row.approve_url" method="post" style="display:inline">
+                                            @csrf
+                                            <button class="btn btn-primary btn-sm" type="submit">Approve</button>
+                                        </form>
+                                    </template>
+                                    <a class="link" :href="row.url" style="margin-left:6px">View</a>
+                                </td>
                             </tr>
                         </template>
                         <tr x-show="filteredRows().length === 0">
-                            <td colspan="9" class="muted" style="padding:24px;text-align:center">No shops match these filters.</td>
+                            <td colspan="10" class="muted" style="padding:24px;text-align:center">No shops match these filters.</td>
                         </tr>
                     </tbody>
                 </table>

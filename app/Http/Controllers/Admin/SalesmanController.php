@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\Territory;
 use App\Models\User;
+use App\Models\AuditLog;
 use App\Services\FieldActivityService;
+use App\Services\RbacService;
 use App\Services\SalesmanService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SalesmanController extends Controller
@@ -16,6 +19,7 @@ class SalesmanController extends Controller
     public function __construct(
         private SalesmanService $salesmen,
         private FieldActivityService $activity,
+        private RbacService $rbac,
     ) {}
 
     public function index(Request $request)
@@ -108,6 +112,35 @@ class SalesmanController extends Controller
         return redirect()->route('salesmen.show', $salesman)->with('success', 'Salesman updated.');
     }
 
+    public function resetPassword(Request $request, User $salesman)
+    {
+        abort_unless($request->user()->can('users.reset_password') || $request->user()->can('salesmen.edit'), 403);
+        abort_unless($salesman->portal === User::PORTAL_SALESMAN, 404);
+
+        $temporary = Str::password(12);
+        $this->rbac->resetPassword($salesman, $temporary, $request->user());
+
+        return back()->with('success', 'Temporary password generated (shown once): '.$temporary);
+    }
+
+    public function loginLogs(Request $request, User $salesman)
+    {
+        abort_unless($request->user()->can('salesmen.view'), 403);
+        abort_unless($salesman->portal === User::PORTAL_SALESMAN, 404);
+
+        $logs = AuditLog::query()
+            ->where('user_id', $salesman->id)
+            ->where(function ($q) {
+                $q->where('action', 'like', '%login%')
+                    ->orWhere('module', 'auth')
+                    ->orWhere('description', 'like', '%logged in%');
+            })
+            ->latest()
+            ->paginate(40);
+
+        return view('admin.salesmen.login-logs', compact('salesman', 'logs'));
+    }
+
     private function formData(): array
     {
         return [
@@ -128,6 +161,8 @@ class SalesmanController extends Controller
             'monthly_target' => ['nullable', 'numeric', 'min:0'],
             'joined_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
+            'grade' => ['nullable', 'string', 'max:20'],
+            'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'shop_ids' => ['nullable', 'array'],
             'shop_ids.*' => ['integer', 'exists:shops,id'],
         ]) + [

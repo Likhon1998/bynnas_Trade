@@ -488,7 +488,17 @@ class OrderService
                 $actor,
             );
 
-            return $order->fresh(['items.product', 'shop', 'salesman', 'auditor', 'fulfilment', 'warehouse', 'statusHistories.user']);
+            $fresh = $order->fresh(['items.product', 'shop', 'salesman', 'auditor', 'fulfilment', 'warehouse', 'statusHistories.user']);
+
+            DB::afterCommit(function () use ($fresh) {
+                try {
+                    app(AppNotificationService::class)->orderApproved($fresh);
+                } catch (\Throwable) {
+                    // non-blocking
+                }
+            });
+
+            return $fresh;
         });
     }
 
@@ -838,9 +848,11 @@ class OrderService
 
             $subtotal = 0;
             $itemCount = 0;
+            $warehouse = Warehouse::defaultWarehouse();
+            $stockIssues = [];
 
             foreach ($lines as $line) {
-                $product = Product::query()->findOrFail($line['product_id']);
+                $product = Product::query()->with('offers')->findOrFail($line['product_id']);
 
                 if ($product->status !== Product::STATUS_ACTIVE || ! $product->is_published) {
                     throw ValidationException::withMessages([
@@ -849,6 +861,16 @@ class OrderService
                 }
 
                 $qty = (int) $line['quantity'];
+
+                if ($warehouse) {
+                    $available = $this->inventory->stockFor($warehouse, $product)->available();
+                    if ($available < $qty) {
+                        $stockIssues[] = "{$product->sku}: need {$qty}, available {$available}";
+                    }
+                } elseif ($product->availableStock() < $qty) {
+                    $stockIssues[] = "{$product->sku}: need {$qty}, available {$product->availableStock()}";
+                }
+
                 $unit = $product->priceForGroup($shop->priceGroup);
                 if ($unit <= 0) {
                     throw ValidationException::withMessages([
@@ -869,6 +891,12 @@ class OrderService
 
                 $subtotal += $lineTotal;
                 $itemCount += $qty;
+            }
+
+            if ($stockIssues !== []) {
+                throw ValidationException::withMessages([
+                    'stock' => 'Only in-stock products can be ordered: '.implode('; ', $stockIssues),
+                ]);
             }
 
             $order->update([

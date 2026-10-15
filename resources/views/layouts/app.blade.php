@@ -44,6 +44,72 @@
                     },
                 };
             });
+
+            Alpine.data('quickCatalogSelect', (config = {}) => ({
+                selected: config.selected ?? '',
+                options: Array.isArray(config.options) ? [...config.options] : [],
+                storeUrl: config.storeUrl || '',
+                canCreate: !!config.canCreate,
+                label: config.label || 'item',
+                previous: config.selected ?? '',
+                adding: false,
+                newName: '',
+                saving: false,
+                error: '',
+                onChange() {
+                    this.error = '';
+                    if (this.selected === '__new__') {
+                        this.adding = true;
+                        this.selected = this.previous || '';
+                        this.$nextTick(() => this.$el.querySelector('input')?.focus());
+                        return;
+                    }
+                    this.previous = this.selected;
+                    this.adding = false;
+                },
+                cancel() {
+                    this.adding = false;
+                    this.newName = '';
+                    this.error = '';
+                    this.selected = this.previous || '';
+                },
+                async create() {
+                    const name = (this.newName || '').trim();
+                    if (!name) {
+                        this.error = 'Enter a ' + this.label + ' name.';
+                        return;
+                    }
+                    this.saving = true;
+                    this.error = '';
+                    try {
+                        const res = await fetch(this.storeUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            body: JSON.stringify({ name }),
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                            const first = data?.errors ? Object.values(data.errors).flat()[0] : null;
+                            throw new Error(first || data?.message || ('Could not create ' + this.label));
+                        }
+                        this.options.push({ id: data.id, name: data.name });
+                        this.options.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+                        this.selected = String(data.id);
+                        this.previous = this.selected;
+                        this.adding = false;
+                        this.newName = '';
+                    } catch (e) {
+                        this.error = e.message || ('Could not create ' + this.label);
+                    } finally {
+                        this.saving = false;
+                    }
+                },
+            }));
         });
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>

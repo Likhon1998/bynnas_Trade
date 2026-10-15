@@ -34,7 +34,16 @@ class ShopPolicy
 
     public function approve(User $user, Shop $shop): bool
     {
-        return $user->can('shops.approve') && $shop->isAccessibleBy($user);
+        if ($user->can('shops.approve') && $shop->isAccessibleBy($user)) {
+            return true;
+        }
+
+        // Field salesmen may approve shops they registered or are assigned to.
+        return $user->portal === User::PORTAL_SALESMAN
+            && (
+                (int) $shop->assigned_salesman_id === (int) $user->id
+                || (int) $shop->created_by === (int) $user->id
+            );
     }
 
     public function manageCredentials(User $user, Shop $shop): bool

@@ -4,6 +4,7 @@
     <x-page-header title="{{ $delivery->number }}" subtitle="{{ $delivery->shop?->name }} · {{ $delivery->statusLabel() }}">
         <a class="btn btn-ghost" href="{{ route('deliveries.index') }}">Back</a>
         <a class="btn btn-ghost" href="{{ route('orders.show', $delivery->order) }}">Order</a>
+        <a class="btn btn-primary" href="{{ route('deliveries.challan', $delivery) }}">Download challan</a>
     </x-page-header>
 
     @if (session('success'))

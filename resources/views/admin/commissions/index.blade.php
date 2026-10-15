@@ -37,7 +37,18 @@
                     <div style="font-weight:700;margin-bottom:12px">Commission rates</div>
                     <form method="post" action="{{ route('commissions.rule') }}" class="form-grid">
                         @csrf
+                        <div class="field">
+                            <label class="label">Basis</label>
+                            <select class="select" name="basis" required>
+                                @foreach (['collection' => 'Collections', 'sales' => 'Sales value', 'product' => 'Specific product'] as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('basis', $rule?->basis ?? 'collection') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="field"><label class="label">Product ID (product basis)</label><input class="input" type="number" name="product_id" value="{{ old('product_id', $rule?->product_id) }}" placeholder="Optional"></div>
                         <div class="field"><label class="label">Collection rate %</label><input class="input" type="number" step="0.0001" min="0" name="collection_rate_percent" value="{{ old('collection_rate_percent', $rule?->collection_rate_percent ?? 3.5) }}" required></div>
+                        <div class="field"><label class="label">Sales rate %</label><input class="input" type="number" step="0.0001" min="0" name="sales_rate_percent" value="{{ old('sales_rate_percent', $rule?->sales_rate_percent) }}"></div>
+                        <div class="field"><label class="label">Product rate %</label><input class="input" type="number" step="0.0001" min="0" name="product_rate_percent" value="{{ old('product_rate_percent', $rule?->product_rate_percent) }}"></div>
                         <div class="field"><label class="label">Target bonus %</label><input class="input" type="number" step="0.0001" min="0" name="target_bonus_percent" value="{{ old('target_bonus_percent', $rule?->target_bonus_percent ?? 1) }}" required></div>
                         <div style="align-self:end"><button class="btn btn-primary" type="submit">Save rates</button></div>
                     </form>

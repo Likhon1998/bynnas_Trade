@@ -279,12 +279,16 @@ class WorkflowSmokeTest extends TestCase
         $category = \App\Models\Category::latest('id')->first();
         $this->ok($this->put(route('categories.update', $category), ['name' => 'Cables & Wires', 'is_active' => 1]), 'category update');
 
+        $this->ok($this->post(route('brands.store'), ['name' => 'NovaTech']), 'brand store');
+        $brand = \App\Models\Brand::where('name', 'NovaTech')->firstOrFail();
+        $this->ok($this->put(route('brands.update', $brand), ['name' => 'NovaTech Pro', 'is_active' => 1]), 'brand update');
+
         $this->ok($this->post(route('price-groups.store'), ['name' => 'VIP', 'code' => 'VIP']), 'price group store');
         $group = \App\Models\PriceGroup::where('code', 'VIP')->first();
         $this->ok($this->put(route('price-groups.update', $group), ['name' => 'VIP Dealers', 'code' => 'VIP', 'is_active' => 1]), 'price group update');
 
         $this->ok($this->post(route('products.store'), [
-            'name' => 'Test Charger', 'sku' => 'TST-CHG-1', 'category_id' => $category->id,
+            'name' => 'Test Charger', 'sku' => 'TST-CHG-1', 'category_id' => $category->id, 'brand_id' => $brand->id,
             'wholesale_price' => 500, 'retail_price' => 650, 'status' => 'active',
             'group_prices' => [$group->id => 480],
         ]), 'product store');
@@ -293,6 +297,13 @@ class WorkflowSmokeTest extends TestCase
             'name' => 'Test Charger 2', 'sku' => 'TST-CHG-1', 'wholesale_price' => 520, 'status' => 'active',
         ]), 'product update');
         $this->ok($this->delete(route('categories.destroy', \App\Models\Category::create(['name' => 'Tmp', 'slug' => 'tmp-x', 'is_active' => true]))), 'category delete');
+        $this->ok($this->delete(route('brands.destroy', \App\Models\Brand::create(['name' => 'TmpBrand', 'slug' => 'tmp-brand-x', 'is_active' => true]))), 'brand delete');
+        $this->from(route('categories.index'))
+            ->delete(route('categories.destroy', $category))
+            ->assertSessionHasErrors('category');
+        $this->from(route('brands.index'))
+            ->delete(route('brands.destroy', $brand))
+            ->assertSessionHasErrors('brand');
 
         $this->ok($this->post(route('suppliers.store'), ['name' => 'Acme Ltd', 'code' => 'ACME']), 'supplier store');
         $supplier = Supplier::where('code', 'ACME')->first();
@@ -362,7 +373,11 @@ class WorkflowSmokeTest extends TestCase
         ]), 'reward store 2');
         $this->ok($this->post(route('rewards.cancel', Reward::latest('id')->first()), ['reason' => 'dup']), 'reward cancel');
 
-        $this->ok($this->post(route('commissions.rule'), ['collection_rate_percent' => 2.5, 'target_bonus_percent' => 1]), 'commission rule');
+        $this->ok($this->post(route('commissions.rule'), [
+            'basis' => 'collection',
+            'collection_rate_percent' => 2.5,
+            'target_bonus_percent' => 1,
+        ]), 'commission rule');
         $this->ok($this->post(route('commissions.sync')), 'commission sync');
         $accrued = Commission::where('status', Commission::STATUS_ACCRUED)->first();
         if ($accrued) {
@@ -479,7 +494,8 @@ class WorkflowSmokeTest extends TestCase
         ]), 'store shop with check-in');
 
         $shop = Shop::where('name', 'Field Test Mobile Corner')->firstOrFail();
-        $this->assertSame(Shop::STATUS_PENDING, $shop->status);
+        $this->assertSame(Shop::STATUS_ACTIVE, $shop->status);
+        $this->assertNotNull($shop->approved_at);
         $this->assertSame($this->salesman->id, $shop->assigned_salesman_id);
         $this->assertSame($this->salesman->id, $shop->created_by);
         $this->assertEqualsWithDelta(23.8069, $shop->latitude, 0.0001);
@@ -487,8 +503,8 @@ class WorkflowSmokeTest extends TestCase
 
         $visit = ShopVisit::where('salesman_id', $this->salesman->id)->where('shop_id', $shop->id)->firstOrFail();
         $this->assertTrue($visit->isOpen(), 'Adding with check-in should start a visit.');
-        $this->get(route('field.visit.show', $visit))->assertOk()->assertSee('waiting for office approval')->assertDontSee('Review order');
-        $this->ok($this->post(route('field.visit.checkout', $visit), ['outcome' => 'follow_up', 'notes' => 'Interested']), 'end pending visit');
+        $this->get(route('field.visit.show', $visit))->assertOk()->assertSee('Review order');
+        $this->ok($this->post(route('field.visit.checkout', $visit), ['outcome' => 'follow_up', 'notes' => 'Interested']), 'end visit');
 
         $this->post(route('field.shops.store'), [
             'name' => 'Duplicate', 'owner_name' => 'Someone', 'phone' => '01987654321',
@@ -499,12 +515,12 @@ class WorkflowSmokeTest extends TestCase
         ]), 'store shop with no required fields');
         $quick = Shop::where('created_by', $this->salesman->id)->latest('id')->firstOrFail();
         $this->assertStringStartsWith('New shop SHP-', $quick->name);
-        $this->assertSame(Shop::STATUS_PENDING, $quick->status);
+        $this->assertSame(Shop::STATUS_ACTIVE, $quick->status);
         $this->assertStringContainsString('Sells: Mobile phones, Accessories', (string) $quick->notes);
         $this->assertStringContainsString('Interest: Interested', (string) $quick->notes);
 
-        $this->get(route('field.shops'))->assertOk()->assertSee('Field Test Mobile Corner')->assertSee('Awaiting approval');
-        $this->ok($this->get(route('field.dashboard')), 'dashboard with pending shop');
+        $this->get(route('field.shops'))->assertOk()->assertSee('Field Test Mobile Corner')->assertSee('Active');
+        $this->ok($this->get(route('field.dashboard')), 'dashboard with field shop');
 
         $this->actingAs($this->admin);
         $this->get(route('visits.index', ['period' => 'today']))->assertOk()
@@ -515,7 +531,9 @@ class WorkflowSmokeTest extends TestCase
         $this->get(route('salesmen.show', $this->salesman))->assertOk()
             ->assertSee('Shops added in the field')->assertSee('Field Test Mobile Corner');
 
-        $this->ok($this->post(route('shops.approve', $shop)), 'approve field shop');
+        $this->ok($this->post(route('shops.deactivate', $shop)), 'admin deactivate shop');
+        $this->assertSame(Shop::STATUS_ON_HOLD, $shop->fresh()->status);
+        $this->ok($this->post(route('shops.approve', $shop)), 'admin re-approve shop');
         $this->assertSame(Shop::STATUS_ACTIVE, $shop->fresh()->status);
 
         $this->actingAs($this->salesman);

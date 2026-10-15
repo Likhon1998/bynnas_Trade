@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $this->authorizePermission('categories.view');
+        abort_unless($request->user()->can('categories.view'), 403);
 
         $categories = Category::query()
             ->withCount('products')
@@ -24,26 +25,34 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
-        $this->authorizePermission('categories.create');
+        abort_unless($request->user()->can('categories.create'), 403);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
         ]);
 
-        Category::query()->create([
-            'name' => $data['name'],
-            'slug' => Str::slug($data['name']).'-'.Str::random(4),
+        $category = Category::query()->create([
+            'name' => trim($data['name']),
+            'slug' => Str::slug($data['name']).'-'.Str::lower(Str::random(4)),
             'description' => $data['description'] ?? null,
             'is_active' => true,
         ]);
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json([
+                'id' => $category->id,
+                'name' => $category->name,
+                'message' => 'Category created.',
+            ]);
+        }
 
         return back()->with('success', 'Category created.');
     }
 
     public function update(Request $request, Category $category)
     {
-        $this->authorizePermission('categories.edit');
+        abort_unless($request->user()->can('categories.edit'), 403);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -52,7 +61,7 @@ class CategoryController extends Controller
         ]);
 
         $category->update([
-            'name' => $data['name'],
+            'name' => trim($data['name']),
             'description' => $data['description'] ?? null,
             'is_active' => $request->boolean('is_active', true),
         ]);
@@ -60,17 +69,18 @@ class CategoryController extends Controller
         return back()->with('success', 'Category updated.');
     }
 
-    public function destroy(Category $category)
+    public function destroy(Request $request, Category $category)
     {
-        $this->authorizePermission('categories.delete');
+        abort_unless($request->user()->can('categories.delete'), 403);
+
+        if ($category->products()->exists()) {
+            throw ValidationException::withMessages([
+                'category' => 'This category is used by products. Reassign those products first.',
+            ]);
+        }
 
         $category->delete();
 
         return back()->with('success', 'Category deleted.');
-    }
-
-    private function authorizePermission(string $permission): void
-    {
-        abort_unless(auth()->user()?->can($permission), 403);
     }
 }

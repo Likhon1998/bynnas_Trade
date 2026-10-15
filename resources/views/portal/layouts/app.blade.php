@@ -77,6 +77,9 @@
                 <a href="{{ route('portal.orders') }}" class="nav-item {{ request()->routeIs('portal.orders*') ? 'active' : '' }}" title="My orders">
                     <i data-lucide="clipboard-list"></i> <span>My orders</span>
                 </a>
+                <a href="{{ route('portal.statement') }}" class="nav-item {{ request()->routeIs('portal.statement') ? 'active' : '' }}" title="Account statement">
+                    <i data-lucide="file-text"></i> <span>Statement</span>
+                </a>
                 <a href="{{ route('portal.profile') }}" class="nav-item {{ request()->routeIs('portal.profile') ? 'active' : '' }}" title="My shop">
                     <i data-lucide="store"></i> <span>My shop</span>
                 </a>

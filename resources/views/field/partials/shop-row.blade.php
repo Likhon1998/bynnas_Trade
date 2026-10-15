@@ -32,8 +32,14 @@
             <span class="f-status gray">Never</span>
         @endif
     </td>
+    <td class="num" style="{{ (float) $shop->outstanding_balance > 0 ? 'color:var(--f-red);font-weight:700' : '' }}">{{ \App\Support\DemoData::taka($shop->outstanding_balance) }}</td>
     @if ($pending)
-        <td class="num"><span class="f-status amber" title="Orders open once the office approves this shop">Awaiting approval</span></td>
+        <td class="num">
+            <form method="post" action="{{ route('field.shops.approve', $shop) }}" style="display:inline">
+                @csrf
+                <button class="f-btn f-btn-primary f-btn-sm" type="submit" title="Approve this shop to take orders">Approve</button>
+            </form>
+        </td>
     @else
         <td class="num {{ $credit <= 0 ? '' : 'strong' }}" style="{{ $credit <= 0 ? 'color:var(--f-red);font-weight:700' : '' }}">{{ \App\Support\DemoData::taka($credit) }}</td>
     @endif

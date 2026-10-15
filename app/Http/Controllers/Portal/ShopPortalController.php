@@ -8,11 +8,15 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Services\OrderService;
+use App\Services\ShopLedgerService;
 use Illuminate\Http\Request;
 
 class ShopPortalController extends Controller
 {
-    public function __construct(private OrderService $orders) {}
+    public function __construct(
+        private OrderService $orders,
+        private ShopLedgerService $ledger,
+    ) {}
 
     public function dashboard(Request $request)
     {
@@ -40,6 +44,7 @@ class ShopPortalController extends Controller
             'productCount' => $productCount,
             'pendingOrders' => $pendingOrders,
             'recentOrders' => $recentOrders,
+            'dueReminder' => (float) $shop->outstanding_balance > 0,
         ]);
     }
 
@@ -50,7 +55,7 @@ class ShopPortalController extends Controller
         $shop->load('priceGroup');
 
         $products = Product::query()
-            ->with(['category', 'brand', 'prices'])
+            ->with(['category', 'brand', 'prices', 'offers'])
             ->where('status', Product::STATUS_ACTIVE)
             ->where('is_published', true)
             ->orderBy('name')
@@ -266,5 +271,14 @@ class ShopPortalController extends Controller
         $shop->load(['territory', 'priceGroup', 'assignedSalesman']);
 
         return view('portal.profile', compact('shop'));
+    }
+
+    public function statement(Request $request)
+    {
+        /** @var Shop $shop */
+        $shop = $request->attributes->get('shop');
+        $statement = $this->ledger->statement($shop);
+
+        return view('portal.statement', $statement);
     }
 }

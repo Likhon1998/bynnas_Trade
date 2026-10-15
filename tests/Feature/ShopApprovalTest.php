@@ -1,0 +1,128 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Shop;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class ShopApprovalTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected bool $seed = true;
+
+    public function test_salesman_new_shop_is_active_and_ready_for_orders(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+
+        $this->actingAs($salesman)->post(route('field.shops.store'), [
+            'name' => 'Ready Shop',
+            'owner_name' => 'Owner',
+            'phone' => '01811223344',
+            'city' => 'Dhaka',
+        ])->assertSessionHasNoErrors();
+
+        $shop = Shop::where('name', 'Ready Shop')->firstOrFail();
+        $this->assertSame(Shop::STATUS_ACTIVE, $shop->status);
+        $this->assertNotNull($shop->approved_at);
+        $this->assertSame($salesman->id, $shop->assigned_salesman_id);
+        $this->assertGreaterThan(0, (float) $shop->credit_limit);
+    }
+
+    public function test_salesman_can_approve_existing_pending_shop(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+        $shop = Shop::query()->create([
+            'code' => 'SHP-TEST1',
+            'name' => 'Pending Field Shop',
+            'owner_name' => 'Owner',
+            'phone' => '01855667788',
+            'status' => Shop::STATUS_PENDING,
+            'assigned_salesman_id' => $salesman->id,
+            'created_by' => $salesman->id,
+            'credit_limit' => 50000,
+        ]);
+
+        $this->actingAs($salesman)
+            ->post(route('field.shops.approve', $shop))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertSame(Shop::STATUS_ACTIVE, $shop->fresh()->status);
+        $this->assertNotNull($shop->fresh()->approved_at);
+    }
+
+    public function test_admin_can_approve_and_deactivate_shop(): void
+    {
+        $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
+        $shop = Shop::query()->create([
+            'code' => 'SHP-TEST2',
+            'name' => 'Admin Pending Shop',
+            'owner_name' => 'Owner',
+            'phone' => '01899887766',
+            'status' => Shop::STATUS_PENDING,
+            'credit_limit' => 100000,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('shops.show', $shop))
+            ->assertOk()
+            ->assertSee('Approve shop');
+
+        $this->actingAs($admin)
+            ->post(route('shops.approve', $shop))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertSame(Shop::STATUS_ACTIVE, $shop->fresh()->status);
+
+        $this->actingAs($admin)
+            ->post(route('shops.deactivate', $shop))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(Shop::STATUS_ON_HOLD, $shop->fresh()->status);
+
+        $this->actingAs($admin)
+            ->post(route('shops.approve', $shop))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(Shop::STATUS_ACTIVE, $shop->fresh()->status);
+    }
+
+    public function test_salesman_cannot_approve_another_salesmans_shop(): void
+    {
+        $karim = User::where('email', 'karim@field.local')->firstOrFail();
+        $other = User::where('portal', User::PORTAL_SALESMAN)->where('id', '!=', $karim->id)->first()
+            ?? User::factory()->create(['portal' => User::PORTAL_SALESMAN]);
+
+        // If factory missing, create a minimal other salesman via query
+        if (! $other->exists || $other->portal !== User::PORTAL_SALESMAN) {
+            $other = User::query()->create([
+                'name' => 'Other Salesman',
+                'email' => 'other.field@test.local',
+                'password' => 'Secret12345!',
+                'portal' => User::PORTAL_SALESMAN,
+                'is_active' => true,
+            ]);
+            $other->assignRole('Salesman');
+        }
+
+        $shop = Shop::query()->create([
+            'code' => 'SHP-TEST3',
+            'name' => 'Karim Only Shop',
+            'owner_name' => 'Owner',
+            'phone' => '01800112233',
+            'status' => Shop::STATUS_PENDING,
+            'assigned_salesman_id' => $karim->id,
+            'created_by' => $karim->id,
+        ]);
+
+        $this->actingAs($other)
+            ->post(route('field.shops.approve', $shop))
+            ->assertForbidden();
+
+        $this->assertSame(Shop::STATUS_PENDING, $shop->fresh()->status);
+    }
+}

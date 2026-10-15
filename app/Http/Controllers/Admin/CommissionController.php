@@ -57,7 +57,11 @@ class CommissionController extends Controller
         abort_unless($request->user()->can('commissions.manage'), 403);
 
         $data = $request->validate([
+            'basis' => ['required', 'in:collection,sales,product'],
+            'product_id' => ['nullable', 'exists:products,id'],
             'collection_rate_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'sales_rate_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'product_rate_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'target_bonus_percent' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 
@@ -65,6 +69,7 @@ class CommissionController extends Controller
         if (! $rule) {
             $rule = CommissionRule::query()->create([
                 'name' => 'Default salesman commission',
+                'basis' => CommissionRule::BASIS_COLLECTION,
                 'is_default' => true,
                 'is_active' => true,
             ]);

@@ -39,6 +39,19 @@
         <input class="input" type="number" step="0.01" min="0" name="monthly_target" value="{{ old('monthly_target', $profile?->monthly_target ?? 0) }}">
     </div>
     <div class="field">
+        <label class="label">Grade</label>
+        <select class="select" name="grade">
+            <option value="">No grade</option>
+            @foreach (['A+', 'A', 'B', 'C', 'D'] as $grade)
+                <option value="{{ $grade }}" @selected(old('grade', $profile?->grade) === $grade)>{{ $grade }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div class="field">
+        <label class="label">Rating (0–5)</label>
+        <input class="input" type="number" step="0.1" min="0" max="5" name="rating" value="{{ old('rating', $profile?->rating) }}">
+    </div>
+    <div class="field">
         <label class="label">Joined on</label>
         <input class="input" type="date" name="joined_at" value="{{ old('joined_at', optional($profile?->joined_at)->format('Y-m-d')) }}">
     </div>

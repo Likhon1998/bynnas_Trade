@@ -52,7 +52,7 @@
         <section class="f-panel f-desktop-only">
             <div class="f-table-wrap">
                 <table class="f-table">
-                    <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Credit left</th><th>Price group</th><th></th></tr></thead>
+                    <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Outstanding</th><th class="num">Credit left</th><th>Price group</th><th></th></tr></thead>
                     <tbody>
                         @forelse ($shops as $shop)
                             @include('field.partials.shop-row', ['shop' => $shop, 'openVisit' => $openVisit, 'filterable' => true, 'showGroup' => true])
@@ -89,7 +89,7 @@
                 <div class="f-empty">
                     <i data-lucide="store"></i>
                     <strong>No shops added yet</strong>
-                    Found a new retailer? Add them and the office will approve.
+                    Found a new retailer? Add them and you can take orders immediately.
                 </div>
             </div>
         @else
@@ -113,11 +113,17 @@
                                 </td>
                                 <td class="f-desktop-only">{{ $added->city ?: '—' }}</td>
                                 <td class="f-muted">{{ $added->created_at?->format('d M') }}</td>
-                                <td><span class="f-status {{ $tone }}">{{ $added->status === \App\Models\Shop::STATUS_PENDING ? 'Awaiting approval' : $added->statusLabel() }}</span></td>
-                                <td class="num">
+                                <td><span class="f-status {{ $tone }}">{{ $added->status === \App\Models\Shop::STATUS_PENDING ? 'Needs approval' : $added->statusLabel() }}</span></td>
+                                <td class="num" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+                                    @if ($added->status === \App\Models\Shop::STATUS_PENDING)
+                                        <form method="post" action="{{ route('field.shops.approve', $added) }}">
+                                            @csrf
+                                            <button class="f-btn f-btn-primary f-btn-sm" type="submit"><i data-lucide="check"></i> Approve</button>
+                                        </form>
+                                    @endif
                                     @if ($added->users_count > 0)
                                         <span class="f-status green">Partner</span>
-                                    @elseif ($added->status !== \App\Models\Shop::STATUS_REJECTED)
+                                    @elseif ($added->status !== \App\Models\Shop::STATUS_REJECTED && $added->status !== \App\Models\Shop::STATUS_ON_HOLD)
                                         <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.partners.create', ['shop' => $added->id]) }}" title="Apply for a partner login"><i data-lucide="handshake"></i> Partner</a>
                                     @endif
                                 </td>

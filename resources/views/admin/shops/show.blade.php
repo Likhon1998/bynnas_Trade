@@ -4,13 +4,19 @@
     <x-page-header title="{{ $shop->name }}" subtitle="{{ $shop->code }}">
         <x-slot:tools>
             <x-badge :status="$shop->statusLabel()" />
+            <a class="btn btn-ghost" href="{{ route('shops.statement', $shop) }}">Account statement</a>
             @can('update', $shop)
                 <a class="btn btn-ghost" href="{{ route('shops.edit', $shop) }}">Edit</a>
             @endcan
-            @can('approve', $shop)
-                @if ($shop->status !== 'active')
+            @can('shops.approve')
+                @if ($shop->status !== \App\Models\Shop::STATUS_ACTIVE)
                     <form action="{{ route('shops.approve', $shop) }}" method="post">@csrf
                         <button class="btn btn-primary" type="submit">Approve shop</button>
+                    </form>
+                @else
+                    <form action="{{ route('shops.deactivate', $shop) }}" method="post"
+                        onsubmit="return confirm('Deactivate this shop? Salesmen will not be able to take new orders.')">@csrf
+                        <button class="btn btn-ghost" type="submit">Deactivate</button>
                     </form>
                 @endif
             @endcan
@@ -19,6 +25,9 @@
 
     @if (session('success'))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>
+    @endif
+    @if ($errors->any())
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fef2f2;color:#b91c1c">{{ $errors->first() }}</div>
     @endif
     @if (session('whatsapp_chat_url'))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -37,7 +46,9 @@
                 <div class="muted" style="font-size:13px;margin-top:2px">
                     {{ $shop->created_at?->format('d M Y, g:i A') }}
                     @if ($shop->status === \App\Models\Shop::STATUS_PENDING)
-                        · Set a price group and credit limit, then approve so they can take orders.
+                        · Pending — approve to activate ordering, or edit price group / credit first.
+                    @elseif ($shop->status === \App\Models\Shop::STATUS_ACTIVE)
+                        · Active — salesman can take orders. You can still edit or deactivate.
                     @endif
                     @if ($shop->notes) · “{{ $shop->notes }}” @endif
                 </div>
@@ -52,6 +63,8 @@
         @foreach ([
             ['Credit limit', \App\Support\DemoData::taka($shop->credit_limit)],
             ['Outstanding', \App\Support\DemoData::taka($shop->outstanding_balance)],
+            ['Grade', $shop->grade ?: '—'],
+            ['Rating', $shop->rating !== null ? $shop->rating.'/5' : '—'],
             ['Available credit', \App\Support\DemoData::taka($shop->availableCredit())],
             ['Payment terms', $shop->payment_terms_days.' days'],
         ] as $card)
