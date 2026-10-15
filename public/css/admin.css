@@ -110,12 +110,22 @@ button, input, select, textarea { font-family: inherit; }
 
     .sidebar.compact .sidebar-brand .brand-wordmark,
     .sidebar.compact .nav-label,
+    .sidebar.compact .nav-group-toggle,
     .sidebar.compact .nav-item > span,
     .sidebar.compact .badge-new,
     .sidebar.compact .sidebar-user-meta,
     .sidebar.compact .account-link,
     .sidebar.compact .logout-btn span {
         display: none !important;
+    }
+
+    .sidebar.compact .nav-group-panel {
+        display: block !important;
+        grid-template-rows: none;
+    }
+
+    .sidebar.compact .nav-group-items {
+        overflow: visible;
     }
 
     .sidebar.compact .nav-item {
@@ -213,6 +223,70 @@ button, input, select, textarea { font-family: inherit; }
     color: #7b8298;
     font-weight: 600;
     padding: 12px 10px 4px;
+}
+
+.nav-group {
+    margin-top: 4px;
+}
+
+.nav-group-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 10px 6px;
+    border: 0;
+    background: transparent;
+    color: #7b8298;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: color .15s ease, background .15s ease;
+}
+
+.nav-group-toggle:hover {
+    color: #c5cad8;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.nav-group-toggle.active {
+    color: #a5b4fc;
+}
+
+.nav-group-toggle span {
+    text-align: left;
+    line-height: 1.2;
+}
+
+.nav-group-chevron {
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0;
+    opacity: 0.75;
+    transition: transform .2s ease;
+}
+
+.nav-group-toggle.open .nav-group-chevron {
+    transform: rotate(180deg);
+}
+
+.nav-group-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows .22s ease;
+}
+
+.nav-group-panel.open {
+    grid-template-rows: 1fr;
+}
+
+.nav-group-items {
+    overflow: hidden;
+    min-height: 0;
 }
 
 .nav-item {

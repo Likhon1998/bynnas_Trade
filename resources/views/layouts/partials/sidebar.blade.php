@@ -78,19 +78,64 @@
         </a>
 
         @foreach ($nav as $group)
-            <div class="nav-label">{{ $group['label'] }}</div>
-            @foreach ($group['items'] as $item)
-                @if (!empty($item['permission']) && ! auth()->user()?->can($item['permission']))
-                    @continue
-                @endif
-                <a href="{{ route($item['name']) }}" class="nav-item {{ request()->routeIs(explode('.', $item['name'])[0].'.*') ? 'active' : '' }}" title="{{ $item['label'] }}">
-                    <i data-lucide="{{ $item['icon'] }}"></i>
-                    <span>{{ $item['label'] }}</span>
-                    @if (!empty($item['badge']))
-                        <span class="badge-new">{{ $item['badge'] }}</span>
-                    @endif
-                </a>
-            @endforeach
+            @php
+                $visibleItems = collect($group['items'])->filter(
+                    fn ($item) => empty($item['permission']) || auth()->user()?->can($item['permission'])
+                )->values();
+                $groupActive = $visibleItems->contains(
+                    fn ($item) => request()->routeIs(explode('.', $item['name'])[0].'.*')
+                );
+                $groupKey = \Illuminate\Support\Str::slug($group['label']);
+            @endphp
+            @continue($visibleItems->isEmpty())
+
+            <div
+                class="nav-group"
+                x-data="{
+                    open: {{ $groupActive ? 'true' : 'false' }},
+                    key: 'bt_nav_{{ $groupKey }}',
+                    init() {
+                        if (!{{ $groupActive ? 'true' : 'false' }}) {
+                            const stored = localStorage.getItem(this.key);
+                            if (stored !== null) this.open = stored === '1';
+                        }
+                        this.$watch('open', (v) => localStorage.setItem(this.key, v ? '1' : '0'));
+                    },
+                    toggle() {
+                        this.open = !this.open;
+                        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                    }
+                }"
+            >
+                <button
+                    type="button"
+                    class="nav-group-toggle"
+                    :class="{ open, active: {{ $groupActive ? 'true' : 'false' }} }"
+                    @click="toggle()"
+                    :aria-expanded="open.toString()"
+                >
+                    <span>{{ $group['label'] }}</span>
+                    <i data-lucide="chevron-down" class="nav-group-chevron"></i>
+                </button>
+
+                <div class="nav-group-panel" :class="{ open: open || (isDesktop && !sidebarExpanded) }">
+                    <div class="nav-group-items">
+                        @foreach ($visibleItems as $item)
+                            <a
+                                href="{{ route($item['name']) }}"
+                                class="nav-item {{ request()->routeIs(explode('.', $item['name'])[0].'.*') ? 'active' : '' }}"
+                                title="{{ $item['label'] }}"
+                            >
+                                <i data-lucide="{{ $item['icon'] }}"></i>
+                                <span>{{ $item['label'] }}</span>
+                                @if (!empty($item['badge']))
+                                    <span class="badge-new">{{ $item['badge'] }}</span>
+                                @endif
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
         @endforeach
     </div>
 
