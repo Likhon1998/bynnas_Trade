@@ -21,7 +21,7 @@
     <header class="site-header">
         <div class="site-wrap site-header-inner">
             <a class="site-brand" href="{{ route('site.home') }}" aria-label="{{ $site->siteName() }} home">
-                <x-brand-logo :size="36" show-wordmark />
+                <x-brand-logo :size="40" show-wordmark />
             </a>
 
             <nav class="site-nav" :class="navOpen && 'is-open'" aria-label="Main">

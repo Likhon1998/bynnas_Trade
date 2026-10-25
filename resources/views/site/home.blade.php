@@ -120,7 +120,7 @@
                         @include('site.products._card', ['product' => $product])
                     @endforeach
                 </div>
-                <div style="margin-top:22px">
+                <div class="catalog-more">
                     <a class="btn btn-outline" href="{{ route('site.products') }}">View all products</a>
                 </div>
             </div>

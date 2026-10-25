@@ -262,6 +262,21 @@ class SiteContent
         return $this->imageUrl($this->get('general.logo')) ?? asset('images/logo.png');
     }
 
+    public function logoMarkUrl(int $size = 48): string
+    {
+        $allowed = Favicon::sizes();
+        $mark = 48;
+        foreach ($allowed as $candidate) {
+            if ($candidate >= $size) {
+                $mark = $candidate;
+                break;
+            }
+            $mark = $candidate;
+        }
+
+        return route('favicon.png', ['size' => $mark, 'v' => Favicon::version()]);
+    }
+
     public function imageUrl(?string $path): ?string
     {
         if (! $path) {

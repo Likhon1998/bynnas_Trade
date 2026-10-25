@@ -125,7 +125,7 @@ class WebsiteContentTest extends TestCase
         $logo = app(SiteContent::class)->get('general.logo');
         $this->assertStringStartsWith('site/', $logo);
         Storage::disk('public')->assertExists($logo);
-        $this->get(route('dashboard'))->assertOk()->assertSee('storage/'.$logo, false);
+        $this->get(route('dashboard'))->assertOk()->assertSee(route('favicon.png', ['size' => 32]), false);
 
         $this->put(route('website.update'), $this->form('general', ['remove_images' => ['logo']]))->assertSessionHasNoErrors();
         $this->assertNull(app(SiteContent::class)->get('general.logo'));

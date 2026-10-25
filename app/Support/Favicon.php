@@ -11,7 +11,7 @@ class Favicon
      */
     public static function sizes(): array
     {
-        return [16, 32, 48, 180, 192];
+        return [16, 32, 48, 64, 180, 192];
     }
 
     public static function version(): string

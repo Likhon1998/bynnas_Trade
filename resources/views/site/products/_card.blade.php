@@ -18,9 +18,9 @@
         </div>
         <h3><a href="{{ route('site.products.show', $product) }}">{{ $product->name }}</a></h3>
         <div class="site-product-row">
-            @if ($price)
-                <div class="site-product-price">{{ \App\Support\DemoData::taka($price) }}</div>
-            @endif
+            <div class="site-product-price">
+                {{ $price ? \App\Support\DemoData::taka($price) : '—' }}
+            </div>
             <a class="btn btn-primary" href="{{ $url }}" target="_blank" rel="noopener noreferrer">Order</a>
         </div>
     </div>
