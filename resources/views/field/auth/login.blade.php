@@ -218,15 +218,15 @@
                 <h1>Sign In</h1>
                 <p class="lg-sub">Enter your email and password to continue.</p>
 
-                @if ($errors->any())
+                @if ($errors->any() || session('error'))
                     <div class="lg-error" role="alert">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-                        <span>{{ $errors->first() }}</span>
+                        <span>{{ $errors->first() ?: session('error') }}</span>
                     </div>
                     @include('partials.portal-hint')
                 @endif
 
-                <form id="lg-form" action="{{ route('field.login.submit') }}" method="post" novalidate>
+                <form id="lg-form" action="{{ url()->current() }}" method="post" novalidate>
                     @csrf
                     <label class="lg-label" for="lg-email">Email</label>
                     <div class="lg-field">

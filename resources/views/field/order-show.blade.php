@@ -53,7 +53,13 @@
     <div class="f-card" style="padding:4px 14px">
         @foreach ($order->items as $item)
             <div class="f-line-item">
-                <span>{{ $item->product_name }} <span class="f-muted">× {{ $item->quantity }}</span></span>
+                <span>
+                    {{ $item->product_name }}
+                    <span class="f-muted">× {{ $item->quantity }} · {{ \App\Support\DemoData::taka($item->unit_price) }}</span>
+                    @if ($item->wasPriceChanged())
+                        <span class="f-muted"> · list {{ \App\Support\DemoData::taka($item->originalUnitPrice()) }}</span>
+                    @endif
+                </span>
                 <span>{{ \App\Support\DemoData::taka($item->line_total) }}</span>
             </div>
         @endforeach

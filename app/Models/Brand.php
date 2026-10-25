@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CatalogLogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -11,7 +12,7 @@ class Brand extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name', 'slug', 'is_active'];
+    protected $fillable = ['name', 'slug', 'logo_path', 'is_active'];
 
     protected function casts(): array
     {
@@ -30,5 +31,10 @@ class Brand extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function logoUrl(): ?string
+    {
+        return CatalogLogo::url($this->logo_path);
     }
 }

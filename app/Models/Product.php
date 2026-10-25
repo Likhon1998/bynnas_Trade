@@ -59,6 +59,14 @@ class Product extends Model
         return $this->hasMany(ProductOffer::class);
     }
 
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
     public function activeOffer(): ?ProductOffer
     {
         if ($this->relationLoaded('offers')) {
@@ -68,6 +76,31 @@ class Product extends Model
         return $this->offers()->currentlyActive()->orderByDesc('id')->first();
     }
 
+    public function publicOrderUrl(): string
+    {
+        return app(\App\Support\SiteContent::class)->productOrderUrl($this);
+    }
+
+    public function publicPrice(): ?float
+    {
+        $retail = (float) $this->retail_price;
+        if ($retail > 0) {
+            return $retail;
+        }
+
+        return null;
+    }
+
+    public function inventoryUnitCost(): float
+    {
+        $landed = (float) $this->landed_cost;
+        if ($landed > 0) {
+            return $landed;
+        }
+
+        return (float) $this->cost_price;
+    }
+
     public function availableStock(): int
     {
         return max(0, (int) $this->stock_on_hand - (int) $this->reserved_stock);
@@ -75,15 +108,33 @@ class Product extends Model
 
     public function imageUrl(): ?string
     {
+        $urls = $this->imageUrls();
+
+        return $urls[0] ?? null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function imageUrls(): array
+    {
+        $images = $this->relationLoaded('images')
+            ? $this->images
+            : $this->images()->get();
+
+        if ($images->isNotEmpty()) {
+            return $images->map(fn (ProductImage $image) => $image->url())->values()->all();
+        }
+
         if (! $this->image_path) {
-            return null;
+            return [];
         }
 
         if (str_starts_with($this->image_path, 'http://') || str_starts_with($this->image_path, 'https://')) {
-            return $this->image_path;
+            return [$this->image_path];
         }
 
-        return asset('storage/'.$this->image_path);
+        return [asset('storage/'.$this->image_path)];
     }
 
     public function priceForGroup(?PriceGroup $group = null): float

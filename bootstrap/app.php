@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
+        $middleware->web(prepend: [\App\Http\Middleware\AlignRequestOrigin::class]);
         $middleware->web(append: [\Illuminate\Session\Middleware\AuthenticateSession::class]);
         $middleware->redirectGuestsTo(fn (\Illuminate\Http\Request $request) => match (true) {
             $request->is('field', 'field/*') => route('field.login'),
@@ -25,13 +26,24 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, $request) {
-            if ($request->expectsJson()) {
+            if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json(['message' => 'Page expired. Please refresh and try again.'], 419);
             }
 
+            $fallback = match (true) {
+                $request->is('field', 'field/*') => route('field.login'),
+                $request->is('portal', 'portal/*') => route('portal.login'),
+                default => route('login'),
+            };
+
+            $referer = (string) $request->headers->get('referer', '');
+            $target = $referer !== '' && str_starts_with($referer, $request->getSchemeAndHttpHost())
+                ? $referer
+                : $fallback;
+
             return redirect()
-                ->back()
-                ->withInput($request->except('password', '_token'))
-                ->with('error', 'Your session expired. Please try again.');
+                ->to($target)
+                ->withInput($request->except(['password', 'password_confirmation', '_token']))
+                ->with('error', 'Your session was refreshed. Please try again.');
         });
     })->create();

@@ -41,13 +41,19 @@ use App\Http\Controllers\Field\FieldPortalController;
 use App\Http\Controllers\Field\SalesmanAuthController;
 use App\Http\Controllers\Portal\ShopAuthController;
 use App\Http\Controllers\Portal\ShopPortalController;
+use App\Http\Controllers\Site\FaviconController;
 use App\Http\Controllers\Site\SiteController;
 use App\Http\Middleware\EnsureAdminPortal;
 use App\Http\Middleware\EnsureSalesmanPortal;
 use App\Http\Middleware\EnsureShopPortal;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/favicon.ico', [FaviconController::class, 'ico'])->name('favicon.ico');
+Route::get('/favicon-{size}.png', [FaviconController::class, 'png'])->whereNumber('size')->name('favicon.png');
+
 Route::get('/', [SiteController::class, 'home'])->name('site.home');
+Route::get('/products', [SiteController::class, 'products'])->name('site.products');
+Route::get('/products/{product}', [SiteController::class, 'showProduct'])->name('site.products.show');
 Route::get('/about', [SiteController::class, 'about'])->name('site.about');
 Route::get('/contact', [SiteController::class, 'contact'])->name('site.contact');
 Route::post('/contact', [SiteController::class, 'storeContact'])->middleware('throttle:5,1')->name('site.contact.store');

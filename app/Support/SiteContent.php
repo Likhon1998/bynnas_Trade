@@ -67,6 +67,7 @@ class SiteContent
                         'hours' => ['type' => 'text', 'label' => 'Business hours', 'default' => 'Saturday – Thursday, 10:00 – 18:00', 'max' => 120],
                         'address' => ['type' => 'text', 'label' => 'Office address', 'default' => 'Tejgaon Industrial Area, Dhaka', 'max' => 200],
                         'map_url' => ['type' => 'url', 'label' => 'Google Maps link', 'default' => '', 'max' => 500],
+                        'maks_gadget_url' => ['type' => 'url', 'label' => 'MAKS GADGET order website', 'default' => 'https://makgadget.com/shop', 'max' => 300, 'help' => 'Public “Order” buttons on the website send visitors here to place their order.'],
                     ],
                     'Social links' => [
                         'facebook_url' => ['type' => 'url', 'label' => 'Facebook', 'default' => '', 'max' => 300],
@@ -290,13 +291,25 @@ class SiteContent
         return 'https://wa.me/'.$digits;
     }
 
+    public function maksGadgetUrl(): string
+    {
+        $url = trim((string) ($this->get('general.maks_gadget_url') ?: config('services.maks_gadget.url') ?: 'https://makgadget.com/shop'));
+
+        return $url !== '' ? $url : 'https://makgadget.com/shop';
+    }
+
+    public function productOrderUrl(?Product $product = null): string
+    {
+        return $this->maksGadgetUrl();
+    }
+
     /** Live numbers for the home page, straight from admin data. */
     public function stats(): array
     {
         try {
             return [
                 ['value' => Shop::query()->where('status', Shop::STATUS_ACTIVE)->count(), 'label' => 'Partner shops'],
-                ['value' => Product::query()->where('status', Product::STATUS_ACTIVE)->where('is_published', true)->count(), 'label' => 'Products'],
+                ['value' => Product::query()->count(), 'label' => 'Products'],
                 ['value' => Category::query()->where('is_active', true)->count(), 'label' => 'Categories'],
                 ['value' => Warehouse::query()->where('is_active', true)->count(), 'label' => 'Warehouses'],
             ];
@@ -305,20 +318,47 @@ class SiteContent
         }
     }
 
-    /** Active categories that currently have published products. */
+    /** Active categories that currently have products. */
     public function categories(int $limit = 8): Collection
     {
-        $published = fn ($q) => $q->where('status', Product::STATUS_ACTIVE)->where('is_published', true);
-
         try {
             return Category::query()
                 ->where('is_active', true)
-                ->whereHas('products', $published)
-                ->withCount(['products' => $published])
+                ->whereHas('products')
+                ->withCount('products')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->limit($limit)
                 ->get();
+        } catch (Throwable) {
+            return collect();
+        }
+    }
+
+    /**
+     * Every product in the catalogue, for public visitors.
+     *
+     * @return Collection<int, Product>
+     */
+    public function catalogProducts(?int $categoryId = null, ?string $search = null, ?int $limit = null): Collection
+    {
+        try {
+            $query = Product::query()
+                ->with(['category', 'brand', 'images'])
+                ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                ->when($search, function ($q) use ($search) {
+                    $q->where(function ($inner) use ($search) {
+                        $inner->where('name', 'like', '%'.$search.'%')
+                            ->orWhere('sku', 'like', '%'.$search.'%');
+                    });
+                })
+                ->orderBy('name');
+
+            if ($limit) {
+                $query->limit($limit);
+            }
+
+            return $query->get();
         } catch (Throwable) {
             return collect();
         }
@@ -378,6 +418,7 @@ class SiteContent
     {
         Cache::forget(self::CACHE_KEY);
         $this->saved = null;
+        Favicon::forget();
     }
 
     /** @return array<string, array<string, mixed>> */

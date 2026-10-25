@@ -15,8 +15,12 @@ class ReportController extends Controller
     {
         abort_unless($request->user()->can('reports.view'), 403);
 
+        [$from, $to] = $this->period($request);
+
         return view('admin.reports.index', [
             'catalog' => $this->reports->catalog(),
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
         ]);
     }
 
@@ -24,8 +28,7 @@ class ReportController extends Controller
     {
         abort_unless($request->user()->can('reports.view'), 403);
 
-        $from = $request->filled('from') ? Carbon::parse($request->input('from'))->startOfDay() : now()->startOfMonth();
-        $to = $request->filled('to') ? Carbon::parse($request->input('to'))->endOfDay() : now()->endOfDay();
+        [$from, $to] = $this->period($request);
 
         return view('admin.reports.show', [
             'key' => $report,
@@ -40,9 +43,27 @@ class ReportController extends Controller
     {
         abort_unless($request->user()->can('reports.export'), 403);
 
-        $from = $request->filled('from') ? Carbon::parse($request->input('from'))->startOfDay() : now()->startOfMonth();
-        $to = $request->filled('to') ? Carbon::parse($request->input('to'))->endOfDay() : now()->endOfDay();
+        [$from, $to] = $this->period($request);
 
         return $this->reports->csv($report, $from, $to);
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function period(Request $request): array
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($from->gt($to)) {
+            return [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        return [$from, $to];
     }
 }

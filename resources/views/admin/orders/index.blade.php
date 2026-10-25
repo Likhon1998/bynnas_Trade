@@ -76,6 +76,7 @@
                         <tr>
                             <th>Order</th>
                             <th>Shop</th>
+                            <th>Shopkeeper</th>
                             <th>Source</th>
                             <th>Salesman</th>
                             <th>Lines</th>
@@ -90,10 +91,14 @@
                             <tr :class="{ 'order-row-flash': flashId === row.id }">
                                 <td style="font-weight:700" x-text="row.number"></td>
                                 <td x-text="row.shop"></td>
+                                <td x-text="row.shopkeeper"></td>
                                 <td class="muted" x-text="row.source_label"></td>
                                 <td x-text="row.salesman"></td>
                                 <td x-text="row.item_count"></td>
-                                <td style="font-weight:700" x-text="row.total"></td>
+                                <td style="font-weight:700">
+                                    <span x-text="row.total"></span>
+                                    <div class="muted" style="font-size:10px;font-weight:600" x-show="row.price_changed">Price changed</div>
+                                </td>
                                 <td class="muted" x-text="row.submitted_at"></td>
                                 <td>
                                     <span class="badge" :class="row.status_badge" x-text="row.status_label"></span>
@@ -104,7 +109,7 @@
                             </tr>
                         </template>
                         <tr x-show="filteredRows().length === 0">
-                            <td colspan="9" class="muted" style="padding:16px;text-align:center">No orders match these filters.</td>
+                            <td colspan="10" class="muted" style="padding:16px;text-align:center">No orders match these filters.</td>
                         </tr>
                     </tbody>
                 </table>

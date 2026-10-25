@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Support\CatalogEntry;
+use App\Support\CatalogLogo;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class CategoryController extends Controller
@@ -25,24 +27,27 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless($request->user()->can('categories.create'), 403);
+        abort_unless(
+            $request->user()->can('categories.create') || $request->user()->can('products.create'),
+            403
+        );
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
+            'logo' => CatalogLogo::rules(),
         ]);
 
-        $category = Category::query()->create([
-            'name' => trim($data['name']),
-            'slug' => Str::slug($data['name']).'-'.Str::lower(Str::random(4)),
+        $category = CatalogEntry::createOrRestore(Category::class, $data['name'], [
             'description' => $data['description'] ?? null,
-            'is_active' => true,
         ]);
+        CatalogLogo::apply($category, $request->file('logo'));
 
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json([
                 'id' => $category->id,
                 'name' => $category->name,
+                'logo_url' => $category->fresh()->logoUrl(),
                 'message' => 'Category created.',
             ]);
         }
@@ -55,9 +60,11 @@ class CategoryController extends Controller
         abort_unless($request->user()->can('categories.edit'), 403);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['required', 'string', 'max:120', Rule::unique('categories', 'name')->ignore($category->id)->whereNull('deleted_at')],
             'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
+            'logo' => CatalogLogo::rules(),
+            'remove_logo' => ['sometimes', 'boolean'],
         ]);
 
         $category->update([
@@ -65,6 +72,7 @@ class CategoryController extends Controller
             'description' => $data['description'] ?? null,
             'is_active' => $request->boolean('is_active', true),
         ]);
+        CatalogLogo::apply($category, $request->file('logo'), $request->boolean('remove_logo'));
 
         return back()->with('success', 'Category updated.');
     }

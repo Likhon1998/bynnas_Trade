@@ -1,156 +1,264 @@
 @if ($errors->any())
-    <div class="form-span" style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px">
-        <ul style="margin:0;padding-left:18px">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+    <div class="product-desk-alert">
+        <ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
     </div>
 @endif
 
-<div>
-    <label class="label">Product name</label>
-    <input class="input" style="width:100%" name="name" value="{{ old('name', $product?->name) }}" required>
-</div>
-<div>
-    <label class="label">SKU</label>
-    <input class="input" style="width:100%" name="sku" value="{{ old('sku', $product?->sku) }}" required>
-</div>
-<div>
-    <label class="label">Barcode</label>
-    <input class="input" style="width:100%" name="barcode" value="{{ old('barcode', $product?->barcode) }}">
-</div>
-<div x-data="quickCatalogSelect({
-        selected: @js(old('category_id', $product?->category_id) ? (string) old('category_id', $product?->category_id) : ''),
-        options: @js($categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()),
-        storeUrl: @js(route('categories.store')),
-        canCreate: @js(auth()->user()?->can('categories.create') ?? false),
-        label: 'category',
-        field: 'category_id',
-    })">
-    <label class="label">Category</label>
-    <select class="select" style="width:100%" name="category_id" x-model="selected" @change="onChange()">
-        <option value="">Select</option>
-        <template x-for="opt in options" :key="opt.id">
-            <option :value="String(opt.id)" x-text="opt.name"></option>
-        </template>
-        <option value="__new__" x-show="canCreate">+ Add new category…</option>
-    </select>
-    <div x-show="adding" x-cloak style="margin-top:8px;display:flex;gap:8px;align-items:center">
-        <input class="input" style="flex:1" x-model="newName" @keydown.enter.prevent="create()" placeholder="New category name">
-        <button class="btn btn-primary btn-sm" type="button" @click="create()" :disabled="saving">Save</button>
-        <button class="btn btn-ghost btn-sm" type="button" @click="cancel()">Cancel</button>
-    </div>
-    <p class="muted" x-show="error" x-text="error" style="color:#b91c1c;margin:6px 0 0;font-size:12px"></p>
-</div>
-<div x-data="quickCatalogSelect({
-        selected: @js(old('brand_id', $product?->brand_id) ? (string) old('brand_id', $product?->brand_id) : ''),
-        options: @js($brands->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values()),
-        storeUrl: @js(route('brands.store')),
-        canCreate: @js(auth()->user()?->can('brands.create') ?? false),
-        label: 'brand',
-        field: 'brand_id',
-    })">
-    <label class="label">Brand</label>
-    <select class="select" style="width:100%" name="brand_id" x-model="selected" @change="onChange()">
-        <option value="">Select</option>
-        <template x-for="opt in options" :key="opt.id">
-            <option :value="String(opt.id)" x-text="opt.name"></option>
-        </template>
-        <option value="__new__" x-show="canCreate">+ Add new brand…</option>
-    </select>
-    <div x-show="adding" x-cloak style="margin-top:8px;display:flex;gap:8px;align-items:center">
-        <input class="input" style="flex:1" x-model="newName" @keydown.enter.prevent="create()" placeholder="New brand name">
-        <button class="btn btn-primary btn-sm" type="button" @click="create()" :disabled="saving">Save</button>
-        <button class="btn btn-ghost btn-sm" type="button" @click="cancel()">Cancel</button>
-    </div>
-    <p class="muted" x-show="error" x-text="error" style="color:#b91c1c;margin:6px 0 0;font-size:12px"></p>
-</div>
-<div>
-    <label class="label">Model / variant</label>
-    <input class="input" style="width:100%" name="model" value="{{ old('model', $product?->model) }}" placeholder="Model">
-</div>
-<div>
-    <label class="label">Wholesale price (৳)</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="wholesale_price" value="{{ old('wholesale_price', $product?->wholesale_price ?? 0) }}" required>
-</div>
-<div>
-    <label class="label">Dealer price</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="dealer_price" value="{{ old('dealer_price', $product?->dealer_price ?? 0) }}">
-</div>
-<div>
-    <label class="label">Distributor price</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="distributor_price" value="{{ old('distributor_price', $product?->distributor_price ?? 0) }}">
-</div>
-<div>
-    <label class="label">Retail price</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="retail_price" value="{{ old('retail_price', $product?->retail_price ?? 0) }}">
-</div>
-<div>
-    <label class="label">Minimum selling price</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="minimum_selling_price" value="{{ old('minimum_selling_price', $product?->minimum_selling_price ?? 0) }}">
-</div>
-<div>
-    <label class="label">Cost price</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="cost_price" value="{{ old('cost_price', $product?->cost_price ?? 0) }}">
-</div>
-<div>
-    <label class="label">Landed cost</label>
-    <input class="input" style="width:100%" type="number" step="0.01" name="landed_cost" value="{{ old('landed_cost', $product?->landed_cost ?? 0) }}">
-</div>
-<div>
-    <label class="label">Stock on hand</label>
-    <input class="input" style="width:100%" type="number" name="stock_on_hand" value="{{ old('stock_on_hand', $product?->stock_on_hand ?? 0) }}">
-</div>
-<div>
-    <label class="label">Minimum stock</label>
-    <input class="input" style="width:100%" type="number" name="minimum_stock" value="{{ old('minimum_stock', $product?->minimum_stock ?? 10) }}">
-</div>
-<div>
-    <label class="label">Warranty</label>
-    <input class="input" style="width:100%" name="warranty" value="{{ old('warranty', $product?->warranty) }}" placeholder="e.g. 12 months">
-</div>
-<div>
-    <label class="label">Status</label>
-    <select class="select" style="width:100%" name="status">
-        @foreach (['active' => 'Active', 'inactive' => 'Inactive', 'discontinued' => 'Discontinued'] as $value => $label)
-            <option value="{{ $value }}" @selected(old('status', $product?->status ?? 'active') === $value)>{{ $label }}</option>
-        @endforeach
-    </select>
-</div>
-<div class="form-span">
-    <label class="label">Description</label>
-    <textarea class="textarea" name="description" rows="3">{{ old('description', $product?->description) }}</textarea>
-</div>
-<div class="form-span">
-    <label class="label">Product picture</label>
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        @if ($product?->imageUrl())
-            <x-product-thumb :product="$product" :size="72" />
-        @endif
-        <input class="input" style="width:min(360px,100%)" type="file" name="image" accept="image/jpeg,image/png,image/webp">
-    </div>
-    <p class="muted" style="margin:8px 0 0">JPG, PNG or WebP · max 4 MB. Shown to shop partners and field salesmen.</p>
-</div>
-<div class="form-span">
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600">
-        <input type="hidden" name="is_published" value="0">
-        <input type="checkbox" name="is_published" value="1" @checked(old('is_published', $product?->is_published ?? true))>
-        Visible in B2B shop portal
-    </label>
-</div>
-
-@can('products.manage_price')
-    <div class="form-span">
-        <div class="section-title" style="margin-bottom:8px">Price group overrides</div>
-        <p class="muted" style="margin-top:0">Leave blank to use the standard wholesale price for that group.</p>
-        <div class="form-grid">
-            @foreach ($priceGroups as $group)
-                @php
-                    $existing = $product?->prices?->firstWhere('price_group_id', $group->id)?->wholesale_price;
-                @endphp
-                <div>
-                    <label class="label">{{ $group->name }}</label>
-                    <input class="input" style="width:100%" type="number" step="0.01" name="group_prices[{{ $group->id }}]"
-                           value="{{ old('group_prices.'.$group->id, $existing) }}">
-                </div>
-            @endforeach
+<div class="pd-layout">
+    <section
+        class="card pd-studio"
+        x-data="productGallery({
+            max: 12,
+            existing: @js(($product?->images ?? collect())->map(fn ($image) => [
+                'id' => $image->id,
+                'url' => $image->url(),
+                'primary' => (bool) $image->is_primary,
+            ])->values()),
+        })"
+    >
+        <div class="pd-card-head">
+            <div>
+                <h2>Gallery</h2>
+                <p>Cover photo first, then extra angles</p>
+            </div>
+            <span class="pd-count" x-text="count + ' of ' + max"></span>
         </div>
+
+        <input type="hidden" name="primary_image_id" :value="coverId">
+        <template x-for="id in removedIds" :key="'rm-'+id">
+            <input type="hidden" name="remove_images[]" :value="id">
+        </template>
+
+        <div class="pd-stage" :class="{ 'is-empty': !stageUrl }">
+            <img x-show="stageUrl" x-cloak :src="stageUrl" alt="">
+            <button type="button" class="pd-stage-empty" x-show="!stageUrl" @click="$refs.fileInput.click()">
+                <i data-lucide="image-plus"></i>
+                <strong>Add pictures</strong>
+                <span>JPEG, PNG or WebP · up to 12 · 4 MB each</span>
+            </button>
+            <span class="pd-stage-badge" x-show="stageUrl && stageIsCover" x-cloak>Cover</span>
+        </div>
+
+        <div class="pd-rail">
+            <template x-for="img in existing" :key="'ex-'+img.id">
+                <article class="pd-thumb" :class="{ 'is-cover': img.primary && !img.remove, 'is-removed': img.remove, 'is-on': stageUrl === img.url && !img.remove }">
+                    <button type="button" class="pd-thumb-photo" @click="preview(img.url)" :disabled="img.remove">
+                        <img :src="img.url" alt="">
+                    </button>
+                    <div class="pd-thumb-actions">
+                        <button type="button" class="pd-thumb-btn" @click="setCover(img)" x-show="!img.remove" x-cloak>Cover</button>
+                        <button type="button" class="pd-thumb-btn is-danger" @click="removeExisting(img)" x-text="img.remove ? 'Undo' : 'Delete'"></button>
+                    </div>
+                </article>
+            </template>
+
+            <template x-for="(file, index) in pending" :key="file.key">
+                <article class="pd-thumb is-new" :class="{ 'is-on': stageUrl === file.url }">
+                    <button type="button" class="pd-thumb-photo" @click="preview(file.url)">
+                        <img :src="file.url" :alt="file.name">
+                    </button>
+                    <div class="pd-thumb-actions">
+                        <span class="pd-thumb-new">New</span>
+                        <button type="button" class="pd-thumb-btn is-danger" @click="removePending(index)">Delete</button>
+                    </div>
+                </article>
+            </template>
+
+            <button type="button" class="pd-add" @click="$refs.fileInput.click()" :disabled="count >= max" x-show="count > 0 && count < max" x-cloak>
+                <i data-lucide="plus"></i>
+                <span>Add pictures</span>
+            </button>
+        </div>
+
+        <input
+            x-ref="fileInput"
+            class="pg-file"
+            type="file"
+            name="images[]"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            tabindex="-1"
+            aria-hidden="true"
+            @change="add($event)"
+        >
+        <p class="product-gallery-error" x-show="error" x-text="error" x-cloak></p>
+    </section>
+
+    <div class="pd-stack">
+        <section class="card pd-card">
+            <div class="pd-card-head">
+                <div>
+                    <h2>Identity</h2>
+                    <p>Name, codes and how shops find it</p>
+                </div>
+            </div>
+            <div class="pd-fields">
+                <div class="pd-field is-wide">
+                    <label class="label" for="product-name">Product name</label>
+                    <input class="input pd-name" id="product-name" name="name" value="{{ old('name', $product?->name) }}" required placeholder="e.g. Samsung Galaxy A16 8/256">
+                </div>
+                <div class="pd-field">
+                    <label class="label" for="product-sku">SKU</label>
+                    <input class="input" id="product-sku" name="sku" value="{{ old('sku', $product?->sku) }}" required>
+                </div>
+                <div class="pd-field">
+                    <label class="label" for="product-barcode">Barcode</label>
+                    <input class="input" id="product-barcode" name="barcode" value="{{ old('barcode', $product?->barcode) }}">
+                </div>
+                <div class="pd-field">
+                    <label class="label" for="product-model">Model / variant</label>
+                    <input class="input" id="product-model" name="model" value="{{ old('model', $product?->model) }}" placeholder="Optional">
+                </div>
+                <div class="pd-field">
+                    <x-catalog-quick-select
+                        name="category_id"
+                        label="Category"
+                        noun="category"
+                        :options="$categories"
+                        :selected="old('category_id', $product?->category_id)"
+                        :store-url="route('categories.store')"
+                        :can-create="auth()->user()?->can('categories.create') || auth()->user()?->can('products.create')"
+                    />
+                </div>
+                <div class="pd-field">
+                    <x-catalog-quick-select
+                        name="brand_id"
+                        label="Brand"
+                        noun="brand"
+                        :options="$brands"
+                        :selected="old('brand_id', $product?->brand_id)"
+                        :store-url="route('brands.store')"
+                        :can-create="auth()->user()?->can('brands.create') || auth()->user()?->can('products.create')"
+                    />
+                </div>
+                <div class="pd-field">
+                    <label class="label" for="product-status">Status</label>
+                    <select class="select" id="product-status" name="status">
+                        @foreach (['active' => 'Active', 'inactive' => 'Inactive', 'discontinued' => 'Discontinued'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('status', $product?->status ?? 'active') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="pd-field is-wide">
+                    <label class="label" for="product-description">Description</label>
+                    <textarea class="textarea" id="product-description" name="description" rows="4" placeholder="What the shopkeeper needs to know">{{ old('description', $product?->description) }}</textarea>
+                </div>
+                <label class="pd-switch is-wide">
+                    <input type="hidden" name="is_published" value="0">
+                    <input type="checkbox" name="is_published" value="1" @checked(old('is_published', $product?->is_published ?? true))>
+                    <span class="pd-switch-ui" aria-hidden="true"></span>
+                    <span>
+                        <b>Visible in B2B shop portal</b>
+                        <small>Shopkeepers can see and order this SKU</small>
+                    </span>
+                </label>
+            </div>
+        </section>
+
+        <section class="card pd-card">
+            <div class="pd-card-head">
+                <div>
+                    <h2>Pricing</h2>
+                    <p>Selling rates and cost. Salesmen cannot go below the minimum.</p>
+                </div>
+            </div>
+            <div class="pd-money-grid">
+                <label class="pd-money">
+                    <span>Wholesale <em>Required</em></span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="wholesale_price" value="{{ old('wholesale_price', $product?->wholesale_price ?? 0) }}" required>
+                    </span>
+                </label>
+                <label class="pd-money">
+                    <span>Dealer</span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="dealer_price" value="{{ old('dealer_price', $product?->dealer_price ?? 0) }}">
+                    </span>
+                </label>
+                <label class="pd-money">
+                    <span>Distributor</span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="distributor_price" value="{{ old('distributor_price', $product?->distributor_price ?? 0) }}">
+                    </span>
+                </label>
+                <label class="pd-money">
+                    <span>Retail</span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="retail_price" value="{{ old('retail_price', $product?->retail_price ?? 0) }}">
+                    </span>
+                </label>
+                <label class="pd-money">
+                    <span>Minimum selling</span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="minimum_selling_price" value="{{ old('minimum_selling_price', $product?->minimum_selling_price ?? 0) }}">
+                    </span>
+                </label>
+                <label class="pd-money">
+                    <span>Cost</span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="cost_price" value="{{ old('cost_price', $product?->cost_price ?? 0) }}">
+                    </span>
+                </label>
+                <label class="pd-money">
+                    <span>Landed cost</span>
+                    <span class="pd-money-box">
+                        <em>৳</em>
+                        <input class="input" type="number" step="0.01" name="landed_cost" value="{{ old('landed_cost', $product?->landed_cost ?? 0) }}">
+                    </span>
+                </label>
+            </div>
+
+            @can('products.manage_price')
+                @if ($priceGroups->isNotEmpty())
+                    <div class="pd-groups">
+                        <h3>Price groups</h3>
+                        <div class="pd-money-grid is-compact">
+                            @foreach ($priceGroups as $group)
+                                @php
+                                    $existing = $product?->prices?->firstWhere('price_group_id', $group->id)?->wholesale_price;
+                                @endphp
+                                <label class="pd-money">
+                                    <span>{{ $group->name }}</span>
+                                    <span class="pd-money-box">
+                                        <em>৳</em>
+                                        <input class="input" type="number" step="0.01" name="group_prices[{{ $group->id }}]"
+                                               value="{{ old('group_prices.'.$group->id, $existing) }}" placeholder="Standard">
+                                    </span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            @endcan
+        </section>
+
+        <section class="card pd-card">
+            <div class="pd-card-head">
+                <div>
+                    <h2>Stock &amp; terms</h2>
+                    <p>On-hand quantity and the shop-facing warranty</p>
+                </div>
+            </div>
+            <div class="pd-stock-grid">
+                <div class="pd-field">
+                    <label class="label" for="product-stock">Stock on hand</label>
+                    <input class="input" id="product-stock" type="number" name="stock_on_hand" value="{{ old('stock_on_hand', $product?->stock_on_hand ?? 0) }}">
+                </div>
+                <div class="pd-field">
+                    <label class="label" for="product-min-stock">Minimum stock</label>
+                    <input class="input" id="product-min-stock" type="number" name="minimum_stock" value="{{ old('minimum_stock', $product?->minimum_stock ?? 10) }}">
+                </div>
+                <div class="pd-field">
+                    <label class="label" for="product-warranty">Warranty</label>
+                    <input class="input" id="product-warranty" name="warranty" value="{{ old('warranty', $product?->warranty) }}" placeholder="e.g. 12 months">
+                </div>
+            </div>
+        </section>
     </div>
-@endcan
+</div>

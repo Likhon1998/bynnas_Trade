@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Site;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\ContactMessage;
 use App\Models\PartnerInquiry;
+use App\Models\Product;
 use App\Rules\BangladeshPhone;
 use App\Services\AppNotificationService;
 use App\Support\SiteContent;
@@ -15,6 +17,34 @@ class SiteController extends Controller
     public function home()
     {
         return view('site.home');
+    }
+
+    public function products(Request $request, SiteContent $site)
+    {
+        $categoryId = $request->integer('category') ?: null;
+        $search = trim((string) $request->input('q', ''));
+
+        return view('site.products.index', [
+            'products' => $site->catalogProducts($categoryId, $search !== '' ? $search : null),
+            'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(),
+            'categoryId' => $categoryId,
+            'search' => $search,
+        ]);
+    }
+
+    public function showProduct(Product $product)
+    {
+        $product->load(['category', 'brand', 'images']);
+
+        $related = Product::query()
+            ->with(['category', 'brand', 'images'])
+            ->whereKeyNot($product->id)
+            ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
+            ->latest()
+            ->limit(4)
+            ->get();
+
+        return view('site.products.show', compact('product', 'related'));
     }
 
     public function about()

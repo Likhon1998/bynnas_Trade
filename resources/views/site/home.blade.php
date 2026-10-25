@@ -7,6 +7,7 @@
     $rows = $c['status_card_rows'];
     $categories = $c['show_categories'] ? $site->categories() : collect();
     $stats = $c['show_stats'] ? $site->stats() : [];
+    $featured = $site->catalogProducts(null, null, 8);
 @endphp
 @section('content')
     <section class="hero">
@@ -19,9 +20,7 @@
                     @if ($showPartner && $c['primary_button'])
                         <a class="btn btn-primary btn-lg" href="{{ route('site.partner') }}">{{ $c['primary_button'] }}</a>
                     @endif
-                    @if ($c['secondary_button'])
-                        <a class="btn btn-outline btn-lg" href="{{ route('site.about') }}">{{ $c['secondary_button'] }}</a>
-                    @endif
+                    <a class="btn btn-outline btn-lg" href="{{ route('site.products') }}">View products</a>
                 </div>
                 @if ($c['hero_points'])
                     <ul class="hero-points">
@@ -91,14 +90,38 @@
                 </div>
                 <div class="site-categories">
                     @foreach ($categories as $category)
-                        <div class="site-category">
-                            <span class="feature-icon">@include('site.partials.icon', ['name' => 'box'])</span>
+                        <a class="site-category" href="{{ route('site.products', ['category' => $category->id]) }}">
+                            @if ($category->logoUrl())
+                                <span class="feature-icon site-category-logo"><img src="{{ $category->logoUrl() }}" alt=""></span>
+                            @else
+                                <span class="feature-icon">@include('site.partials.icon', ['name' => 'box'])</span>
+                            @endif
                             <div>
                                 <h3>{{ $category->name }}</h3>
                                 <p>{{ $category->products_count }} {{ \Illuminate\Support\Str::plural('product', $category->products_count) }}</p>
                             </div>
-                        </div>
+                        </a>
                     @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
+    @if ($featured->isNotEmpty())
+        <section class="section">
+            <div class="site-wrap">
+                <div class="section-head">
+                    <span class="eyebrow">Catalogue</span>
+                    <h2>All products, ready to order.</h2>
+                    <p class="lead">Every item in our catalogue is listed here. Order on the official MAKS GADGET website.</p>
+                </div>
+                <div class="site-product-grid">
+                    @foreach ($featured as $product)
+                        @include('site.products._card', ['product' => $product])
+                    @endforeach
+                </div>
+                <div style="margin-top:22px">
+                    <a class="btn btn-outline" href="{{ route('site.products') }}">View all products</a>
                 </div>
             </div>
         </section>

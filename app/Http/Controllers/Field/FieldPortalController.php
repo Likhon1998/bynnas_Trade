@@ -377,7 +377,7 @@ class FieldPortalController extends Controller
         $group = $visit->shop?->priceGroup;
 
         $catalog = Product::query()
-            ->with(['prices', 'category', 'offers'])
+            ->with(['prices', 'category', 'offers', 'images'])
             ->where('status', Product::STATUS_ACTIVE)
             ->where('is_published', true)
             ->orderBy('name')
@@ -391,11 +391,13 @@ class FieldPortalController extends Controller
                     'sku' => $p->sku,
                     'category' => $p->category?->name ?? 'Other',
                     'price' => $p->priceForGroup($group),
+                    'min_price' => (float) ($p->minimum_selling_price ?? 0),
                     'list_price' => (float) $p->wholesale_price,
                     'offer_title' => $offer?->title,
                     'on_offer' => (bool) $offer,
                     'stock' => $p->availableStock(),
                     'image' => $p->imageUrl(),
+                    'images' => $p->imageUrls(),
                 ];
             })
             ->values();
@@ -436,6 +438,7 @@ class FieldPortalController extends Controller
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
         ]);
 
         $order = DB::transaction(function () use ($request, $visit, $data) {

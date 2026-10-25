@@ -31,6 +31,7 @@
 
     <div class="order-page-summary">
         <div><span>Shop</span><strong>{{ $order->shop?->name ?: '—' }}</strong></div>
+        <div><span>Shopkeeper</span><strong>{{ $order->shop?->owner_name ?: $order->shop?->name ?: '—' }}</strong></div>
         <div><span>Salesman</span><strong>{{ $order->salesman?->name ?: '—' }}</strong></div>
         <div><span>Submitted</span><strong>{{ $order->submitted_at?->format('l, d M Y · h:i A') ?: '—' }}</strong></div>
         <div><span>Lines</span><strong>{{ $order->item_count }}</strong></div>
@@ -239,28 +240,37 @@
                         <tr>
                                 <th>Item</th>
                                 <th class="num">Qty</th>
-                                <th class="num">Stock</th>
-                                <th class="num">Reserved</th>
-                                <th class="num">Unit</th>
+                                <th class="num">Original</th>
+                                <th class="num">Sold at</th>
                                 <th class="num">Line</th>
+                                <th>Date & time</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($order->items as $item)
-                            @php
-                                $avail = $item->product?->availableStock() ?? ($item->available_at_audit ?? 0);
-                                $ok = $avail >= $item->quantity || $item->reserved_quantity > 0;
-                            @endphp
                             <tr>
                                     <td>
                                         <div style="font-weight:700">{{ $item->product_name }}</div>
                                         <div class="muted" style="font-size:11px">{{ $item->product_sku }}</div>
                                     </td>
                                     <td class="num" style="font-weight:800">{{ $item->quantity }}</td>
-                                    <td class="num" style="color:{{ $ok ? '#15803d' : '#b91c1c' }};font-weight:700">{{ number_format($avail) }}</td>
-                                    <td class="num">{{ $item->reserved_quantity }}</td>
-                                    <td class="num">{{ \App\Support\DemoData::taka($item->unit_price) }}</td>
+                                    <td class="num">{{ \App\Support\DemoData::taka($item->originalUnitPrice()) }}</td>
+                                    <td class="num" style="font-weight:700;{{ $item->wasPriceChanged() ? 'color:#b45309' : '' }}">
+                                        {{ \App\Support\DemoData::taka($item->unit_price) }}
+                                        @if ($item->wasPriceChanged())
+                                            <div class="muted" style="font-size:10px;font-weight:600">
+                                                @if ($order->source === \App\Models\Order::SOURCE_SALESMAN)
+                                                    Changed by salesman
+                                                @elseif ($order->source === \App\Models\Order::SOURCE_ADMIN)
+                                                    Changed by admin
+                                                @else
+                                                    Price changed
+                                                @endif
+                                            </div>
+                                        @endif
+                                    </td>
                                     <td class="num" style="font-weight:700">{{ \App\Support\DemoData::taka($item->line_total) }}</td>
+                                    <td>{{ $order->submitted_at?->format('d M Y · h:i A') ?: $item->created_at?->format('d M Y · h:i A') }}</td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -27,6 +27,8 @@ function portalShop(cfg) {
         init() {
             const draft = {};
             (this.catalog || []).forEach((p) => {
+                p.images = Array.isArray(p.images) && p.images.length ? p.images : (p.image ? [p.image] : []);
+                p.image_index = 0;
                 const line = this.cart.find((c) => c.id === p.id);
                 draft[p.id] = line ? line.qty : 1;
             });
@@ -75,6 +77,15 @@ function portalShop(cfg) {
             return this.catalog.filter((p) => this.isWished(p.id));
         },
         inCart(id) { return this.cart.some((c) => c.id === id); },
+        coverImage(item) {
+            const images = item.images || [];
+            return images[item.image_index || 0] || item.image || '';
+        },
+        cycleImage(item) {
+            const images = item.images || [];
+            if (images.length < 2) return;
+            item.image_index = ((item.image_index || 0) + 1) % images.length;
+        },
         bumpQty(id, delta) {
             const p = this.catalog.find((x) => x.id === id);
             if (!p) return;

@@ -45,6 +45,126 @@
                 };
             });
 
+            Alpine.data('productGallery', (config = {}) => ({
+                max: config.max || 12,
+                existing: Array.isArray(config.existing) ? config.existing.map((img) => ({
+                    id: img.id,
+                    url: img.url,
+                    primary: !!img.primary,
+                    remove: false,
+                })) : [],
+                pending: [],
+                error: '',
+                focusUrl: '',
+                get kept() {
+                    return this.existing.filter((img) => !img.remove);
+                },
+                get count() {
+                    return this.kept.length + this.pending.length;
+                },
+                get cover() {
+                    return this.kept.find((img) => img.primary) || this.kept[0] || null;
+                },
+                get coverId() {
+                    return this.cover ? this.cover.id : '';
+                },
+                get stageUrl() {
+                    if (this.focusUrl) {
+                        const stillThere = this.kept.some((img) => img.url === this.focusUrl)
+                            || this.pending.some((item) => item.url === this.focusUrl);
+                        if (stillThere) return this.focusUrl;
+                    }
+                    if (this.cover) return this.cover.url;
+                    return this.pending[0]?.url || '';
+                },
+                get stageIsCover() {
+                    return !!(this.cover && this.stageUrl === this.cover.url);
+                },
+                get removedIds() {
+                    return this.existing.filter((img) => img.remove).map((img) => img.id);
+                },
+                preview(url) {
+                    this.focusUrl = url || '';
+                },
+                add(event) {
+                    const incoming = [...(event.target.files || [])];
+                    event.target.value = '';
+                    this.error = '';
+                    incoming.forEach((file) => {
+                        if (this.count >= this.max) {
+                            this.error = 'You can add up to ' + this.max + ' pictures.';
+                            return;
+                        }
+                        if (!String(file.type || '').startsWith('image/')) {
+                            this.error = file.name + ' is not an image.';
+                            return;
+                        }
+                        if (file.size > 4 * 1024 * 1024) {
+                            this.error = file.name + ' is larger than 4 MB.';
+                            return;
+                        }
+                        this.pending.push({
+                            key: [file.name, file.size, file.lastModified, Math.random()].join('-'),
+                            file,
+                            url: URL.createObjectURL(file),
+                            name: file.name,
+                        });
+                    });
+                    this.syncInput();
+                },
+                removeExisting(img) {
+                    img.remove = !img.remove;
+                    if (img.remove && img.primary) {
+                        img.primary = false;
+                        if (this.kept[0]) this.kept[0].primary = true;
+                    }
+                },
+                removePending(index) {
+                    const item = this.pending[index];
+                    if (item?.url) URL.revokeObjectURL(item.url);
+                    this.pending.splice(index, 1);
+                    this.error = '';
+                    this.syncInput();
+                },
+                setCover(img) {
+                    if (img.remove) return;
+                    this.existing.forEach((item) => { item.primary = item.id === img.id; });
+                    this.preview(img.url);
+                },
+                syncInput() {
+                    const input = this.$refs.fileInput;
+                    if (!input || !window.DataTransfer) return;
+                    const transfer = new DataTransfer();
+                    this.pending.forEach((item) => transfer.items.add(item.file));
+                    input.files = transfer.files;
+                },
+            }));
+
+            Alpine.data('catalogLogo', (config = {}) => ({
+                existing: config.url || '',
+                preview: config.url || '',
+                removed: false,
+                pick(event) {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    if (this.preview && this.preview !== this.existing) {
+                        URL.revokeObjectURL(this.preview);
+                    }
+                    this.removed = false;
+                    this.preview = URL.createObjectURL(file);
+                    this.$nextTick(() => window.lucide && lucide.createIcons());
+                },
+                clear() {
+                    if (this.preview && this.preview !== this.existing) {
+                        URL.revokeObjectURL(this.preview);
+                    }
+                    this.removed = true;
+                    this.preview = '';
+                    if (this.$refs.file) this.$refs.file.value = '';
+                    this.$nextTick(() => window.lucide && lucide.createIcons());
+                },
+            }));
+
             Alpine.data('quickCatalogSelect', (config = {}) => ({
                 selected: config.selected ?? '',
                 options: Array.isArray(config.options) ? [...config.options] : [],
@@ -54,14 +174,32 @@
                 previous: config.selected ?? '',
                 adding: false,
                 newName: '',
+                logoFile: null,
+                logoPreview: '',
                 saving: false,
                 error: '',
+                startAdd() {
+                    this.error = '';
+                    this.adding = true;
+                    this.$nextTick(() => this.$el.querySelector('.catalog-quick-form input')?.focus());
+                },
+                pickLogo(event) {
+                    const file = event.target.files?.[0];
+                    if (this.logoPreview) URL.revokeObjectURL(this.logoPreview);
+                    this.logoFile = file || null;
+                    this.logoPreview = file ? URL.createObjectURL(file) : '';
+                },
+                clearLogo() {
+                    if (this.logoPreview) URL.revokeObjectURL(this.logoPreview);
+                    this.logoFile = null;
+                    this.logoPreview = '';
+                    if (this.$refs.logo) this.$refs.logo.value = '';
+                },
                 onChange() {
                     this.error = '';
                     if (this.selected === '__new__') {
-                        this.adding = true;
                         this.selected = this.previous || '';
-                        this.$nextTick(() => this.$el.querySelector('input')?.focus());
+                        this.startAdd();
                         return;
                     }
                     this.previous = this.selected;
@@ -70,6 +208,7 @@
                 cancel() {
                     this.adding = false;
                     this.newName = '';
+                    this.clearLogo();
                     this.error = '';
                     this.selected = this.previous || '';
                 },
@@ -82,27 +221,35 @@
                     this.saving = true;
                     this.error = '';
                     try {
+                        const body = new FormData();
+                        body.append('name', name);
+                        if (this.logoFile) body.append('logo', this.logoFile);
                         const res = await fetch(this.storeUrl, {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json',
                                 'Accept': 'application/json',
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
                                 'X-Requested-With': 'XMLHttpRequest',
                             },
-                            body: JSON.stringify({ name }),
+                            body,
                         });
                         const data = await res.json().catch(() => ({}));
                         if (!res.ok) {
                             const first = data?.errors ? Object.values(data.errors).flat()[0] : null;
                             throw new Error(first || data?.message || ('Could not create ' + this.label));
                         }
-                        this.options.push({ id: data.id, name: data.name });
-                        this.options.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-                        this.selected = String(data.id);
-                        this.previous = this.selected;
+                        const id = String(data.id);
+                        if (!this.options.some((opt) => String(opt.id) === id)) {
+                            this.options.push({ id: data.id, name: data.name });
+                            this.options.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+                        }
                         this.adding = false;
                         this.newName = '';
+                        this.clearLogo();
+                        this.$nextTick(() => {
+                            this.selected = id;
+                            this.previous = id;
+                        });
                     } catch (e) {
                         this.error = e.message || ('Could not create ' + this.label);
                     } finally {

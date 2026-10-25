@@ -26,6 +26,7 @@
 
             <nav class="site-nav" :class="navOpen && 'is-open'" aria-label="Main">
                 <a href="{{ route('site.home') }}" class="{{ request()->routeIs('site.home') ? 'is-active' : '' }}">Home</a>
+                <a href="{{ route('site.products') }}" class="{{ request()->routeIs('site.products*') ? 'is-active' : '' }}">Products</a>
                 <a href="{{ route('site.about') }}" class="{{ request()->routeIs('site.about') ? 'is-active' : '' }}">About</a>
                 <a href="{{ route('site.contact') }}" class="{{ request()->routeIs('site.contact') ? 'is-active' : '' }}">Contact</a>
                 <div class="site-nav-actions">
@@ -65,6 +66,7 @@
                 </div>
                 <div>
                     <h4>Company</h4>
+                    <a href="{{ route('site.products') }}">Products</a>
                     <a href="{{ route('site.about') }}">About us</a>
                     <a href="{{ route('site.contact') }}">Contact</a>
                     @if ($g['show_partner_button'])

@@ -112,7 +112,13 @@
                         <template x-if="!p.image"><div class="f-thumb"><i data-lucide="package"></i></div></template>
                         <div class="f-product-info">
                             <div class="f-product-name" x-text="p.name"></div>
-                            <div class="f-product-price" x-text="taka(p.price)"></div>
+                            <div class="f-product-price" x-show="!qty[p.id]" x-text="taka(p.price)"></div>
+                            <label class="f-price-edit" x-show="qty[p.id] > 0" x-cloak>
+                                <span>৳</span>
+                                <input type="number" inputmode="decimal" step="0.01" min="0" :value="sellPrice(p)" @change="setPrice(p.id, $event.target.value)" :aria-label="'Price of ' + p.name">
+                            </label>
+                            <div class="f-muted f-small" x-show="qty[p.id] > 0 && changed(p) && !belowMin(p)" x-text="'List ' + taka(p.price)"></div>
+                            <div class="f-stock low" x-show="qty[p.id] > 0 && belowMin(p)" x-text="'Cannot sell below ' + taka(p.min_price)"></div>
                             <div class="f-stock" :class="p.stock <= 0 ? 'out' : (p.stock <= 10 ? 'low' : 'ok')"
                                  x-text="p.stock <= 0 ? 'Out of stock' : (p.stock <= 10 ? 'Only ' + p.stock + ' left' : p.stock + ' in stock')"></div>
                         </div>
@@ -145,15 +151,16 @@
                 <div class="f-summary-lines">
                     <template x-for="line in lines()" :key="line.id">
                         <div class="f-line-item">
-                            <span><span x-text="line.name"></span> <span class="f-muted" x-text="'× ' + line.qty"></span></span>
-                            <span x-text="taka(line.qty * line.price)"></span>
+                            <span><span x-text="line.name"></span> <span class="f-muted" x-text="'× ' + line.qty + ' · ' + taka(line.sell)"></span></span>
+                            <span x-text="taka(line.qty * line.sell)"></span>
                         </div>
                     </template>
                     <div class="f-muted f-small" x-show="count() === 0" style="padding:18px 0;text-align:center">Click <b>Add</b> on a product to start the order.</div>
                 </div>
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
+                <div class="f-warn" x-show="hasBelowMin()">A selling price is below the product minimum. Raise it before sending.</div>
                 <div class="f-warn" x-show="total() > credit">Over the shop's credit by <b x-text="taka(total() - credit)"></b>. The office may ask for an advance.</div>
-                <button type="button" class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" :disabled="count() === 0" @click="reviewSheet = true">Review &amp; send order</button>
+                <button type="button" class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" :disabled="count() === 0 || hasBelowMin()" @click="reviewSheet = true">Review &amp; send order</button>
                 <button type="button" class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" @click="endSheet = true"><i data-lucide="door-open"></i> End visit without order</button>
             </div>
           </aside>
@@ -179,21 +186,24 @@
                     <div class="f-line-item">
                         <span>
                             <span x-text="line.name"></span>
-                            <span class="f-muted" x-text="' × ' + line.qty"></span>
+                            <span class="f-muted" x-text="' × ' + line.qty + ' · ' + taka(line.sell)"></span>
+                            <span class="f-muted" x-show="line.changed" x-text="' · list ' + taka(line.price)"></span>
                             <span class="f-stock low" x-show="line.qty > line.stock" x-text="' · only ' + Math.max(0, line.stock) + ' in stock'"></span>
                         </span>
-                        <span x-text="taka(line.qty * line.price)"></span>
+                        <span x-text="taka(line.qty * line.sell)"></span>
                         <input type="hidden" :name="'items[' + i + '][product_id]'" :value="line.id">
                         <input type="hidden" :name="'items[' + i + '][quantity]'" :value="line.qty">
+                        <input type="hidden" :name="'items[' + i + '][unit_price]'" :value="line.sell">
                     </div>
                 </template>
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
+                <div class="f-warn" x-show="hasBelowMin()">Raise every selling price to at least the product minimum before sending.</div>
                 <div class="f-warn" x-show="total() > credit">
                     This is <b x-text="taka(total() - credit)"></b> over the shop's credit limit. The office may ask for an advance payment before approving.
                 </div>
                 <label class="f-label" for="order-notes">Note for the office (optional)</label>
                 <textarea id="order-notes" class="f-textarea" name="notes" rows="2" maxlength="1000" placeholder="e.g. deliver before Friday"></textarea>
-                <button class="f-btn f-btn-success f-btn-lg f-btn-block" style="margin-top:14px" type="submit" :disabled="submitting || count() === 0">
+                <button class="f-btn f-btn-success f-btn-lg f-btn-block" style="margin-top:14px" type="submit" :disabled="submitting || count() === 0 || hasBelowMin()">
                     <span x-text="submitting ? 'Sending…' : 'Send order for approval'"></span>
                 </button>
                 <button class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" type="button" @click="reviewSheet = false">Keep adding products</button>
@@ -226,9 +236,28 @@
 function fieldOrder(catalog, credit) {
     return {
         catalog, credit,
-        q: '', cat: '', qty: {},
+        q: '', cat: '', qty: {}, prices: {},
         reviewSheet: false, endSheet: false, submitting: false,
         taka(n) { return '৳ ' + Math.round(n || 0).toLocaleString('en-IN'); },
+        sellPrice(p) {
+            const raw = this.prices[p.id];
+            if (raw === undefined || raw === null || raw === '') return Number(p.price) || 0;
+            return Number(raw);
+        },
+        setPrice(id, v) {
+            const n = parseFloat(v);
+            this.prices[id] = isNaN(n) || n < 0 ? 0 : Math.round(n * 100) / 100;
+        },
+        changed(p) {
+            return Math.abs(this.sellPrice(p) - Number(p.price || 0)) >= 0.005;
+        },
+        belowMin(p) {
+            const min = Number(p.min_price || 0);
+            return min > 0 && this.sellPrice(p) + 0.001 < min;
+        },
+        hasBelowMin() {
+            return this.lines().some((line) => this.belowMin(line));
+        },
         filtered() {
             const q = this.q.trim().toLowerCase();
             return this.catalog.filter((p) => {
@@ -241,10 +270,13 @@ function fieldOrder(catalog, credit) {
         dec(id) { this.qty[id] = Math.max(0, (this.qty[id] || 0) - 1); },
         set(id, v) { this.qty[id] = Math.max(0, Math.min(100000, parseInt(v, 10) || 0)); },
         lines() {
-            return this.catalog.filter((p) => this.qty[p.id] > 0).map((p) => ({ ...p, qty: this.qty[p.id] }));
+            return this.catalog.filter((p) => this.qty[p.id] > 0).map((p) => {
+                const sell = this.sellPrice(p);
+                return { ...p, qty: this.qty[p.id], sell, changed: Math.abs(sell - Number(p.price || 0)) >= 0.005 };
+            });
         },
         count() { return Object.values(this.qty).reduce((a, b) => a + (b || 0), 0); },
-        total() { return this.lines().reduce((sum, l) => sum + l.qty * l.price, 0); },
+        total() { return this.lines().reduce((sum, l) => sum + l.qty * l.sell, 0); },
         init() {
             this.$watch('reviewSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
             this.$watch('endSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });

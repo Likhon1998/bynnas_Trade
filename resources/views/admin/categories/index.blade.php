@@ -2,7 +2,7 @@
 @section('title', 'Categories')
 @section('content')
     <x-page-header title="Categories" subtitle="Catalogue structure">
-        <x-slot:description>Create, edit or delete categories used on products.</x-slot:description>
+        <x-slot:description>Create, edit or delete categories used on products. Each category can have a logo.</x-slot:description>
         <a class="btn btn-ghost" href="{{ route('products.create') }}">Add product</a>
         <a class="btn btn-ghost" href="{{ route('brands.index') }}">Brands</a>
     </x-page-header>
@@ -18,12 +18,13 @@
         @can('categories.create')
             <div class="card" style="padding:18px">
                 <div class="section-title" style="margin-bottom:12px">Add category</div>
-                <form action="{{ route('categories.store') }}" method="post">
+                <form action="{{ route('categories.store') }}" method="post" enctype="multipart/form-data">
                     @csrf
                     <label class="label">Name</label>
                     <input class="input" style="width:100%;margin-bottom:10px" name="name" value="{{ old('name') }}" required>
                     <label class="label">Description</label>
-                    <textarea class="textarea" name="description" rows="3">{{ old('description') }}</textarea>
+                    <textarea class="textarea" name="description" rows="3" style="margin-bottom:10px">{{ old('description') }}</textarea>
+                    <x-catalog-logo-field />
                     <button class="btn btn-primary" style="margin-top:12px" type="submit">Create</button>
                 </form>
             </div>
@@ -32,18 +33,30 @@
         <div class="card">
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Category</th><th>Products</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>Category</th><th class="num">Products</th><th>Status</th><th class="actions"></th></tr></thead>
                     <tbody>
                         @forelse ($categories as $category)
                             <tr x-data="{ editing: false }">
-                                <td style="min-width:220px">
-                                    <div x-show="!editing" style="font-weight:600">{{ $category->name }}</div>
-                                    <div x-show="!editing" class="muted" style="font-size:12px">{{ $category->description }}</div>
+                                <td style="min-width:260px">
+                                    <div x-show="!editing" class="cat-logo-name">
+                                        <span class="cat-logo-thumb">
+                                            @if ($category->logoUrl())
+                                                <img src="{{ $category->logoUrl() }}" alt="">
+                                            @else
+                                                <em>{{ mb_strtoupper(mb_substr($category->name, 0, 1)) }}</em>
+                                            @endif
+                                        </span>
+                                        <div>
+                                            <div style="font-weight:600">{{ $category->name }}</div>
+                                            <div class="muted" style="font-size:12px">{{ $category->description }}</div>
+                                        </div>
+                                    </div>
                                     @can('categories.edit')
-                                        <form x-show="editing" x-cloak method="post" action="{{ route('categories.update', $category) }}" style="display:grid;gap:8px">
+                                        <form x-show="editing" x-cloak method="post" action="{{ route('categories.update', $category) }}" enctype="multipart/form-data" style="display:grid;gap:8px">
                                             @csrf @method('PUT')
                                             <input class="input" name="name" value="{{ $category->name }}" required>
                                             <textarea class="textarea" name="description" rows="2">{{ $category->description }}</textarea>
+                                            <x-catalog-logo-field :url="$category->logoUrl()" />
                                             <label style="font-size:12px;display:flex;gap:6px;align-items:center">
                                                 <input type="hidden" name="is_active" value="0">
                                                 <input type="checkbox" name="is_active" value="1" @checked($category->is_active)> Active
@@ -55,9 +68,9 @@
                                         </form>
                                     @endcan
                                 </td>
-                                <td>{{ $category->products_count }}</td>
+                                <td class="num">{{ $category->products_count }}</td>
                                 <td><x-badge :status="$category->is_active ? 'Active' : 'On Hold'" /></td>
-                                <td style="white-space:nowrap">
+                                <td class="actions">
                                     @can('categories.edit')
                                         <button class="btn btn-ghost btn-sm" type="button" x-show="!editing" @click="editing=true">Edit</button>
                                     @endcan

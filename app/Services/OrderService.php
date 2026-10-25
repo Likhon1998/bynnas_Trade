@@ -147,12 +147,7 @@ class OrderService
                 }
 
                 $qty = (int) $line['quantity'];
-                $unit = $product->priceForGroup($shop->priceGroup);
-                if ($unit <= 0) {
-                    throw ValidationException::withMessages([
-                        'items' => "Product {$product->sku} has no price yet. Ask the office to set it before ordering.",
-                    ]);
-                }
+                [$original, $unit] = $this->resolveLinePricing($product, $shop, $line, Order::SOURCE_SHOP_PORTAL);
                 $lineTotal = round($unit * $qty, 2);
 
                 OrderItem::query()->create([
@@ -161,6 +156,7 @@ class OrderService
                     'product_name' => $product->name,
                     'product_sku' => $product->sku,
                     'quantity' => $qty,
+                    'original_unit_price' => $original,
                     'unit_price' => $unit,
                     'line_total' => $lineTotal,
                 ]);
@@ -795,7 +791,7 @@ class OrderService
     }
 
     /**
-     * @param  list<array{product_id:int, quantity:int}>  $lines
+     * @param  list<array{product_id:int, quantity:int, unit_price?:float|int|string}>  $lines
      */
     private function submitOrder(
         Shop $shop,
@@ -871,12 +867,7 @@ class OrderService
                     $stockIssues[] = "{$product->sku}: need {$qty}, available {$product->availableStock()}";
                 }
 
-                $unit = $product->priceForGroup($shop->priceGroup);
-                if ($unit <= 0) {
-                    throw ValidationException::withMessages([
-                        'items' => "Product {$product->sku} has no price yet. Ask the office to set it before ordering.",
-                    ]);
-                }
+                [$original, $unit] = $this->resolveLinePricing($product, $shop, $line, $source);
                 $lineTotal = round($unit * $qty, 2);
 
                 OrderItem::query()->create([
@@ -885,6 +876,7 @@ class OrderService
                     'product_name' => $product->name,
                     'product_sku' => $product->sku,
                     'quantity' => $qty,
+                    'original_unit_price' => $original,
                     'unit_price' => $unit,
                     'line_total' => $lineTotal,
                 ]);
@@ -940,6 +932,43 @@ class OrderService
 
             return $fresh;
         });
+    }
+
+    /**
+     * @param  array{product_id?:int, quantity?:int, unit_price?:float|int|string|null}  $line
+     * @return array{0: float, 1: float}
+     */
+    private function resolveLinePricing(Product $product, Shop $shop, array $line, string $source): array
+    {
+        $original = round((float) $product->priceForGroup($shop->priceGroup), 2);
+        if ($original <= 0) {
+            throw ValidationException::withMessages([
+                'items' => "Product {$product->sku} has no price yet. Ask the office to set it before ordering.",
+            ]);
+        }
+
+        $canOverride = in_array($source, [Order::SOURCE_SALESMAN, Order::SOURCE_ADMIN], true);
+        $requested = $line['unit_price'] ?? null;
+        $unit = $original;
+
+        if ($canOverride && $requested !== null && $requested !== '') {
+            $unit = round((float) $requested, 2);
+        }
+
+        if ($unit <= 0) {
+            throw ValidationException::withMessages([
+                'items' => "Product {$product->sku} needs a selling price above zero.",
+            ]);
+        }
+
+        $floor = round((float) ($product->minimum_selling_price ?? 0), 2);
+        if ($canOverride && $floor > 0 && $unit + 0.001 < $floor) {
+            throw ValidationException::withMessages([
+                'items' => "{$product->sku}: selling price cannot be below ৳".number_format($floor, 2).'.',
+            ]);
+        }
+
+        return [$original, $unit];
     }
 
     private function recordHistory(

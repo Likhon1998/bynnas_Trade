@@ -136,11 +136,11 @@
         <div>
             <h1 class="pl-step" style="margin:12px 0 6px;font-size:24px;letter-spacing:-0.03em">B2B Partner Login</h1>
             <p class="muted pl-step" style="margin:0 0 22px">Approved shop owners only. Wholesale prices and stock are private to your account.</p>
-            @if ($errors->any())
-                <div class="pl-error" style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px">{{ $errors->first() }}</div>
+            @if ($errors->any() || session('error'))
+                <div class="pl-error" style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px">{{ $errors->first() ?: session('error') }}</div>
                 @include('partials.portal-hint')
             @endif
-            <form class="pl-step" action="{{ route('portal.login.submit') }}" method="post" onsubmit="this.querySelector('.pl-submit').classList.add('is-loading')">
+            <form class="pl-step" action="{{ url()->current() }}" method="post" onsubmit="this.querySelector('.pl-submit').classList.add('is-loading')">
                 @csrf
                 <label class="label">Work email</label>
                 <input class="input" style="width:100%;margin-bottom:12px" type="email" name="email" value="{{ old('email', request('email')) }}" required>

@@ -55,7 +55,7 @@ class ShopPortalController extends Controller
         $shop->load('priceGroup');
 
         $products = Product::query()
-            ->with(['category', 'brand', 'prices', 'offers'])
+            ->with(['category', 'brand', 'prices', 'offers', 'images'])
             ->where('status', Product::STATUS_ACTIVE)
             ->where('is_published', true)
             ->orderBy('name')
@@ -93,6 +93,7 @@ class ShopPortalController extends Controller
                 'price' => $price,
                 'price_label' => \App\Support\DemoData::taka($price),
                 'image' => $product->imageUrl(),
+                'images' => $product->imageUrls(),
                 'in_stock' => $stock > 0,
                 'is_new' => $isNew,
                 'is_trending' => $sold > 0 || $stock >= 200,

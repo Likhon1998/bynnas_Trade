@@ -2,7 +2,7 @@
 @section('title', 'Brands')
 @section('content')
     <x-page-header title="Brands" subtitle="Product brands">
-        <x-slot:description>Create, edit or delete brands used on products.</x-slot:description>
+        <x-slot:description>Create, edit or delete brands used on products. Each brand can have a logo.</x-slot:description>
         <a class="btn btn-ghost" href="{{ route('products.create') }}">Add product</a>
         <a class="btn btn-ghost" href="{{ route('categories.index') }}">Categories</a>
     </x-page-header>
@@ -18,11 +18,12 @@
         @can('brands.create')
             <div class="card" style="padding:18px">
                 <div class="section-title" style="margin-bottom:12px">Add brand</div>
-                <form action="{{ route('brands.store') }}" method="post">
+                <form action="{{ route('brands.store') }}" method="post" enctype="multipart/form-data">
                     @csrf
                     <label class="label">Name</label>
                     <input class="input" style="width:100%;margin-bottom:10px" name="name" value="{{ old('name') }}" required>
-                    <button class="btn btn-primary" type="submit">Create</button>
+                    <x-catalog-logo-field />
+                    <button class="btn btn-primary" style="margin-top:12px" type="submit">Create</button>
                 </form>
             </div>
         @endcan
@@ -30,16 +31,26 @@
         <div class="card">
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Brand</th><th>Products</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>Brand</th><th class="num">Products</th><th>Status</th><th class="actions"></th></tr></thead>
                     <tbody>
                         @forelse ($brands as $brand)
                             <tr x-data="{ editing: false }">
-                                <td style="min-width:200px">
-                                    <div x-show="!editing" style="font-weight:600">{{ $brand->name }}</div>
+                                <td style="min-width:240px">
+                                    <div x-show="!editing" class="cat-logo-name">
+                                        <span class="cat-logo-thumb">
+                                            @if ($brand->logoUrl())
+                                                <img src="{{ $brand->logoUrl() }}" alt="">
+                                            @else
+                                                <em>{{ mb_strtoupper(mb_substr($brand->name, 0, 1)) }}</em>
+                                            @endif
+                                        </span>
+                                        <div style="font-weight:600">{{ $brand->name }}</div>
+                                    </div>
                                     @can('brands.edit')
-                                        <form x-show="editing" x-cloak method="post" action="{{ route('brands.update', $brand) }}" style="display:grid;gap:8px">
+                                        <form x-show="editing" x-cloak method="post" action="{{ route('brands.update', $brand) }}" enctype="multipart/form-data" style="display:grid;gap:8px">
                                             @csrf @method('PUT')
                                             <input class="input" name="name" value="{{ $brand->name }}" required>
+                                            <x-catalog-logo-field :url="$brand->logoUrl()" />
                                             <label style="font-size:12px;display:flex;gap:6px;align-items:center">
                                                 <input type="hidden" name="is_active" value="0">
                                                 <input type="checkbox" name="is_active" value="1" @checked($brand->is_active)> Active
@@ -51,9 +62,9 @@
                                         </form>
                                     @endcan
                                 </td>
-                                <td>{{ $brand->products_count }}</td>
+                                <td class="num">{{ $brand->products_count }}</td>
                                 <td><x-badge :status="$brand->is_active ? 'Active' : 'On Hold'" /></td>
-                                <td style="white-space:nowrap">
+                                <td class="actions">
                                     @can('brands.edit')
                                         <button class="btn btn-ghost btn-sm" type="button" x-show="!editing" @click="editing=true">Edit</button>
                                     @endcan

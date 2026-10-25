@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CatalogLogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +14,7 @@ class Category extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'name', 'slug', 'parent_id', 'description', 'is_active', 'sort_order',
+        'name', 'slug', 'parent_id', 'description', 'logo_path', 'is_active', 'sort_order',
     ];
 
     protected function casts(): array
@@ -43,5 +44,10 @@ class Category extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function logoUrl(): ?string
+    {
+        return CatalogLogo::url($this->logo_path);
     }
 }

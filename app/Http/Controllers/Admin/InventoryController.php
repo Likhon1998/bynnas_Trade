@@ -9,6 +9,7 @@ use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use App\Services\InventoryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class InventoryController extends Controller
 {
@@ -20,10 +21,26 @@ class InventoryController extends Controller
 
         $warehouses = Warehouse::query()->where('is_active', true)->orderBy('name')->get();
         $warehouseId = $request->integer('warehouse_id') ?: Warehouse::defaultWarehouse()?->id;
+        $categoryId = $request->filled('category_id') ? $request->integer('category_id') : null;
+
+        $scope = WarehouseStock::query()
+            ->with(['product.category'])
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId));
+
+        $scoped = (clone $scope)->get();
+        $summary = $this->summarizeStock($scoped);
+        $categoryStats = $this->categoryStats($scoped);
 
         $stocks = WarehouseStock::query()
-            ->with(['product.category', 'warehouse'])
+            ->with(['product.category', 'product.images', 'warehouse'])
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->when($request->filled('category_id'), function ($q) use ($categoryId) {
+                if ((int) $categoryId === 0) {
+                    $q->whereHas('product', fn ($p) => $p->whereNull('category_id'));
+                } else {
+                    $q->whereHas('product', fn ($p) => $p->where('category_id', $categoryId));
+                }
+            })
             ->when($request->search, function ($q, $search) {
                 $q->whereHas('product', function ($p) use ($search) {
                     $p->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%");
@@ -33,7 +50,14 @@ class InventoryController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        return view('admin.inventory.index', compact('stocks', 'warehouses', 'warehouseId'));
+        return view('admin.inventory.index', compact(
+            'stocks',
+            'warehouses',
+            'warehouseId',
+            'categoryId',
+            'summary',
+            'categoryStats',
+        ));
     }
 
     public function receiveForm(Request $request)
@@ -87,5 +111,46 @@ class InventoryController extends Controller
             'entries' => $entries,
             'warehouses' => Warehouse::query()->orderBy('name')->get(),
         ]);
+    }
+
+    /**
+     * @param  Collection<int, WarehouseStock>  $stocks
+     * @return array{value: float, products: int, units: int}
+     */
+    private function summarizeStock(Collection $stocks): array
+    {
+        return [
+            'value' => round($stocks->sum(function (WarehouseStock $stock) {
+                return (int) $stock->qty_on_hand * (float) ($stock->product?->inventoryUnitCost() ?? 0);
+            }), 2),
+            'products' => $stocks->pluck('product_id')->filter()->unique()->count(),
+            'units' => (int) $stocks->sum('qty_on_hand'),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, WarehouseStock>  $stocks
+     * @return list<array{id: int|null, name: string, products: int, units: int, value: float}>
+     */
+    private function categoryStats(Collection $stocks): array
+    {
+        return $stocks
+            ->groupBy(fn (WarehouseStock $stock) => $stock->product?->category_id ?: 0)
+            ->map(function (Collection $rows) {
+                $category = $rows->first()?->product?->category;
+
+                return [
+                    'id' => $category?->id,
+                    'name' => $category?->name ?: 'Uncategorized',
+                    'products' => $rows->pluck('product_id')->filter()->unique()->count(),
+                    'units' => (int) $rows->sum('qty_on_hand'),
+                    'value' => round($rows->sum(function (WarehouseStock $stock) {
+                        return (int) $stock->qty_on_hand * (float) ($stock->product?->inventoryUnitCost() ?? 0);
+                    }), 2),
+                ];
+            })
+            ->sortByDesc('products')
+            ->values()
+            ->all();
     }
 }

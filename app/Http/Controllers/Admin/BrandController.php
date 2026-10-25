@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
+use App\Support\CatalogEntry;
+use App\Support\CatalogLogo;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -25,22 +26,24 @@ class BrandController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless($request->user()->can('brands.create'), 403);
+        abort_unless(
+            $request->user()->can('brands.create') || $request->user()->can('products.create'),
+            403
+        );
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:120', Rule::unique('brands', 'name')->whereNull('deleted_at')],
+            'name' => ['required', 'string', 'max:120'],
+            'logo' => CatalogLogo::rules(),
         ]);
 
-        $brand = Brand::query()->create([
-            'name' => trim($data['name']),
-            'slug' => Str::slug($data['name']).'-'.Str::lower(Str::random(4)),
-            'is_active' => true,
-        ]);
+        $brand = CatalogEntry::createOrRestore(Brand::class, $data['name']);
+        CatalogLogo::apply($brand, $request->file('logo'));
 
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json([
                 'id' => $brand->id,
                 'name' => $brand->name,
+                'logo_url' => $brand->fresh()->logoUrl(),
                 'message' => 'Brand created.',
             ]);
         }
@@ -55,12 +58,15 @@ class BrandController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120', Rule::unique('brands', 'name')->ignore($brand->id)->whereNull('deleted_at')],
             'is_active' => ['sometimes', 'boolean'],
+            'logo' => CatalogLogo::rules(),
+            'remove_logo' => ['sometimes', 'boolean'],
         ]);
 
         $brand->update([
             'name' => trim($data['name']),
             'is_active' => $request->boolean('is_active', $brand->is_active),
         ]);
+        CatalogLogo::apply($brand, $request->file('logo'), $request->boolean('remove_logo'));
 
         return back()->with('success', 'Brand updated.');
     }

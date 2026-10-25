@@ -23,6 +23,7 @@ class CatalogQuickCreateTest extends TestCase
             ->assertOk()
             ->assertSee('+ Add new category')
             ->assertSee('+ Add new brand')
+            ->assertSee('+ New')
             ->assertSee('quickCatalogSelect');
     }
 
@@ -72,5 +73,27 @@ class CatalogQuickCreateTest extends TestCase
 
         $this->assertSoftDeleted($category);
         $this->assertSoftDeleted($brand);
+    }
+
+    public function test_soft_deleted_category_and_brand_can_be_recreated(): void
+    {
+        $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
+        $category = Category::query()->create(['name' => 'Revived Cat', 'slug' => 'revived-cat', 'is_active' => true]);
+        $brand = Brand::query()->create(['name' => 'Revived Brand', 'slug' => 'revived-brand', 'is_active' => true]);
+        $category->delete();
+        $brand->delete();
+
+        $this->actingAs($admin)
+            ->postJson(route('categories.store'), ['name' => 'Revived Cat'])
+            ->assertOk()
+            ->assertJsonPath('id', $category->id);
+
+        $this->actingAs($admin)
+            ->postJson(route('brands.store'), ['name' => 'Revived Brand'])
+            ->assertOk()
+            ->assertJsonPath('id', $brand->id);
+
+        $this->assertNotSoftDeleted($category);
+        $this->assertNotSoftDeleted($brand);
     }
 }

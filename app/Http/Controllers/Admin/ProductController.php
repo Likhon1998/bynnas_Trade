@@ -26,7 +26,7 @@ class ProductController extends Controller
         $this->authorize('viewAny', Product::class);
 
         $products = Product::query()
-            ->with(['category', 'brand'])
+            ->with(['category', 'brand', 'images'])
             ->when($request->search, function ($q, $search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('name', 'like', "%{$search}%")
@@ -69,7 +69,7 @@ class ProductController extends Controller
             $data,
             $request->user(),
             $groupPrices,
-            $request->file('image'),
+            $this->uploadedImages($request),
         );
 
         if ($openingStock > 0) {
@@ -83,7 +83,7 @@ class ProductController extends Controller
     {
         $this->authorize('update', $product);
 
-        $product->load('prices');
+        $product->load(['prices', 'images']);
 
         return view('admin.products.edit', array_merge($this->formData(), compact('product')));
     }
@@ -116,7 +116,15 @@ class ProductController extends Controller
             throw ValidationException::withMessages(['stock_on_hand' => 'You are not allowed to change stock. Use Inventory.']);
         }
 
-        $this->products->update($product, $data, $user, $priceChanged ? $groupPrices : null, $request->file('image'));
+        $this->products->update(
+            $product,
+            $data,
+            $user,
+            $priceChanged ? $groupPrices : null,
+            $this->uploadedImages($request),
+            $request->input('remove_images', []),
+            $request->filled('primary_image_id') ? (int) $request->input('primary_image_id') : null,
+        );
 
         if ($stockChanged) {
             $this->products->setTotalStock($product->fresh(), (int) $data['stock_on_hand'], $user);
@@ -137,6 +145,11 @@ class ProductController extends Controller
             'variant' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'images' => ['nullable', 'array', 'max:'.ProductService::MAX_IMAGES],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'remove_images' => ['nullable', 'array'],
+            'remove_images.*' => ['integer'],
+            'primary_image_id' => ['nullable', 'integer'],
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             'landed_cost' => ['nullable', 'numeric', 'min:0'],
             'wholesale_price' => ['required', 'numeric', 'min:0'],
@@ -155,6 +168,22 @@ class ProductController extends Controller
         $data['is_published'] = $request->boolean('is_published', true);
 
         return $data;
+    }
+
+    /**
+     * @return list<\Illuminate\Http\UploadedFile>
+     */
+    private function uploadedImages(Request $request): array
+    {
+        $files = $request->file('images', []);
+        if (! is_array($files)) {
+            $files = $files ? [$files] : [];
+        }
+        if ($single = $request->file('image')) {
+            $files[] = $single;
+        }
+
+        return array_values(array_filter($files));
     }
 
     private function formData(): array

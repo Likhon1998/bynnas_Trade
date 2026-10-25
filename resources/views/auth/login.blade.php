@@ -15,14 +15,14 @@
         <h1 style="margin:12px 0 6px;font-size:24px;letter-spacing:-0.03em">Admin portal</h1>
         <p class="muted" style="margin:0 0 22px">Sign in with credentials issued by Super Admin. Access is role-scoped and audited.</p>
 
-        @if ($errors->any())
+        @if ($errors->any() || session('error'))
             <div style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px">
-                {{ $errors->first() }}
+                {{ $errors->first() ?: session('error') }}
             </div>
             @include('partials.portal-hint')
         @endif
 
-        <form action="{{ route('login.submit') }}" method="post">
+        <form action="{{ url()->current() }}" method="post">
             @csrf
             <label class="label">Work email</label>
             <input class="input" style="width:100%;margin-bottom:12px" type="email" name="email" value="{{ old('email', request('email', 'admin@bynnastrade.com')) }}" required autocomplete="username">

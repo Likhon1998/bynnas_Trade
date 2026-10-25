@@ -87,11 +87,11 @@
     <div class="ecom-grid">
         <template x-for="item in filteredCatalog()" :key="item.id">
             <article class="ecom-card" :class="!item.in_stock && 'is-oos'">
-                <div class="ecom-card-media">
-                    <template x-if="item.image">
-                        <img :src="item.image" :alt="item.name" loading="lazy">
+                <div class="ecom-card-media" @click="cycleImage(item)">
+                    <template x-if="coverImage(item)">
+                        <img :src="coverImage(item)" :alt="item.name" loading="lazy">
                     </template>
-                    <template x-if="!item.image">
+                    <template x-if="!coverImage(item)">
                         <div class="ecom-fallback" x-text="(item.name || '?').charAt(0)"></div>
                     </template>
                     <div class="ecom-badges">
@@ -103,7 +103,7 @@
                         type="button"
                         class="ecom-wish"
                         :class="isWished(item.id) && 'is-on'"
-                        @click="toggleWish(item)"
+                        @click.stop="toggleWish(item)"
                         :title="isWished(item.id) ? 'Remove from wishlist' : 'Save to wishlist'"
                     >
                         <i data-lucide="heart" style="width:14px;height:14px"></i>
