@@ -31,7 +31,7 @@
         <div class="f-mobile-only" style="display:grid;gap:10px">
             @forelse ($shops as $shop)
                 @php
-                    $credit = $shop->availableCredit();
+                    $outstanding = (float) $shop->outstanding_balance;
                     $tone = ['violet', 'blue', 'green', 'amber', 'rose', 'sky', 'teal'][crc32((string) $shop->name) % 7];
                     $search = strtolower($shop->name.' '.$shop->code.' '.$shop->owner_name.' '.$shop->city.' '.$shop->territory?->name);
                 @endphp
@@ -42,7 +42,7 @@
                             <div class="f-shop-name">{{ $shop->name }}</div>
                             <div class="f-shop-meta">{{ $shop->owner_name ?: $shop->code }}{{ $shop->city ? ' · '.$shop->city : '' }}</div>
                             <div class="f-chips">
-                                <span class="f-chip {{ $credit <= 0 ? 'red' : 'green' }}">Credit {{ \App\Support\DemoData::taka($credit) }}</span>
+                                <span class="f-chip {{ $outstanding > 0 ? 'red' : 'green' }}">Outstanding {{ \App\Support\DemoData::taka($outstanding) }}</span>
                                 @if ($shop->priceGroup)<span class="f-chip">{{ $shop->priceGroup->name }}</span>@endif
                                 @if ($shop->is_mine)
                                     <span class="f-chip green">My route</span>
@@ -77,7 +77,7 @@
                         <tr>
                             <th>Shop</th>
                             <th>Area</th>
-                            <th class="num">Credit left</th>
+                            <th class="num">Outstanding</th>
                             <th>Price group</th>
                             <th></th>
                         </tr>
@@ -85,7 +85,7 @@
                     <tbody>
                         @forelse ($shops as $shop)
                             @php
-                                $credit = $shop->availableCredit();
+                                $outstanding = (float) $shop->outstanding_balance;
                                 $tone = ['violet', 'blue', 'green', 'amber', 'rose', 'sky', 'teal'][crc32((string) $shop->name) % 7];
                                 $search = strtolower($shop->name.' '.$shop->code.' '.$shop->owner_name.' '.$shop->city.' '.$shop->territory?->name);
                             @endphp
@@ -100,7 +100,7 @@
                                     </div>
                                 </td>
                                 <td>{{ $shop->city ?: $shop->territory?->name ?: '—' }}</td>
-                                <td class="num {{ $credit <= 0 ? '' : 'strong' }}" style="{{ $credit <= 0 ? 'color:var(--f-red);font-weight:700' : '' }}">{{ \App\Support\DemoData::taka($credit) }}</td>
+                                <td class="num {{ $outstanding > 0 ? '' : 'strong' }}" style="{{ $outstanding > 0 ? 'color:var(--f-red);font-weight:700' : '' }}">{{ \App\Support\DemoData::taka($outstanding) }}</td>
                                 <td>
                                     @if ($shop->priceGroup)<span class="f-chip violet">{{ $shop->priceGroup->name }}</span>@else<span class="f-muted">—</span>@endif
                                     @if ($shop->is_mine)

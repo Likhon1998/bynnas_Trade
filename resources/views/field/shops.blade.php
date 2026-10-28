@@ -53,7 +53,7 @@
         <section class="f-panel f-desktop-only">
             <div class="f-table-wrap">
                 <table class="f-table">
-                    <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Outstanding</th><th class="num">Credit left</th><th>Price group</th><th></th></tr></thead>
+                    <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Outstanding</th><th>Price group</th><th></th></tr></thead>
                     <tbody>
                         @forelse ($shops as $shop)
                             @include('field.partials.shop-row', ['shop' => $shop, 'openVisit' => $openVisit, 'filterable' => true, 'showGroup' => true])

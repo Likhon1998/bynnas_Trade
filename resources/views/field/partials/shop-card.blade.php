@@ -1,5 +1,5 @@
 @php
-    $credit = $shop->availableCredit();
+    $outstanding = (float) $shop->outstanding_balance;
     $phone = preg_replace('/[^0-9+]/', '', (string) $shop->phone);
     $mapQuery = urlencode(trim(implode(', ', array_filter([$shop->name, $shop->address, $shop->city]))));
     $isOpenHere = $openVisit && $openVisit->shop_id === $shop->id;
@@ -30,7 +30,7 @@
                 @if ($shop->status === \App\Models\Shop::STATUS_PENDING)
                     <span class="f-chip amber">Awaiting approval</span>
                 @else
-                    <span class="f-chip {{ $credit <= 0 ? 'red' : '' }}">Credit {{ \App\Support\DemoData::taka($credit) }}</span>
+                    <span class="f-chip {{ $outstanding > 0 ? 'red' : '' }}">Outstanding {{ \App\Support\DemoData::taka($outstanding) }}</span>
                 @endif
                 @if ($shop->priceGroup)
                     <span class="f-chip">{{ $shop->priceGroup->name }}</span>

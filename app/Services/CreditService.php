@@ -9,7 +9,6 @@ use App\Models\ProductReturn;
 use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class CreditService
 {
@@ -105,44 +104,25 @@ class CreditService
         $shop = $order->shop;
         $limit = round((float) $shop->credit_limit, 2);
         $exposure = $this->exposure($shop, $order->id);
-        $available = max(0, round($limit - $exposure, 2));
         $needed = round($order->settlement()['remaining_due'], 2);
 
+        // Credit limits are not enforced — shops may order freely. Figures stay for reporting.
         return [
             'limit' => $limit,
             'exposure' => $exposure,
-            'available' => $available,
+            'available' => max(0, round($limit - $exposure, 2)),
             'needed' => $needed,
-            'ok' => $needed <= $available + 0.009,
+            'ok' => true,
         ];
     }
 
     /**
-     * Block an approval that would take the shop past its credit limit unless an authorised
-     * user overrides it. Returns true when the override was used.
+     * Credit limit is not enforced. Outstanding is still tracked; shops may buy freely.
+     * Always returns false (no override used).
      */
     public function assertCanOrder(Order $order, User $actor, bool $override = false): bool
     {
-        $check = $this->creditCheck($order);
-        if ($check['ok']) {
-            return false;
-        }
-
-        $taka = fn (float $v) => '৳ '.number_format($v, 2);
-        if (! $override) {
-            throw ValidationException::withMessages([
-                'credit' => "Over credit limit: this order needs {$taka($check['needed'])} of credit but only {$taka($check['available'])} is available "
-                    ."(limit {$taka($check['limit'])}, already owed {$taka($check['exposure'])}). Request an advance, or tick \"Override credit limit\".",
-            ]);
-        }
-
-        if (! $actor->can('orders.credit_override')) {
-            throw ValidationException::withMessages([
-                'credit' => 'You are not allowed to approve orders over the credit limit. Ask an admin.',
-            ]);
-        }
-
-        return true;
+        return false;
     }
 
     public function syncAllShops(): void

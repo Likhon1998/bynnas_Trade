@@ -280,29 +280,16 @@ class LogicGuardsTest extends TestCase
         $this->assertEqualsWithDelta(max(0, $owedBefore - 50), (float) $this->shop->fresh()->outstanding_balance, 0.01);
     }
 
-    // Credit limit — approval is blocked past the limit; only users with the override permission can push it through.
-    public function test_credit_limit_blocks_approval_unless_admin_overrides(): void
+    // Credit limit is informational only — shops may buy freely even when over the stored limit.
+    public function test_credit_limit_does_not_block_approval(): void
     {
         $order = $this->newOrder(2);
         $this->shop->update(['credit_limit' => 1]);
 
-        $this->post(route('orders.approve', $order))->assertSessionHasErrors('credit');
-        $this->assertSame(Order::STATUS_PENDING_AUDIT, $order->fresh()->status);
-        $this->get(route('orders.show', $order))->assertOk()->assertSee('Over limit')->assertSee('Override credit limit');
-
-        $manager = $this->staff('Sales Manager', 'manager2@bt.test');
-        $this->actingAs($manager)->post(route('orders.approve', $order), ['credit_override' => 1])->assertSessionHasErrors('credit');
-        $this->assertSame(Order::STATUS_PENDING_AUDIT, $order->fresh()->status);
-
-        $this->actingAs($this->super)->post(route('orders.approve', $order), ['credit_override' => 1])->assertSessionHasNoErrors();
+        $this->post(route('orders.approve', $order))->assertSessionHasNoErrors();
         $order->refresh();
         $this->assertSame(Order::STATUS_APPROVED, $order->status);
-        $this->assertTrue((bool) $order->credit_override);
-
-        $this->shop->update(['credit_limit' => 10_000_000]);
-        $next = $this->newOrder(1);
-        $this->post(route('orders.approve', $next))->assertSessionHasNoErrors();
-        $this->assertFalse((bool) $next->fresh()->credit_override);
+        $this->assertFalse((bool) $order->credit_override);
     }
 
     // H5 — saving a salesman never silently drops shops the form didn't show.

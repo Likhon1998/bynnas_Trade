@@ -2,7 +2,7 @@
 @php
     $shop = $visit->shop;
     $phone = preg_replace('/[^0-9+]/', '', (string) $shop?->phone);
-    $credit = $shop?->availableCredit() ?? 0;
+    $outstanding = (float) ($shop?->outstanding_balance ?? 0);
     $taking = $visit->isOpen() && ! $visit->order && $canOrder;
 @endphp
 @section('title', 'Visit · '.$shop?->name)
@@ -26,7 +26,7 @@
         </div>
         <div class="f-chips" style="margin-top:12px">
             @if ($canOrder)
-                <span class="f-chip {{ $credit <= 0 ? 'red' : 'green' }}">Credit left {{ \App\Support\DemoData::taka($credit) }}</span>
+                <span class="f-chip {{ $outstanding > 0 ? 'red' : 'green' }}">Outstanding {{ \App\Support\DemoData::taka($outstanding) }}</span>
             @else
                 <span class="f-chip amber">Awaiting approval</span>
             @endif
@@ -86,7 +86,7 @@
             <button class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" type="submit"><i data-lucide="log-out"></i> End visit</button>
         </form>
     @else
-        <div x-data="fieldOrder(@js($catalog), {{ $credit }})" x-cloak>
+        <div x-data="fieldOrder(@js($catalog))" x-cloak>
           <div class="f-visit">
           <div class="f-visit-main">
             <div class="f-toolbar">
@@ -182,7 +182,6 @@
                 </div>
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
                 <div class="f-warn" x-show="hasBelowMin()">A selling price is below the product minimum. Raise it before sending.</div>
-                <div class="f-warn" x-show="total() > credit">Over the shop's credit by <b x-text="taka(total() - credit)"></b>. The office may ask for an advance.</div>
                 <button type="button" class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" :disabled="count() === 0 || hasBelowMin()" @click="reviewSheet = true">Review &amp; send order</button>
                 <button type="button" class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" @click="endSheet = true"><i data-lucide="door-open"></i> End visit without order</button>
             </div>
@@ -221,13 +220,10 @@
                 </template>
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
                 <div class="f-warn" x-show="hasBelowMin()">Raise every selling price to at least the product minimum before sending.</div>
-                <div class="f-warn" x-show="total() > credit">
-                    This is <b x-text="taka(total() - credit)"></b> over the shop's credit limit. Collect some cash now if the owner can pay.
-                </div>
 
                 <div class="f-baki" style="margin-top:12px">
                     <div class="f-label">Payment at shop</div>
-                    <p class="f-muted f-small" style="margin:0 0 8px">Owner can pay some now; rest stays as <b>baki</b> (credit).</p>
+                    <p class="f-muted f-small" style="margin:0 0 8px">Owner can pay some now; rest stays as <b>baki</b> (pay later). No credit limit — they can buy as they like.</p>
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
                         <button type="button" class="f-filter" :class="Number(paidNow) === 0 && 'active'" @click="paidNow = 0">Full baki</button>
                         <button type="button" class="f-filter" @click="paidNow = Math.round(total() / 2)">Half now</button>
@@ -285,9 +281,9 @@
 @if ($taking)
 @push('scripts')
 <script>
-function fieldOrder(catalog, credit) {
+function fieldOrder(catalog) {
     return {
-        catalog, credit,
+        catalog,
         q: '', cat: '', view: 'categories',
         qty: {}, prices: {},
         paidNow: 0, payMethod: 'cash',

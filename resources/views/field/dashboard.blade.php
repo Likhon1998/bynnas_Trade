@@ -82,7 +82,7 @@
                 </div>
                 <div class="f-table-wrap f-desktop-only">
                     <table class="f-table">
-                        <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Credit left</th><th></th></tr></thead>
+                        <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Outstanding</th><th></th></tr></thead>
                         <tbody>
                             @forelse ($routeShops as $shop)
                                 @include('field.partials.shop-row', ['shop' => $shop, 'openVisit' => $openVisit])
