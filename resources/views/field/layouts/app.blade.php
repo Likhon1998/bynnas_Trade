@@ -22,7 +22,7 @@
     $user = auth()->user();
     $initials = collect(explode(' ', (string) $user?->name))->filter()->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
     $onVisitPage = request()->routeIs('field.visit.show') && optional(request()->route('visit'))->id === $fieldOpenVisit?->id;
-    $moreActive = request()->routeIs('field.earnings', 'field.notifications*', 'field.account.*');
+    $moreActive = request()->routeIs('field.earnings', 'field.collections', 'field.notifications*', 'field.account.*');
 @endphp
 <body class="f-app" x-data="{ moreOpen: false }" @keydown.escape.window="moreOpen = false">
     <div class="f-shell @hasSection('has-bar') has-bar @endif">
@@ -103,6 +103,7 @@
             </button>
 
             <a href="{{ route('field.earnings') }}" title="Earnings" class="f-nav-extra tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
+            <a href="{{ route('field.collections') }}" title="Collected money" class="f-nav-extra tone-blue {{ request()->routeIs('field.collections') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="banknote"></i></span><span class="f-nav-text">Collected</span></a>
             <a href="{{ route('field.notifications') }}" title="Notifications" class="f-nav-extra tone-rose {{ request()->routeIs('field.notifications*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="bell"></i></span><span class="f-nav-text">Alerts</span></a>
 
             <div class="f-nav-user">
@@ -140,6 +141,7 @@
         </div>
         <div class="f-more-grid">
             <a class="f-more-item" href="{{ route('field.earnings') }}" @click="moreOpen = false"><span class="f-ico tone-green"><i data-lucide="wallet"></i></span>Earnings</a>
+            <a class="f-more-item" href="{{ route('field.collections') }}" @click="moreOpen = false"><span class="f-ico tone-blue"><i data-lucide="banknote"></i></span>Collected money</a>
             <a class="f-more-item" href="{{ route('field.notifications') }}" @click="moreOpen = false"><span class="f-ico tone-rose"><i data-lucide="bell"></i></span>Alerts</a>
             <a class="f-more-item" href="{{ route('field.account.password') }}" @click="moreOpen = false"><span class="f-ico tone-amber"><i data-lucide="key-round"></i></span>Password</a>
         </div>

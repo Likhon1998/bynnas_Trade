@@ -7,13 +7,14 @@
     </div>
     @if (!empty($dueReminder))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fff7ed;color:#c2410c">
-            You have an outstanding balance of <strong>{{ \App\Support\DemoData::taka($shop->outstanding_balance) }}</strong>.
-            <a class="link" href="{{ route('portal.statement') }}">View statement</a>
+            Previous baki: <strong>{{ \App\Support\DemoData::taka($shop->outstanding_balance) }}</strong>.
+            This is unpaid from delivered orders — it stays even when you place a new order.
+            Pay from a delivered order, or <a class="link" href="{{ route('portal.statement') }}">view statement</a>.
         </div>
     @endif
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([
-            ['Outstanding due', \App\Support\DemoData::taka($shop->outstanding_balance)],
+            ['Baki', \App\Support\DemoData::taka($shop->outstanding_balance)],
             ['Pending audit', number_format($pendingOrders)],
             ['Price group', $shop->priceGroup?->name ?: 'Standard'],
             ['Payment terms', ($shop->payment_terms_days ?: 21).' days'],

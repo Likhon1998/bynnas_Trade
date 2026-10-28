@@ -6,6 +6,7 @@ use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\OrderFulfilment;
 use App\Models\OrderStatusHistory;
+use App\Models\Payment;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
@@ -170,13 +171,69 @@ class FulfilmentService
         });
     }
 
-    public function markDelivered(Delivery $delivery, User $actor, ?string $notes = null): Delivery
+    public function deliverNow(Order $order, User $actor, ?string $notes = null): Order
     {
+        $order->load(['fulfilment', 'delivery', 'items.product', 'warehouse']);
+
+        if ($order->isDelivered()) {
+            return $order;
+        }
+
+        if (! $order->canDeliver()) {
+            throw ValidationException::withMessages([
+                'order' => 'Approve the order first, then deliver.',
+            ]);
+        }
+
+        $fulfilment = $order->fulfilment;
+        if (! $fulfilment) {
+            throw ValidationException::withMessages([
+                'order' => 'No warehouse fulfilment is queued for this order.',
+            ]);
+        }
+
+        $note = $notes ?: 'Marked delivered';
+
+        if (in_array($fulfilment->status, [OrderFulfilment::STATUS_AWAITING_PICK, OrderFulfilment::STATUS_PICKING], true)) {
+            $fulfilment = $this->completePick($fulfilment, $actor, $note);
+        }
+
+        if ($fulfilment->status === OrderFulfilment::STATUS_PICKED) {
+            $fulfilment = $this->pack($fulfilment, $actor, $note);
+        }
+
+        $delivery = $order->delivery;
+        if ($fulfilment->status === OrderFulfilment::STATUS_PACKED) {
+            $delivery = $this->dispatch($fulfilment, $actor, ['notes' => $note]);
+        } else {
+            $delivery = $delivery ?: $order->fresh('delivery')->delivery;
+        }
+
+        if ($delivery && $delivery->status !== Delivery::STATUS_DELIVERED) {
+            $this->markDelivered($delivery, $actor, $note, 0);
+        }
+
+        return $order->fresh(['fulfilment', 'delivery', 'invoice']);
+    }
+
+    public function markDelivered(
+        Delivery $delivery,
+        User $actor,
+        ?string $notes = null,
+        float $collectedNow = 0,
+        string $method = Payment::METHOD_CASH,
+        ?string $reference = null,
+    ): Delivery {
         if ($delivery->status === Delivery::STATUS_DELIVERED) {
             throw ValidationException::withMessages(['delivery' => 'Already delivered.']);
         }
 
-        return DB::transaction(function () use ($delivery, $actor, $notes) {
+        $collectedNow = round($collectedNow, 2);
+        if ($collectedNow < 0) {
+            throw ValidationException::withMessages(['collected_now' => 'Collected amount cannot be negative.']);
+        }
+
+        return DB::transaction(function () use ($delivery, $actor, $notes, $collectedNow, $method, $reference) {
             $delivery = Delivery::query()->lockForUpdate()->with(['fulfilment', 'order'])->findOrFail($delivery->id);
             if ($delivery->status === Delivery::STATUS_DELIVERED) {
                 throw ValidationException::withMessages(['delivery' => 'Already delivered.']);
@@ -201,6 +258,24 @@ class FulfilmentService
 
             if (! $order->invoice_id) {
                 $this->invoices->createFromOrder($order->fresh('items'), $actor);
+            }
+
+            $order = $order->fresh(['invoice']);
+            if ($collectedNow > 0.009) {
+                if (! $order->invoice) {
+                    throw ValidationException::withMessages([
+                        'collected_now' => 'Cannot collect until the sales invoice is raised.',
+                    ]);
+                }
+                app(PaymentService::class)->collectAgainstInvoice(
+                    $order->invoice,
+                    $collectedNow,
+                    $actor,
+                    $method,
+                    $reference,
+                    'Owner paid at the shop when the goods were delivered',
+                    applyNow: true,
+                );
             }
 
             $this->targets->recalculateFor($order->salesman_id);

@@ -50,7 +50,7 @@
                     No target set for this month
                 @endif
                 @if (($shopsOutstanding ?? 0) > 0)
-                    · Dues {{ \App\Support\DemoData::taka($shopsOutstanding) }}
+                    · Baki {{ \App\Support\DemoData::taka($shopsOutstanding) }}
                 @endif
             </div>
             <div class="f-kpi-bar"><span style="width: {{ max(2, $progress ?? 0) }}%"></span></div>
@@ -90,7 +90,7 @@
                 </div>
                 <div class="f-table-wrap f-desktop-only">
                     <table class="f-table">
-                        <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Outstanding</th><th></th></tr></thead>
+                        <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Baki</th><th></th></tr></thead>
                         <tbody>
                             @forelse ($routeShops as $shop)
                                 @include('field.partials.shop-row', ['shop' => $shop, 'openVisit' => $openVisit])

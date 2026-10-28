@@ -55,7 +55,7 @@
                             <th>Price group</th>
                             <th>Salesman</th>
                             <th>Credit</th>
-                            <th>Outstanding</th>
+                            <th>Baki</th>
                             <th>Status</th>
                             <th>Login</th>
                             <th></th>

@@ -10,7 +10,7 @@
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Shop</div><div style="font-weight:700">{{ $summary['shop_name'] }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total purchases</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($summary['total_purchases']) }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total payments</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($summary['total_payments']) }}</div></div>
-        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Outstanding</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($summary['outstanding']) }}</div></div>
+        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Baki</div><div style="font-weight:700">{{ \App\Support\DemoData::taka($summary['outstanding']) }}</div></div>
         <div class="card" style="padding:14px">
             <div class="muted" style="font-size:12px">Last payment</div>
             <div style="font-weight:700">{{ \App\Support\DemoData::taka($summary['last_payment_amount']) }}</div>

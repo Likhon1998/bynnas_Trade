@@ -37,7 +37,7 @@
         </div>
         <div class="f-chips" style="margin-top:12px">
             @if ($canOrder)
-                <span class="f-chip {{ $outstanding > 0 ? 'red' : 'green' }}">Outstanding {{ \App\Support\DemoData::taka($outstanding) }}</span>
+                <span class="f-chip {{ $outstanding > 0 ? 'red' : 'green' }}">Baki {{ \App\Support\DemoData::taka($outstanding) }}</span>
             @else
                 <span class="f-chip amber">Awaiting approval</span>
             @endif
@@ -210,62 +210,108 @@
 
             {{-- Review & submit --}}
             <div class="f-sheet-backdrop" x-show="reviewSheet" x-transition.opacity @click="reviewSheet = false"></div>
-            <form class="f-sheet" x-show="reviewSheet" x-transition method="post" action="{{ route('field.visit.order', $visit) }}" @submit="submitting = true" @keydown.escape.window="reviewSheet = false">
+            <form class="f-sheet f-review" x-show="reviewSheet" x-transition method="post" action="{{ route('field.visit.order', $visit) }}" @submit="submitting = true" @keydown.escape.window="reviewSheet = false">
                 @csrf
                 <div class="f-sheet-grip"></div>
-                <h3>Review order</h3>
-                <div class="f-muted f-small" style="margin-bottom:6px">{{ $shop?->name }}</div>
-                <template x-for="(line, i) in lines()" :key="line.id">
-                    <div class="f-line-item">
-                        <span>
-                            <span x-text="line.name"></span>
-                            <span class="f-muted" x-text="' × ' + line.qty + ' · ' + taka(line.sell)"></span>
-                            <span class="f-muted" x-show="line.changed" x-text="' · list ' + taka(line.price)"></span>
-                            <span class="f-stock low" x-show="line.qty > line.stock" x-text="' · only ' + Math.max(0, line.stock) + ' in stock'"></span>
-                        </span>
-                        <span x-text="taka(line.qty * line.sell)"></span>
-                        <input type="hidden" :name="'items[' + i + '][product_id]'" :value="line.id">
-                        <input type="hidden" :name="'items[' + i + '][quantity]'" :value="line.qty">
-                        <input type="hidden" :name="'items[' + i + '][unit_price]'" :value="line.sell">
+                <div class="f-review-head">
+                    <div>
+                        <h3>Review order</h3>
+                        <div class="f-review-shop">{{ $shop?->name }}@if ($shop?->owner_name) · {{ $shop->owner_name }}@endif</div>
                     </div>
-                </template>
-                <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
+                    <button type="button" class="f-review-close" @click="reviewSheet = false" aria-label="Close">×</button>
+                </div>
+
+                <div class="f-review-lines">
+                    <template x-for="(line, i) in lines()" :key="line.id">
+                        <div class="f-review-line">
+                            <div>
+                                <strong x-text="line.name"></strong>
+                                <span class="f-muted" x-text="line.qty + ' × ' + taka(line.sell)"></span>
+                                <span class="f-muted" x-show="line.changed" x-text="' · list ' + taka(line.price)"></span>
+                            </div>
+                            <span class="f-review-amt" x-text="taka(line.qty * line.sell)"></span>
+                            <input type="hidden" :name="'items[' + i + '][product_id]'" :value="line.id">
+                            <input type="hidden" :name="'items[' + i + '][quantity]'" :value="line.qty">
+                            <input type="hidden" :name="'items[' + i + '][unit_price]'" :value="line.sell">
+                        </div>
+                    </template>
+                </div>
                 <div class="f-warn" x-show="hasBelowMin()">Raise every selling price to at least the product minimum before sending.</div>
 
-                <div class="f-baki" style="margin-top:12px">
-                    <div class="f-label">Payment at shop</div>
-                    <p class="f-muted f-small" style="margin:0 0 8px">Pay some now if they have cash. If they pay nothing, collection starts <b>after delivery</b>.</p>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-                        <button type="button" class="f-filter" :class="Number(paidNow) === 0 && 'active'" @click="paidNow = 0">Full baki</button>
-                        <button type="button" class="f-filter" @click="paidNow = Math.round(total() / 2)">Half now</button>
-                        <button type="button" class="f-filter" :class="Number(paidNow) >= total() && total() > 0 && 'active'" @click="paidNow = Math.round(total())">Pay all</button>
+                <div class="f-review-box">
+                    <div class="f-review-row">
+                        <span>Subtotal</span>
+                        <strong x-text="taka(total())"></strong>
                     </div>
-                    <label class="f-label" for="paid-now">Collected now (৳)</label>
-                    <input id="paid-now" class="f-input" type="number" inputmode="decimal" min="0" step="1" name="paid_now" x-model.number="paidNow" :max="Math.round(total())">
-                    <div class="f-kv" style="margin-top:8px">
-                        <span>After delivery</span>
-                        <strong x-text="taka(baki())"></strong>
+                    <div class="f-review-disc">
+                        <div class="f-review-row" style="padding-bottom:4px">
+                            <span>Discount</span>
+                            <strong x-show="discountAmount() > 0.009" x-text="'- ' + taka(discountAmount())"></strong>
+                        </div>
+                        <div class="f-disc-add" role="group" aria-label="Add discount">
+                            <button type="button" @click="addDiscount(50)">+50</button>
+                            <button type="button" @click="addDiscount(100)">+100</button>
+                            <button type="button" @click="addDiscount(200)">+200</button>
+                            <button type="button" @click="addPercent(10)">+10%</button>
+                            <button type="button" class="is-clear" x-show="discountAmount() > 0.009" @click="clearDiscount()">Clear</button>
+                        </div>
+                        <div class="f-money f-money-sm">
+                            <span>−৳</span>
+                            <input id="order-discount" type="number" inputmode="decimal" min="0" step="1" name="discount_total" x-model.number="discount" :max="Math.round(total())" placeholder="Tap above or type more">
+                        </div>
+                    </div>
+                    <div class="f-review-row is-grand">
+                        <span>This order</span>
+                        <strong x-text="taka(payable())"></strong>
+                    </div>
+                    <div class="f-review-row is-old" x-show="previousBaki > 0.009">
+                        <span>Previous baki</span>
+                        <strong x-text="taka(previousBaki)"></strong>
+                    </div>
+                    <div class="f-review-row is-grand is-old" x-show="previousBaki > 0.009">
+                        <span>Total baki</span>
+                        <strong x-text="taka(payable() + Number(previousBaki || 0))"></strong>
+                    </div>
+                </div>
+
+                <div class="f-pay">
+                    <div class="f-pay-title">Collect now <span class="f-muted" style="font-weight:600">· this order only</span></div>
+                    <div class="f-pay-seg" role="group" aria-label="How much to collect">
+                        <button type="button" :class="Number(paidNow) === 0 && 'active'" @click="paidNow = 0">Full baki</button>
+                        <button type="button" :class="payable() > 0 && Number(paidNow) === Math.round(payable() / 2) && 'active'" @click="paidNow = Math.round(payable() / 2)">Half</button>
+                        <button type="button" :class="payable() > 0 && Number(paidNow) >= payable() && 'active'" @click="paidNow = Math.round(payable())">Pay all</button>
+                    </div>
+                    <div class="f-money f-money-sm">
+                        <span>৳</span>
+                        <input id="paid-now" type="number" inputmode="decimal" min="0" step="1" name="paid_now" x-model.number="paidNow" :max="Math.round(payable())" placeholder="0">
+                    </div>
+                    <div class="f-review-row" x-show="Number(paidNow) > 0.009">
+                        <span>Left on this order</span>
+                        <strong x-text="taka(thisBaki())"></strong>
+                    </div>
+                    <div class="f-review-row is-old" x-show="previousBaki > 0.009 && Number(paidNow) > 0.009">
+                        <span>Shop still owes</span>
+                        <strong x-text="taka(shopDue())"></strong>
                     </div>
                     <template x-if="Number(paidNow) > 0">
-                        <div style="margin-top:8px">
-                            <label class="f-label" for="pay-method">How did they pay?</label>
-                            <select id="pay-method" class="f-input" name="payment_method" x-model="payMethod">
+                        <div class="f-pay-how">
+                            <select id="pay-method" class="f-input" name="payment_method" x-model="payMethod" aria-label="How did they pay?">
                                 <option value="cash">Cash</option>
                                 <option value="mobile_banking">bKash / Nagad / Rocket</option>
                                 <option value="bank_transfer">Bank transfer</option>
                             </select>
-                            <label class="f-label" for="pay-ref" style="margin-top:8px">Reference (optional)</label>
-                            <input id="pay-ref" class="f-input" type="text" name="payment_reference" maxlength="120" placeholder="Txn id or note">
+                            <input id="pay-ref" class="f-input" type="text" name="payment_reference" maxlength="120" placeholder="Reference (optional)">
                         </div>
                     </template>
                 </div>
 
-                <label class="f-label" for="order-notes" style="margin-top:12px">Note for the office (optional)</label>
-                <textarea id="order-notes" class="f-textarea" name="notes" rows="2" maxlength="1000" placeholder="e.g. deliver before Friday"></textarea>
-                <button class="f-btn f-btn-success f-btn-lg f-btn-block" style="margin-top:14px" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || paidNow > total() + 0.01">
-                    <span x-text="submitting ? 'Sending…' : (Number(paidNow) > 0 ? 'Send order · collect ' + taka(paidNow) : 'Send order · full baki')"></span>
-                </button>
-                <button class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" type="button" @click="reviewSheet = false">Keep adding products</button>
+                <textarea id="order-notes" class="f-textarea f-review-note" name="notes" rows="1" maxlength="1000" placeholder="Note for the office (optional)"></textarea>
+                <div class="f-review-foot">
+                    <button class="f-btn f-btn-success f-btn-lg f-btn-block" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || paidNow > payable() + 0.01 || discountAmount() > total() + 0.01">
+                        <span x-text="submitting ? 'Sending…' : sendLabel()"></span>
+                    </button>
+                    <button class="f-review-back" type="button" @click="reviewSheet = false">Keep adding products</button>
+                </div>
             </form>
 
             {{-- End visit without order --}}
@@ -369,7 +415,8 @@ function fieldOrder(catalog) {
         catalog,
         q: '', cat: '', view: 'categories',
         qty: {}, prices: {},
-        paidNow: 0, payMethod: 'cash',
+        paidNow: 0, payMethod: 'cash', discount: 0,
+        previousBaki: {{ json_encode($outstanding) }},
         reviewSheet: false, endSheet: false, submitting: false,
         taka(n) { return '৳ ' + Math.round(n || 0).toLocaleString('en-IN'); },
         sellPrice(p) {
@@ -444,11 +491,29 @@ function fieldOrder(catalog) {
             });
         },
         count() { return Object.values(this.qty).reduce((a, b) => a + (b || 0), 0); },
-        total() { return this.lines().reduce((sum, l) => sum + l.qty * l.sell, 0); },
-        baki() { return Math.max(0, this.total() - (Number(this.paidNow) || 0)); },
+        money(n) { return Math.max(0, Math.round((Number(n) || 0) * 100) / 100); },
+        total() { return this.money(this.lines().reduce((sum, l) => sum + l.qty * l.sell, 0)); },
+        discountAmount() { return Math.min(this.total(), this.money(this.discount)); },
+        payable() { return this.money(this.total() - this.discountAmount()); },
+        thisBaki() { return this.money(this.payable() - (Number(this.paidNow) || 0)); },
+        baki() { return this.thisBaki(); },
+        shopDue() { return this.money(this.thisBaki() + (Number(this.previousBaki) || 0)); },
+        addDiscount(n) { this.discount = this.money(Math.min(this.total(), this.discountAmount() + this.money(n))); },
+        addPercent(p) { this.addDiscount(this.total() * p / 100); },
+        clearDiscount() { this.discount = 0; },
+        sendLabel() {
+            if (Number(this.paidNow) > 0) return 'Send · collect ' + this.taka(this.paidNow);
+            return 'Send · baki ' + this.taka(this.thisBaki());
+        },
+        clampPayAndDiscount() {
+            if (this.discountAmount() > this.total()) this.discount = this.total();
+            if (Number(this.paidNow) > this.payable()) this.paidNow = Math.round(this.payable());
+        },
         init() {
             this.$watch('reviewSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
             this.$watch('endSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
+            this.$watch('discount', () => this.clampPayAndDiscount());
+            this.$watch('paidNow', () => this.clampPayAndDiscount());
             this.$nextTick(() => window.lucide && lucide.createIcons());
             this.$watch('view', () => this.$nextTick(() => window.lucide && lucide.createIcons()));
             this.$watch('cat', () => this.$nextTick(() => window.lucide && lucide.createIcons()));

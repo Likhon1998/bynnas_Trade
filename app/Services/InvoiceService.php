@@ -22,9 +22,9 @@ class InvoiceService
             return Invoice::query()->findOrFail($order->invoice_id);
         }
 
-        if ($order->status !== Order::STATUS_DELIVERED) {
+        if (in_array($order->status, [Order::STATUS_REJECTED, Order::STATUS_CANCELLED], true)) {
             throw ValidationException::withMessages([
-                'order' => 'The sales invoice is raised when the goods are delivered — not before.',
+                'order' => 'Cannot raise an invoice for a cancelled or rejected order.',
             ]);
         }
 

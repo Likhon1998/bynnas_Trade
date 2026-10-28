@@ -9,6 +9,7 @@
                 'code' => $shop->code,
                 'credit' => (float) $shop->availableCredit(),
                 'credit_limit' => (float) $shop->credit_limit,
+                'baki' => (float) $shop->outstanding_balance,
                 'price_group' => $shop->priceGroup?->name ?: 'Standard wholesale',
                 'salesman_id' => $shop->assigned_salesman_id,
             ];
@@ -84,12 +85,12 @@
                     <div style="font-weight:700" x-text="selectedShop?.price_group"></div>
                 </div>
                 <div>
-                    <div class="muted" style="font-size:12px">Available credit</div>
-                    <div style="font-weight:700" x-text="formatMoney(selectedShop?.credit || 0)"></div>
+                    <div class="muted" style="font-size:12px">Previous baki</div>
+                    <div style="font-weight:700;color:#c2410c" x-text="formatMoney(selectedShop?.baki || 0)"></div>
                 </div>
                 <div>
-                    <div class="muted" style="font-size:12px">Estimated total</div>
-                    <div style="font-weight:800;color:var(--brand-dark)" x-text="formatMoney(estimatedTotal)"></div>
+                    <div class="muted" style="font-size:12px">This order</div>
+                    <div style="font-weight:800;color:var(--brand-dark)" x-text="formatMoney(payableTotal)"></div>
                 </div>
             </div>
         </div>
@@ -126,8 +127,19 @@
             </table>
         </div>
 
+        <div class="form-grid" style="margin-bottom:16px">
+            <div class="field">
+                <label class="label">Reduce total (discount)</label>
+                <input class="input" type="number" name="discount_total" min="0" step="0.01" x-model.number="discount" :max="estimatedTotal">
+            </div>
+            <div class="field" x-show="selectedShop && selectedShop.baki > 0.009">
+                <label class="label">Shop will still owe after this order</label>
+                <div style="font-weight:800;padding-top:8px" x-text="formatMoney((selectedShop?.baki || 0) + payableTotal)"></div>
+            </div>
+        </div>
+
         <div class="form-actions">
-            <button class="btn btn-primary" type="submit" :disabled="!shopId || estimatedTotal <= 0">
+            <button class="btn btn-primary" type="submit" :disabled="!shopId || payableTotal <= 0">
                 Submit for Super Admin audit
             </button>
             <span class="muted" style="font-size:13px" x-show="shopId && estimatedTotal <= 0">Add at least one quantity to continue.</span>
@@ -144,11 +156,15 @@ function adminOrderForm(shops, products, initialShopId, initialSalesmanId) {
         shopId: initialShopId ? String(initialShopId) : '',
         salesmanId: initialSalesmanId ? String(initialSalesmanId) : '',
         qty: Object.fromEntries(products.map(p => [p.id, 0])),
+        discount: 0,
         get selectedShop() {
             return this.shops.find(s => String(s.id) === String(this.shopId)) || null;
         },
         get estimatedTotal() {
             return this.products.reduce((sum, product) => sum + this.lineTotal(product.id), 0);
+        },
+        get payableTotal() {
+            return Math.max(0, Math.round((this.estimatedTotal - (Number(this.discount) || 0)) * 100) / 100);
         },
         onShopChange() {
             if (this.selectedShop?.salesman_id) {

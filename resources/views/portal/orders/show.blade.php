@@ -19,9 +19,24 @@
     @if (session('success'))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>
     @endif
+    @if ($errors->any())
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fef2f2;color:#b91c1c">{{ $errors->first() }}</div>
+    @endif
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
-        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total</div><div style="font-weight:800">{{ \App\Support\DemoData::taka($order->total) }}</div></div>
+        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">This order</div><div style="font-weight:800">{{ \App\Support\DemoData::taka($order->total) }}</div></div>
+        @if ((float) $order->discount_total > 0)
+            <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Discount</div><div style="font-weight:800">− {{ \App\Support\DemoData::taka($order->discount_total) }}</div></div>
+        @endif
+        <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Previous baki</div><div style="font-weight:800;color:{{ $order->previousShopBaki() > 0.009 ? '#c2410c' : 'inherit' }}">{{ \App\Support\DemoData::taka($order->previousShopBaki()) }}</div></div>
+        @php
+            $portalThisBaki = (float) $order->settlement()['remaining_due'];
+            $portalPrevBaki = $order->previousShopBaki();
+            $portalTotalBaki = round($portalThisBaki + $portalPrevBaki, 2);
+        @endphp
+        @if ($portalTotalBaki > 0.009)
+            <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Total baki</div><div style="font-weight:800;color:#c2410c">{{ \App\Support\DemoData::taka($portalTotalBaki) }}</div><div class="muted" style="font-size:11px;margin-top:2px">this order {{ \App\Support\DemoData::taka($portalThisBaki) }} + previous {{ \App\Support\DemoData::taka($portalPrevBaki) }}</div></div>
+        @endif
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Salesman</div><div style="font-weight:700">{{ $order->salesman?->name ?: '—' }}</div></div>
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Submitted</div><div style="font-weight:700">{{ $order->submitted_at?->format('d M Y H:i') }}</div></div>
     </div>
@@ -38,11 +53,11 @@
                 @elseif ($settle['collectible'])
                     Invoice ready — amount due
                 @elseif ($settle['has_advance'] && $settle['advance_cleared'])
-                    Paid at order — rest after delivery
+                    Paid some — rest is baki
                 @elseif ($settle['has_advance'])
                     Waiting for office to confirm shop payment
                 @else
-                    Payment after delivery
+                    Pay whenever you can
                 @endif
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
@@ -51,11 +66,11 @@
                     <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['order_total']) }}</div>
                 </div>
                 <div>
-                    <div class="muted" style="font-size:11px">Paid at order</div>
-                    <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['advance_paid']) }}</div>
+                    <div class="muted" style="font-size:11px">Paid so far</div>
+                    <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['paid_to_date']) }}</div>
                 </div>
                 <div>
-                    <div class="muted" style="font-size:11px">{{ $settle['collectible'] ? 'Due now' : 'After delivery' }}</div>
+                    <div class="muted" style="font-size:11px">Baki</div>
                     <div style="font-weight:800;font-size:18px;color:{{ $settle['fully_settled'] ? '#166534' : '#b45309' }}">
                         {{ \App\Support\DemoData::taka($settle['remaining_due']) }}
                     </div>
@@ -63,16 +78,67 @@
             </div>
             @if (! $settle['fully_settled'])
                 <p class="muted" style="margin:10px 0 0;font-size:12px">
-                    @if ($settle['collectible'])
-                        Goods have been delivered. Please pay {{ \App\Support\DemoData::taka($settle['remaining_due']) }}.
-                    @elseif ($settle['has_advance'] && $settle['advance_cleared'])
-                        The rest will be collected after delivery.
+                    @if ($settle['collectible'] || $settle['baki'] > 0.009)
+                        Pay some now if you can — the rest stays as baki.
                     @else
                         Office is confirming the amount paid at the shop.
                     @endif
                 </p>
             @endif
         </div>
+    @endif
+
+    @if (! empty($pendingBill) && (empty($collectibleBalance) || $collectibleBalance <= 0.009))
+        <div class="card" style="padding:14px;margin-bottom:14px;background:#fff7ed;color:#9a3412">
+            Payment of <strong>{{ \App\Support\DemoData::taka($pendingBill->amount) }}</strong> is waiting for office confirmation.
+        </div>
+    @elseif (! empty($collectibleBalance) && $collectibleBalance > 0.009)
+        <form class="card" style="padding:16px;margin-bottom:14px" method="post" action="{{ route('portal.orders.pay', $order) }}"
+              x-data="{
+                  due: {{ json_encode((float) $collectibleBalance) }},
+                  paidNow: {{ json_encode((float) old('amount', 0)) }},
+                  taka(n) { return '৳ ' + Math.round(Number(n) || 0).toLocaleString('en-IN'); },
+                  baki() { return Math.max(0, Math.round((this.due - Number(this.paidNow || 0)) * 100) / 100); }
+              }">
+            @csrf
+            <div style="font-weight:800;margin-bottom:4px">Pay this bill</div>
+            <p class="muted" style="margin:0 0 12px;font-size:13px">
+                Pay some now if you can — remaining stays as baki. You can pay at any stage.
+                @if (! empty($pendingBill))
+                    Office is confirming {{ \App\Support\DemoData::taka($pendingBill->amount) }}.
+                @endif
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                <button type="button" class="btn btn-ghost btn-sm" :class="Number(paidNow) === 0 && 'btn-primary'" @click="paidNow = 0">Full baki</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="paidNow = Math.round(due / 2)">Half now</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="paidNow = Math.round(due)">Pay all</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+                <div class="field">
+                    <label class="label">Pay now</label>
+                    <input class="input" type="number" name="amount" min="0" step="1" :max="Math.round(due)" x-model.number="paidNow">
+                </div>
+                <div class="field">
+                    <label class="label">Method</label>
+                    <select class="select" name="method">
+                        <option value="cash" @selected(old('method', 'cash') === 'cash')>Cash</option>
+                        <option value="mobile_banking" @selected(old('method') === 'mobile_banking')>Mobile banking</option>
+                        <option value="bank_transfer" @selected(old('method') === 'bank_transfer')>Bank transfer</option>
+                        <option value="cheque" @selected(old('method') === 'cheque')>Cheque</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label">Reference</label>
+                    <input class="input" type="text" name="reference" value="{{ old('reference') }}" maxlength="120" placeholder="Optional">
+                </div>
+            </div>
+            <div class="muted" style="margin-top:10px;font-size:13px">Baki left: <strong x-text="taka(baki())"></strong></div>
+            <div style="margin-top:12px">
+                <button class="btn btn-primary" type="submit" :disabled="Number(paidNow) <= 0">
+                    Pay now
+                </button>
+            </div>
+        </form>
     @endif
 
     @if ($order->isAwaitingAdvance())

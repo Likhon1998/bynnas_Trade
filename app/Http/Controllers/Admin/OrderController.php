@@ -99,6 +99,7 @@ class OrderController extends Controller
             'shop_id' => ['required', 'exists:shops,id'],
             'salesman_id' => ['nullable', 'exists:users,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'discount_total' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0'],
@@ -119,10 +120,24 @@ class OrderController extends Controller
             $data['items'],
             $data['notes'] ?? null,
             $data['salesman_id'] ?? null,
+            (float) ($data['discount_total'] ?? 0),
         );
 
         return redirect()->route('orders.show', $order)
             ->with('success', 'Order '.$order->number.' created for '.$shop->name.' and submitted for Super Admin audit.');
+    }
+
+    public function discount(Request $request, Order $order)
+    {
+        $this->authorize('update', $order);
+
+        $data = $request->validate([
+            'discount_total' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $this->orders->applyDiscount($order, (float) $data['discount_total'], $request->user());
+
+        return back()->with('success', 'Order total reduced. Discount ৳ '.number_format((float) $data['discount_total'], 2).'.');
     }
 
     public function show(Order $order)
@@ -204,6 +219,24 @@ class OrderController extends Controller
             'Order '.$order->number.' approved — status is now '.$order->statusLabel().'.',
             'approved',
         );
+    }
+
+    public function deliver(Request $request, Order $order)
+    {
+        $this->authorize('view', $order);
+        abort_unless(
+            $request->user()->can('deliveries.update_status') || $request->user()->can('orders.approve'),
+            403
+        );
+
+        $data = $request->validate([
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $this->orders->deliver($order, $request->user(), $data['notes'] ?? null);
+
+        return redirect()->route('orders.show', $order)
+            ->with('success', 'Order '.$order->number.' delivered.');
     }
 
     public function requestAdvance(Request $request, Order $order)
@@ -739,10 +772,8 @@ class OrderController extends Controller
 
         return match ($status) {
             Order::STATUS_PENDING_AUDIT, Order::STATUS_AWAITING_ADVANCE => 'badge-pending',
-            Order::STATUS_APPROVED => 'badge-approved',
-            Order::STATUS_PICKING, Order::STATUS_PICKED => 'badge-processing',
-            Order::STATUS_PACKED => 'badge-shipped',
-            Order::STATUS_DISPATCHED => 'badge-transit',
+            Order::STATUS_APPROVED, Order::STATUS_PICKING, Order::STATUS_PICKED,
+            Order::STATUS_PACKED, Order::STATUS_DISPATCHED => 'badge-approved',
             Order::STATUS_DELIVERED => 'badge-delivered',
             Order::STATUS_REJECTED => 'badge-out',
             default => 'badge-hold',

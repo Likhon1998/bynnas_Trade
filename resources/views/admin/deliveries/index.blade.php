@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Deliveries')
 @section('content')
-    <x-page-header title="Deliveries" subtitle="Van desk — mark delivered or failed. Warehouse only pick, pack and dispatch.">
+    <x-page-header title="Deliveries" subtitle="Mark delivered when the goods are with the shop.">
         <a class="btn btn-ghost" href="{{ route('fulfilment.index') }}">Warehouse desk</a>
     </x-page-header>
 

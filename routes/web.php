@@ -78,6 +78,7 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::put('/orders/{order}', [ShopPortalController::class, 'updateOrder'])->name('orders.update');
         Route::delete('/orders/{order}', [ShopPortalController::class, 'destroyOrder'])->name('orders.destroy');
         Route::get('/orders/{order}', [ShopPortalController::class, 'showOrder'])->name('orders.show');
+        Route::post('/orders/{order}/pay', [ShopPortalController::class, 'payBill'])->middleware('throttle:20,1')->name('orders.pay');
         Route::get('/profile', [ShopPortalController::class, 'profile'])->name('profile');
         Route::get('/statement', [ShopPortalController::class, 'statement'])->name('statement');
         Route::get('/account/password', [AccountPasswordController::class, 'edit'])->name('account.password');
@@ -111,7 +112,11 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/orders/create', [FieldPortalController::class, 'createOrder'])->name('orders.create');
         Route::redirect('/orders/new', '/field/orders/create');
         Route::get('/orders/{order}', [FieldPortalController::class, 'showOrder'])->whereNumber('order')->name('orders.show');
+        Route::post('/orders/{order}/collect', [FieldPortalController::class, 'collectBill'])->middleware('throttle:20,1')->whereNumber('order')->name('orders.collect');
+        Route::post('/orders/{order}/deliver', [FieldPortalController::class, 'deliverOrder'])->middleware('throttle:20,1')->whereNumber('order')->name('orders.deliver');
+        Route::post('/orders/{order}/discount', [FieldPortalController::class, 'discountOrder'])->middleware('throttle:20,1')->whereNumber('order')->name('orders.discount');
         Route::get('/earnings', [FieldPortalController::class, 'earnings'])->name('earnings');
+        Route::get('/collections', [FieldPortalController::class, 'collections'])->name('collections');
         Route::get('/deliveries', [FieldPortalController::class, 'deliveries'])->name('deliveries');
         Route::get('/announcements', [FieldPortalController::class, 'announcements'])->name('announcements');
         Route::get('/notifications', [FieldPortalController::class, 'notifications'])->name('notifications');
@@ -228,7 +233,9 @@ Route::prefix('admin')->group(function () {
         Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
         Route::get('/orders/{order}/preview', [OrderController::class, 'preview'])->name('orders.preview');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+        Route::post('/orders/{order}/discount', [OrderController::class, 'discount'])->name('orders.discount');
         Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
+        Route::post('/orders/{order}/deliver', [OrderController::class, 'deliver'])->name('orders.deliver');
         Route::post('/orders/{order}/request-advance', [OrderController::class, 'requestAdvance'])->name('orders.request-advance');
         Route::post('/orders/{order}/collect-advance', [OrderController::class, 'collectAdvance'])->name('orders.collect-advance');
         Route::post('/orders/{order}/reject', [OrderController::class, 'reject'])->name('orders.reject');

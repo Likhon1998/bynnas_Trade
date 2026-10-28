@@ -45,14 +45,23 @@
                 <thead><tr><th>Order</th><th>Shop</th><th>Sent</th><th class="num">Items</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                     @forelse ($orders as $order)
-                        @php $s = $order->simpleStatus(); @endphp
-                        <tr class="is-link" onclick="window.location='{{ route('field.orders.show', $order) }}'">
-                            <td><a class="strong" href="{{ route('field.orders.show', $order) }}">{{ $order->number }}</a></td>
+                        @php
+                            $s = $order->simpleStatus();
+                            $due = (float) $order->collectibleBalance();
+                            $href = route('field.orders.show', $order).($due > 0.009 ? '#collect-bill' : '');
+                        @endphp
+                        <tr class="is-link" onclick="window.location='{{ $href }}'">
+                            <td><a class="strong" href="{{ $href }}">{{ $order->number }}</a></td>
                             <td><span class="strong">{{ $order->shop?->name }}</span><span class="sub">{{ $order->shop?->city }}</span></td>
                             <td>{{ $order->submitted_at?->format('d M Y') }}<span class="sub">{{ $order->submitted_at?->format('g:i A') }}</span></td>
                             <td class="num">{{ $order->item_count }}</td>
                             <td class="num strong">{{ \App\Support\DemoData::taka($order->total) }}</td>
-                            <td><span class="f-status {{ $s['tone'] }}">{{ $s['label'] }}</span></td>
+                            <td>
+                                <span class="f-status {{ $s['tone'] }}">{{ $s['label'] }}</span>
+                                @if ($due > 0.009)
+                                    <span class="f-collect-pill">Baki {{ \App\Support\DemoData::taka($due) }}</span>
+                                @endif
+                            </td>
                             <td class="num"><i data-lucide="chevron-right" class="f-chev"></i></td>
                         </tr>
                     @empty

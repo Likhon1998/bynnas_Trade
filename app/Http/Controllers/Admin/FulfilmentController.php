@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\FulfilmentService;
 use App\Support\DemoData;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class FulfilmentController extends Controller
 {
@@ -141,20 +140,44 @@ class FulfilmentController extends Controller
 
     public function markDelivered(Request $request, OrderFulfilment $fulfilment)
     {
-        abort_unless($request->user()->can('deliveries.update_status'), 403);
+        abort_unless(
+            $request->user()->can('deliveries.update_status') || $request->user()->can('orders.approve'),
+            403
+        );
 
-        $fulfilment->loadMissing('delivery');
-        if (! $fulfilment->delivery) {
-            throw ValidationException::withMessages(['delivery' => 'No delivery record for this order yet.']);
+        $fulfilment->loadMissing(['delivery', 'order']);
+
+        $data = $request->validate([
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'collected_now' => ['nullable', 'numeric', 'min:0'],
+            'method' => ['nullable', 'in:cash,bank_transfer,cheque,mobile_banking'],
+            'reference' => ['nullable', 'string', 'max:120'],
+        ]);
+        $collected = round((float) ($data['collected_now'] ?? 0), 2);
+        $note = $data['notes'] ?? null;
+
+        if ($fulfilment->delivery && $fulfilment->delivery->status !== \App\Models\Delivery::STATUS_DELIVERED) {
+            $this->fulfilment->markDelivered(
+                $fulfilment->delivery,
+                $request->user(),
+                $note,
+                $collected,
+                $data['method'] ?? \App\Models\Payment::METHOD_CASH,
+                $data['reference'] ?? null,
+            );
+        } else {
+            $this->fulfilment->deliverNow($fulfilment->order, $request->user(), $note);
         }
 
-        $data = $request->validate(['notes' => ['nullable', 'string', 'max:1000']]);
-        $this->fulfilment->markDelivered($fulfilment->delivery, $request->user(), $data['notes'] ?? null);
+        $message = 'Marked delivered.';
+        if ($collected > 0.009) {
+            $message = 'Marked delivered. Owner paid ৳ '.number_format($collected, 2).' at the shop.';
+        }
 
         return $this->actionResponse(
             $request,
             $fulfilment->fresh(['order.shop', 'order.items', 'warehouse', 'picker', 'packer', 'dispatcher', 'delivery.assignee']),
-            'Marked delivered. Invoice raised if needed.',
+            $message,
         );
     }
 
@@ -209,19 +232,13 @@ class FulfilmentController extends Controller
             'shop' => $row->order?->shop?->name,
             'warehouse' => $row->warehouse?->code ?: $row->warehouse?->name,
             'status' => $row->status,
-            'status_label' => $row->statusLabel(),
+            'status_label' => $row->status === OrderFulfilment::STATUS_DELIVERED ? 'Delivered' : 'Approved',
             'position' => $position,
             'item_count' => (int) ($row->order?->item_count ?? $row->order?->items?->count() ?? 0),
             'total' => DemoData::taka($row->order?->total ?? 0),
             'picker' => $row->picker?->name,
             'updated' => $row->updated_at?->format('d M H:i'),
-            'next_action' => match ($row->status) {
-                OrderFulfilment::STATUS_AWAITING_PICK, OrderFulfilment::STATUS_PICKING => 'Pick',
-                OrderFulfilment::STATUS_PICKED => 'Pack',
-                OrderFulfilment::STATUS_PACKED => 'Dispatch',
-                OrderFulfilment::STATUS_DISPATCHED => 'Deliver',
-                default => 'View',
-            },
+            'next_action' => $row->status === OrderFulfilment::STATUS_DELIVERED ? 'View' : 'Deliver',
         ];
     }
 
@@ -236,25 +253,27 @@ class FulfilmentController extends Controller
             $position = 0;
         }
 
-        $track = [];
-        foreach (self::STAGES as $key => $label) {
-            $i = array_search($key, $stageKeys, true);
-            $at = match ($key) {
-                'picking' => $fulfilment->picking_started_at?->format('d M H:i'),
-                'picked' => $fulfilment->picked_at?->format('d M H:i'),
-                'packed' => $fulfilment->packed_at?->format('d M H:i'),
-                'dispatched' => $fulfilment->dispatched_at?->format('d M H:i'),
-                'delivered' => $fulfilment->delivered_at?->format('d M H:i'),
-                default => null,
-            };
-            $track[] = [
-                'key' => $key,
-                'label' => $label,
-                'done' => $i < $position,
-                'current' => $i === $position,
-                'at' => $at,
-            ];
-        }
+        $delivered = $fulfilment->status === OrderFulfilment::STATUS_DELIVERED;
+        $track = [
+            [
+                'key' => 'ready',
+                'label' => 'Approved',
+                'done' => $delivered,
+                'current' => ! $delivered,
+                'at' => null,
+            ],
+            [
+                'key' => 'delivered',
+                'label' => 'Delivered',
+                'done' => $delivered,
+                'current' => $delivered,
+                'at' => $fulfilment->delivered_at?->format('d M H:i'),
+            ],
+        ];
+
+        $canDeliver = ($user?->can('deliveries.update_status') || $user?->can('orders.approve'))
+            && $fulfilment->order
+            && $fulfilment->order->canDeliver();
 
         return [
             'id' => $fulfilment->id,
@@ -265,7 +284,7 @@ class FulfilmentController extends Controller
             'warehouse' => $fulfilment->warehouse?->name,
             'warehouse_code' => $fulfilment->warehouse?->code,
             'status' => $fulfilment->status,
-            'status_label' => $fulfilment->statusLabel(),
+            'status_label' => $delivered ? 'Delivered' : 'Approved',
             'position' => $position,
             'total' => DemoData::taka($fulfilment->order?->total ?? 0),
             'notes' => $fulfilment->warehouse_notes,
@@ -276,16 +295,18 @@ class FulfilmentController extends Controller
             'delivery_id' => $fulfilment->delivery?->id,
             'assignee' => $fulfilment->delivery?->assignee?->name,
             'tracking_ref' => $fulfilment->delivery?->tracking_ref,
-            'can_start_pick' => ($user?->can('fulfilment.pick') ?? false) && $fulfilment->status === OrderFulfilment::STATUS_AWAITING_PICK,
-            'can_complete_pick' => ($user?->can('fulfilment.pick') ?? false) && in_array($fulfilment->status, [OrderFulfilment::STATUS_AWAITING_PICK, OrderFulfilment::STATUS_PICKING], true),
-            'can_pack' => ($user?->can('fulfilment.pack') ?? false) && $fulfilment->status === OrderFulfilment::STATUS_PICKED,
-            'can_dispatch' => ($user?->can('fulfilment.dispatch') ?? false) && $fulfilment->status === OrderFulfilment::STATUS_PACKED,
+            'can_start_pick' => false,
+            'can_complete_pick' => false,
+            'can_pack' => false,
+            'can_dispatch' => false,
+            'can_deliver_now' => $canDeliver,
             'delivery_url' => $fulfilment->delivery ? route('deliveries.show', $fulfilment->delivery, false) : null,
             'urls' => [
                 'start_pick' => route('fulfilment.start-pick', $fulfilment, false),
                 'complete_pick' => route('fulfilment.complete-pick', $fulfilment, false),
                 'pack' => route('fulfilment.pack', $fulfilment, false),
                 'dispatch' => route('fulfilment.dispatch', $fulfilment, false),
+                'deliver' => route('fulfilment.deliver', $fulfilment, false),
                 'order' => route('orders.show', $fulfilment->order_id, false),
             ],
             'track' => $track,

@@ -11,6 +11,9 @@
     };
 @endphp
 @section('content')
+    <a class="f-btn f-btn-ghost f-btn-block" style="margin-bottom:12px" href="{{ route('field.collections') }}">
+        <i data-lucide="banknote"></i> Money collected from shops
+    </a>
     <div class="f-kpis five">
         <div class="f-kpi tone-violet">
             <div class="f-kpi-top"><span class="f-ico"><i data-lucide="banknote"></i></span><span class="f-kpi-label">Monthly salary</span></div>

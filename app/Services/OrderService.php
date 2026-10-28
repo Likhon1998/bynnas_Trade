@@ -35,6 +35,7 @@ class OrderService
         array $lines,
         ?ShopVisit $visit = null,
         ?string $notes = null,
+        float $discount = 0,
     ): Order {
         // Field officers may collect an order on behalf of any active shop.
         // Credit and the salesman who took the order are tracked on the order itself.
@@ -52,12 +53,13 @@ class OrderService
             salesmanId: $salesman->id,
             visit: $visit,
             notes: $notes,
+            discount: $discount,
         );
     }
 
     /**
-     * Record cash (or transfer) the salesman collected at the shop now; remainder stays as baki.
-     * Reuses the advance invoice path so office can verify the payment before approval.
+     * Record cash (or transfer) collected at the shop. Does not change order status —
+     * collection is allowed at any stage, and leftover stays as baki.
      */
     public function recordFieldCollection(
         Order $order,
@@ -66,30 +68,55 @@ class OrderService
         string $method = Payment::METHOD_CASH,
         ?string $reference = null,
     ): Order {
-        $paidNow = round($paidNow, 2);
-        if ($paidNow <= 0) {
+        return $this->collectAnytime($order, $salesman, $paidNow, $method, $reference);
+    }
+
+    public function collectAnytime(
+        Order $order,
+        User $actor,
+        float $amount,
+        string $method = Payment::METHOD_CASH,
+        ?string $reference = null,
+    ): Order {
+        if (in_array($order->status, [Order::STATUS_REJECTED, Order::STATUS_CANCELLED], true)) {
+            throw ValidationException::withMessages([
+                'amount' => 'Cannot collect on a cancelled or rejected order.',
+            ]);
+        }
+
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
             return $order;
         }
 
-        if ($order->source !== Order::SOURCE_SALESMAN) {
+        $due = $order->fresh(['invoice', 'advanceInvoice'])->collectibleBalance();
+        if ($amount > $due + 0.01) {
             throw ValidationException::withMessages([
-                'paid_now' => 'Only field orders can record a collection at the shop.',
+                'amount' => 'Amount cannot exceed the remaining baki (৳ '.number_format($due, 2).').',
             ]);
         }
 
-        if ($paidNow > (float) $order->total + 0.01) {
-            throw ValidationException::withMessages([
-                'paid_now' => 'Collected amount cannot exceed the order total.',
-            ]);
+        if (! $order->invoice_id) {
+            $this->invoices->createFromOrder($order->fresh('items'), $actor);
+            $order->refresh()->load('invoice');
         }
 
-        $baki = max(0, round((float) $order->total - $paidNow, 2));
-        $note = 'Salesman collected ৳ '.number_format($paidNow, 2).' at the shop'
-            .($baki > 0.009 ? '; baki ৳ '.number_format($baki, 2).' later' : ' (full payment)');
+        app(\App\Services\PaymentService::class)->collectAgainstInvoice(
+            $order->invoice,
+            $amount,
+            $actor,
+            $method,
+            $reference,
+            'Collected against order '.$order->number,
+            applyNow: false,
+        );
 
-        $order = $this->requestAdvance($order, $salesman, $paidNow, $note);
+        return $order->fresh(['invoice', 'advanceInvoice', 'shop']);
+    }
 
-        return $this->collectAdvance($order, $salesman, $paidNow, $method, $reference);
+    public function deliver(Order $order, User $actor, ?string $notes = null): Order
+    {
+        return $this->fulfilment->deliverNow($order, $actor, $notes);
     }
 
     /**
@@ -237,7 +264,7 @@ class OrderService
     /**
      * @param  list<array{product_id:int, quantity:int}>  $lines
      */
-    public function createFromAdmin(User $admin, Shop $shop, array $lines, ?string $notes = null, ?int $salesmanId = null): Order
+    public function createFromAdmin(User $admin, Shop $shop, array $lines, ?string $notes = null, ?int $salesmanId = null, float $discount = 0): Order
     {
         return $this->submitOrder(
             shop: $shop,
@@ -246,7 +273,55 @@ class OrderService
             source: Order::SOURCE_ADMIN,
             salesmanId: $salesmanId ?: $shop->assigned_salesman_id,
             notes: $notes,
+            discount: $discount,
         );
+    }
+
+    public function applyDiscount(Order $order, float $amount, User $actor): Order
+    {
+        $amount = round(max(0, $amount), 2);
+
+        if (! $order->isPendingAudit() || $order->stock_reserved || $order->advance_required || $order->hasRecordedPayments()) {
+            throw ValidationException::withMessages([
+                'discount_total' => 'The total can only be reduced before approval, while no payment has been recorded.',
+            ]);
+        }
+
+        $subtotal = round((float) $order->subtotal, 2);
+        if ($amount > $subtotal + 0.01) {
+            throw ValidationException::withMessages([
+                'discount_total' => 'Discount cannot exceed the order subtotal.',
+            ]);
+        }
+
+        $total = max(0, round($subtotal - $amount, 2));
+
+        return DB::transaction(function () use ($order, $actor, $amount, $total) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $from = (float) $order->total;
+            $order->update([
+                'discount_total' => $amount,
+                'total' => $total,
+            ]);
+
+            $this->recordHistory($order, $order->status, $order->status, 'discount_applied', null, [
+                'old_total' => $from,
+                'discount' => $amount,
+                'new_total' => $total,
+            ], $actor);
+
+            $this->auditLogger->log(
+                'orders',
+                'discounted',
+                "Order {$order->number} total reduced by ৳ ".number_format($amount, 2),
+                $order,
+                ['total' => $from],
+                ['discount_total' => $amount, 'total' => $total],
+                $actor,
+            );
+
+            return $order->fresh(['items', 'shop', 'salesman']);
+        });
     }
 
 
@@ -839,6 +914,7 @@ class OrderService
         ?int $salesmanId = null,
         ?ShopVisit $visit = null,
         ?string $notes = null,
+        float $discount = 0,
     ): Order {
         if ($shop->status !== Shop::STATUS_ACTIVE) {
             throw ValidationException::withMessages([
@@ -856,7 +932,7 @@ class OrderService
             ]);
         }
 
-        return DB::transaction(function () use ($shop, $lines, $actor, $source, $salesmanId, $visit, $notes) {
+        return DB::transaction(function () use ($shop, $lines, $actor, $source, $salesmanId, $visit, $notes, $discount) {
             $shop->loadMissing('priceGroup');
 
             if ($visit) {
@@ -929,10 +1005,18 @@ class OrderService
                 ]);
             }
 
+            $discount = round(max(0, $discount), 2);
+            if ($discount > $subtotal + 0.01) {
+                throw ValidationException::withMessages([
+                    'discount_total' => 'Discount cannot exceed the order subtotal.',
+                ]);
+            }
+            $total = max(0, round($subtotal - $discount, 2));
+
             $order->update([
                 'subtotal' => $subtotal,
-                'discount_total' => 0,
-                'total' => $subtotal,
+                'discount_total' => $discount,
+                'total' => $total,
                 'item_count' => $itemCount,
             ]);
 
@@ -945,7 +1029,8 @@ class OrderService
 
             $this->recordHistory($order, null, Order::STATUS_PENDING_AUDIT, 'submitted_for_audit', $notes, [
                 'source' => $source,
-                'total' => $subtotal,
+                'total' => $total,
+                'discount' => $discount,
             ], $actor);
 
             $this->auditLogger->log(
@@ -954,7 +1039,7 @@ class OrderService
                 "Order {$order->number} submitted for Super Admin audit",
                 $order,
                 null,
-                ['shop_id' => $shop->id, 'total' => $subtotal, 'items' => $itemCount, 'source' => $source],
+                ['shop_id' => $shop->id, 'total' => $total, 'discount' => $discount, 'items' => $itemCount, 'source' => $source],
                 $actor,
             );
 

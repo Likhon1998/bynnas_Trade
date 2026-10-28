@@ -54,7 +54,8 @@
                     <option value="">All statuses</option>
                     <option value="pending_audit">Pending Super Admin Audit</option>
                     <option value="awaiting_advance">Awaiting Advance</option>
-                    <option value="approved">Approved · Reserved</option>
+                    <option value="approved">Approved</option>
+                    <option value="delivered">Delivered</option>
                     <option value="rejected">Rejected</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
@@ -139,6 +140,7 @@ function orderBoard(rows, initialFilters, statusFlash) {
             return this.rows.filter((row) => {
                 if (this.status && row.status !== this.status) {
                     if (this.status === 'pending_audit' && row.status === 'awaiting_advance') return true;
+                    if (this.status === 'approved' && ['approved', 'picking', 'picked', 'packed', 'dispatched'].includes(row.status)) return true;
                     return false;
                 }
                 if (this.source && row.source !== this.source) return false;

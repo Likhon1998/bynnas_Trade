@@ -10,6 +10,9 @@
     @if (session('success'))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>
     @endif
+    @if ($errors->any())
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#fef2f2;color:#b91c1c">{{ $errors->first() }}</div>
+    @endif
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
         <div class="card" style="padding:14px"><div class="muted" style="font-size:12px">Order</div><div style="font-weight:700">{{ $delivery->order?->number }}</div></div>
@@ -25,23 +28,66 @@
 
     @if ($delivery->status === \App\Models\Delivery::STATUS_OUT_FOR_DELIVERY)
         @can('deliveries.update_status')
-            <div class="card" style="padding:16px;margin-bottom:14px">
+            @php
+                $dueNow = $delivery->order ? (float) $delivery->order->settlement()['remaining_due'] : 0;
+            @endphp
+            <form id="deliver-form" class="card" style="padding:16px;margin-bottom:14px" method="post" action="{{ route('deliveries.deliver', $delivery) }}"
+                  x-data="{
+                      due: {{ json_encode($dueNow) }},
+                      paidNow: {{ json_encode((float) old('collected_now', 0)) }},
+                      taka(n) { return '৳ ' + Math.round(Number(n) || 0).toLocaleString('en-IN'); },
+                      baki() { return Math.max(0, Math.round((this.due - Number(this.paidNow || 0)) * 100) / 100); }
+                  }">
+                @csrf
+                <div style="font-weight:800;margin-bottom:6px">Goods at the shop</div>
+                <p class="muted" style="margin:0 0 12px;font-size:13px">
+                    Mark delivered when the products are with the owner.
+                    @if ($dueNow > 0.009)
+                        Bill due: <strong style="color:var(--text)">{{ \App\Support\DemoData::taka($dueNow) }}</strong>. Collect some now, or leave the rest as baki.
+                    @else
+                        Nothing left to collect — already paid at order.
+                    @endif
+                </p>
+                @if ($dueNow > 0.009)
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                        <button type="button" class="btn btn-ghost btn-sm" :class="Number(paidNow) === 0 && 'btn-primary'" @click="paidNow = 0">Full baki</button>
+                        <button type="button" class="btn btn-ghost btn-sm" @click="paidNow = Math.round(due / 2)">Half now</button>
+                        <button type="button" class="btn btn-ghost btn-sm" @click="paidNow = Math.round(due)">Pay all</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px">
+                        <div class="field">
+                            <label class="label">Owner paid now</label>
+                            <input class="input" type="number" name="collected_now" min="0" step="1" :max="Math.round(due)" x-model.number="paidNow">
+                        </div>
+                        <div class="field">
+                            <label class="label">Method</label>
+                            <select class="select" name="method">
+                                <option value="cash" @selected(old('method', 'cash') === 'cash')>Cash</option>
+                                <option value="mobile_banking" @selected(old('method') === 'mobile_banking')>Mobile banking</option>
+                                <option value="bank_transfer" @selected(old('method') === 'bank_transfer')>Bank transfer</option>
+                                <option value="cheque" @selected(old('method') === 'cheque')>Cheque</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="label">Reference</label>
+                            <input class="input" type="text" name="reference" value="{{ old('reference') }}" maxlength="120" placeholder="Optional">
+                        </div>
+                    </div>
+                    <p class="muted" style="margin:0 0 12px;font-size:13px">Baki left: <strong x-text="taka(baki())"></strong></p>
+                @endif
                 <div class="field" style="margin-bottom:10px">
                     <label class="label">Delivery notes</label>
-                    <textarea class="input" form="deliver-form" name="notes" rows="2">{{ old('notes', $delivery->notes) }}</textarea>
+                    <textarea class="input" name="notes" rows="2">{{ old('notes', $delivery->notes) }}</textarea>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <form id="deliver-form" method="post" action="{{ route('deliveries.deliver', $delivery) }}">
-                        @csrf
-                        <button class="btn btn-primary" type="submit">Mark delivered</button>
-                    </form>
-                    <form method="post" action="{{ route('deliveries.fail', $delivery) }}" onsubmit="return confirm('Mark this drop as failed?')">
-                        @csrf
-                        <input type="hidden" name="notes" value="{{ old('notes', $delivery->notes) }}">
-                        <button class="btn btn-ghost" type="submit">Mark failed</button>
-                    </form>
+                    <button class="btn btn-primary" type="submit">Mark delivered</button>
                 </div>
-            </div>
+            </form>
+            <form method="post" action="{{ route('deliveries.fail', $delivery) }}" onsubmit="return confirm('Mark this drop as failed?')" style="margin-bottom:14px">
+                @csrf
+                <input type="hidden" name="notes" value="{{ old('notes', $delivery->notes) }}">
+                <button class="btn btn-ghost" type="submit">Mark failed</button>
+            </form>
         @endcan
     @elseif ($delivery->status === \App\Models\Delivery::STATUS_FAILED)
         @can('deliveries.update_status')

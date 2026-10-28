@@ -42,7 +42,7 @@
                             <div class="f-shop-name">{{ $shop->name }}</div>
                             <div class="f-shop-meta">{{ $shop->owner_name ?: $shop->code }}{{ $shop->city ? ' · '.$shop->city : '' }}</div>
                             <div class="f-chips">
-                                <span class="f-chip {{ $outstanding > 0 ? 'red' : 'green' }}">Outstanding {{ \App\Support\DemoData::taka($outstanding) }}</span>
+                                <span class="f-chip {{ $outstanding > 0 ? 'red' : 'green' }}">Baki {{ \App\Support\DemoData::taka($outstanding) }}</span>
                                 @if ($shop->priceGroup)<span class="f-chip">{{ $shop->priceGroup->name }}</span>@endif
                                 @if ($shop->is_mine)
                                     <span class="f-chip green">My route</span>
@@ -77,7 +77,7 @@
                         <tr>
                             <th>Shop</th>
                             <th>Area</th>
-                            <th class="num">Outstanding</th>
+                            <th class="num">Baki</th>
                             <th>Price group</th>
                             <th></th>
                         </tr>

@@ -8,8 +8,9 @@
         \App\Models\Delivery::STATUS_FAILED => 'package-x',
         default => 'truck',
     };
+    $due = $delivery->order ? (float) $delivery->order->collectibleBalance() : 0;
     $tag = $delivery->order ? 'a' : 'div';
-    $href = $delivery->order ? ' href="'.e(route('field.orders.show', $delivery->order)).'"' : '';
+    $href = $delivery->order ? ' href="'.e(route('field.orders.show', $delivery->order).($due > 0.009 ? '#collect-bill' : '')).'"' : '';
 @endphp
 <{{ $tag }} class="f-order"{{ $href }}>
     <div class="f-shop-ico tone-sky" style="width:40px;height:40px;flex:none">
@@ -26,11 +27,8 @@
             <span>{{ $delivery->number }}{{ $delivery->order ? ' · '.$delivery->order->number : '' }} · {{ $whenLabel }}</span>
             <span class="f-status {{ $delivery->statusTone() }}">{{ $delivery->statusLabel() }}</span>
         </div>
-        @if ($delivery->status === \App\Models\Delivery::STATUS_DELIVERED && $delivery->order)
-            @php $due = (float) $delivery->order->settlement()['remaining_due']; @endphp
-            @if ($due > 0.009)
-                <div class="f-muted f-small" style="margin-top:4px">Due now {{ \App\Support\DemoData::taka($due) }}</div>
-            @endif
+        @if ($due > 0.009)
+            <div class="f-collect-pill">Baki {{ \App\Support\DemoData::taka($due) }}</div>
         @endif
         @if ($delivery->assignee?->name || $delivery->delivery_address)
             <div class="f-muted f-small" style="margin-top:4px">

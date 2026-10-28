@@ -2,14 +2,16 @@
 @section('title', $order->number)
 @section('content')
 @php
+    $simple = $order->simpleStatus();
     $statusTone = $payload['status_tone'] ?? 'muted';
     $timeline = $purchase['timeline'] ?? [];
     $invoices = $purchase['invoices'] ?? [];
     $payments = $purchase['payments'] ?? [];
+    $flowSteps = [1 => 'Sent', 2 => 'Approved', 3 => 'Delivered'];
 @endphp
 <div class="order-page" x-data="{ tab: 'timeline', requireAdvance: false, auditTab: 'approve', previewId: null }" @keydown.escape.window="previewId = null">
     <x-page-header title="{{ $order->number }}" subtitle="{{ $order->shop?->name }} · {{ $order->shop?->code }} · {{ ucfirst(str_replace('_', ' ', $order->source)) }}">
-        <span class="status-pill status-pill--{{ $statusTone }}">{{ $order->statusLabel() }}</span>
+        <span class="status-pill status-pill--{{ $statusTone }}">{{ $simple['label'] }}</span>
         <a class="btn btn-ghost" href="{{ route('orders.index') }}">Back to orders</a>
     </x-page-header>
 
@@ -35,7 +37,26 @@
         <div><span>Salesman</span><strong>{{ $order->salesman?->name ?: '—' }}</strong></div>
         <div><span>Submitted</span><strong>{{ $order->submitted_at?->format('l, d M Y · h:i A') ?: '—' }}</strong></div>
         <div><span>Lines</span><strong>{{ $order->item_count }}</strong></div>
-        <div><span>Total</span><strong>{{ \App\Support\DemoData::taka($order->total) }}</strong></div>
+        <div><span>This order</span><strong>{{ \App\Support\DemoData::taka($order->total) }}</strong></div>
+        @if ((float) $order->discount_total > 0)
+            <div><span>Discount</span><strong>− {{ \App\Support\DemoData::taka($order->discount_total) }}</strong></div>
+        @endif
+        <div>
+            <span>Shop previous baki</span>
+            <strong style="{{ $order->previousShopBaki() > 0.009 ? 'color:#c2410c' : '' }}">{{ \App\Support\DemoData::taka($order->previousShopBaki()) }}</strong>
+        </div>
+        @php
+            $adminThisBaki = (float) $order->settlement()['remaining_due'];
+            $adminPrevBaki = $order->previousShopBaki();
+            $adminTotalBaki = round($adminThisBaki + $adminPrevBaki, 2);
+        @endphp
+        @if ($adminTotalBaki > 0.009)
+            <div>
+                <span>Total baki</span>
+                <strong style="color:#c2410c">{{ \App\Support\DemoData::taka($adminTotalBaki) }}</strong>
+                <small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">this order {{ \App\Support\DemoData::taka($adminThisBaki) }} + previous {{ \App\Support\DemoData::taka($adminPrevBaki) }}</small>
+            </div>
+        @endif
             <div>
             <span>Stock</span>
             <strong style="color:{{ $snapshot['stock_ok'] ? '#15803d' : '#b91c1c' }}">
@@ -53,6 +74,16 @@
         @endif
         </div>
 
+    @if ($simple['step'] > 0)
+        <div class="order-simple-steps">
+            @foreach ($flowSteps as $n => $label)
+                <div class="order-simple-step {{ $n < $simple['step'] || ($simple['step'] === 3 && $n === 3) ? 'is-done' : ($n === $simple['step'] ? 'is-now' : '') }}">
+                    <span class="dot"></span>{{ $label }}
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     @php $settlement = $order->settlement(); @endphp
     @if ($settlement['has_advance'] || $settlement['invoice_issued'])
         <div class="order-settlement {{ $settlement['fully_settled'] ? 'is-settled' : ($settlement['advance_cleared'] ? 'is-partial' : 'is-due') }}">
@@ -62,11 +93,11 @@
                     @if ($settlement['fully_settled'])
                         Fully settled
                     @elseif ($settlement['collectible'])
-                        Invoice after delivery — collect baki
+                        Collect anytime — remaining is baki
                     @elseif ($settlement['has_advance'] && ! $settlement['advance_cleared'])
-                        Pay-now waiting for office verify
+                        Payment waiting for office verify
                     @elseif ($settlement['has_advance'])
-                        Collected at shop — rest after delivery
+                        Collected at shop — rest is baki
                     @else
                         Balance outstanding
                     @endif
@@ -78,13 +109,19 @@
                     <strong>{{ \App\Support\DemoData::taka($settlement['order_total']) }}</strong>
                 </div>
                 <div>
-                    <span>Collected at shop</span>
-                    <strong>{{ \App\Support\DemoData::taka($settlement['advance_paid']) }}</strong>
+                    <span>Paid so far</span>
+                    <strong>{{ \App\Support\DemoData::taka($settlement['paid_to_date']) }}</strong>
             </div>
                 @if ($settlement['sales_paid'] > 0.009)
                     <div>
-                        <span>Final invoice paid</span>
+                        <span>After delivery</span>
                         <strong>{{ \App\Support\DemoData::taka($settlement['sales_paid']) }}</strong>
+                    </div>
+                @endif
+                @if (($settlement['pending_sales'] ?? 0) > 0.009)
+                    <div>
+                        <span>Waiting confirm</span>
+                        <strong>{{ \App\Support\DemoData::taka($settlement['pending_sales']) }}</strong>
                     </div>
                 @endif
                 <div class="order-settlement-rest">
@@ -93,12 +130,12 @@
                     <em>
                         @if ($settlement['fully_settled'])
                             Nothing left to collect
+                        @elseif ($settlement['baki'] > 0.009)
+                            Collect in parts at any stage
                         @elseif ($settlement['collectible'])
-                            On sales invoice {{ $order->invoice->number }} — collect now
-                        @elseif ($settlement['has_advance'])
-                            Rest is collected after the goods are delivered
+                            On sales invoice {{ $order->invoice->number }} — collect at the shop or from the portal
                         @else
-                            Collect after delivery
+                            Collect whenever the owner has cash
                         @endif
                     </em>
                     </div>
@@ -108,10 +145,10 @@
         <div class="order-settlement is-partial">
             <div class="order-settlement-head">
                 <strong>Payment</strong>
-                <span>Starts after delivery</span>
+                <span>Collect anytime</span>
             </div>
             <p class="muted" style="margin:8px 0 0;font-size:13px">
-                Shop did not pay at order. Approve and ship as usual. The sales invoice and collection appear when the goods are delivered.
+                Approve, then deliver. Money can be collected before or after — leftover stays as baki.
             </p>
         </div>
     @endif
@@ -290,6 +327,16 @@
                     </tbody>
                 </table>
             </div>
+            @if ((float) $order->discount_total > 0)
+                    <div style="padding:12px 14px;border-top:1px solid var(--line);display:flex;justify-content:space-between">
+                        <span class="muted">Subtotal</span>
+                        <strong>{{ \App\Support\DemoData::taka($order->subtotal) }}</strong>
+                    </div>
+                    <div style="padding:0 14px 12px;display:flex;justify-content:space-between">
+                        <span class="muted">Discount</span>
+                        <strong>− {{ \App\Support\DemoData::taka($order->discount_total) }}</strong>
+                    </div>
+            @endif
             @if ($order->notes)
                     <div style="padding:14px;border-top:1px solid var(--line)"><span class="muted">Shop notes:</span> {{ $order->notes }}</div>
             @endif
@@ -297,11 +344,10 @@
         </div>
 
         <aside class="order-page-aside">
-            @if ($order->fulfilment)
+            @if ($order->fulfilment && ! $order->isDelivered())
                 <div class="card" style="padding:14px;margin-bottom:12px">
-                    <div style="font-weight:800;margin-bottom:4px">Warehouse fulfilment</div>
-                    <div class="muted" style="font-size:12px;margin-bottom:10px">{{ $order->fulfilment->statusLabel() }} · {{ $order->warehouse?->name ?: $order->fulfilment->warehouse?->name }}</div>
-                    <a class="btn btn-primary btn-sm" href="{{ route('fulfilment.show', $order->fulfilment) }}">Open fulfilment</a>
+                    <div style="font-weight:800;margin-bottom:4px">Ready to deliver</div>
+                    <p class="muted" style="margin:0;font-size:12px">{{ $order->warehouse?->name ?: $order->fulfilment->warehouse?->name }} · approve, then deliver. No pick / pack / dispatch steps.</p>
                 </div>
             @endif
 
@@ -311,6 +357,33 @@
             @if ($order->cancellation_reason)
                 <div class="card" style="padding:12px 14px;margin-bottom:12px;background:#f3f4f6">Cancelled: {{ $order->cancellation_reason }}</div>
             @endif
+
+            @if ($order->canDeliver())
+                @can('orders.approve')
+                    <form class="card" style="padding:14px;margin-bottom:12px" method="post" action="{{ route('orders.deliver', $order) }}"
+                          onsubmit="return confirm('Mark this order as delivered?')">
+                        @csrf
+                        <div style="font-weight:800;margin-bottom:4px">Deliver</div>
+                        <p class="muted" style="margin:0 0 10px;font-size:12px">One step after approval. Collection is separate.</p>
+                        <button class="btn btn-primary btn-sm" type="submit">Mark delivered</button>
+                    </form>
+                @endcan
+            @endif
+
+            @can('update', $order)
+                @if ($order->canApplyDiscount())
+                    <form class="card" style="padding:14px;margin-bottom:12px" method="post" action="{{ route('orders.discount', $order) }}">
+                        @csrf
+                        <div style="font-weight:800;margin-bottom:4px">Reduce total</div>
+                        <p class="muted" style="margin:0 0 10px;font-size:12px">Subtotal {{ \App\Support\DemoData::taka($order->subtotal) }}. Enter a discount to lower what the shop owes on this order.</p>
+                        <div class="field" style="margin-bottom:10px">
+                            <label class="label">Discount amount</label>
+                            <input class="input" type="number" name="discount_total" min="0" step="0.01" max="{{ (float) $order->subtotal }}" value="{{ old('discount_total', $order->discount_total) }}">
+                        </div>
+                        <button class="btn btn-primary btn-sm" type="submit">Apply discount</button>
+                    </form>
+                @endif
+            @endcan
 
             {{-- Advance --}}
             @if ($payload['awaiting_advance'] ?? false)
@@ -511,11 +584,11 @@
                         <a class="btn btn-ghost btn-sm" href="{{ route('invoices.show', $order->invoice) }}">Open</a>
                     </div>
                 </div>
-            @elseif ($order->isDelivered())
+            @elseif (! in_array($order->status, [\App\Models\Order::STATUS_REJECTED, \App\Models\Order::STATUS_CANCELLED], true))
                 @can('invoices.create')
                     <div class="card" style="padding:14px;margin-bottom:12px">
                         <div style="font-weight:800;margin-bottom:6px">No sales invoice yet</div>
-                        <p class="muted" style="font-size:12px;margin:0 0 8px">Invoice is raised when goods are delivered.</p>
+                        <p class="muted" style="font-size:12px;margin:0 0 8px">Raised automatically when money is collected, or raise it now.</p>
                         <form method="post" action="{{ route('orders.invoice', $order) }}">@csrf<button class="btn btn-primary btn-sm" type="submit">Raise invoice</button></form>
                     </div>
                 @endcan
@@ -524,14 +597,11 @@
             <div class="card" style="padding:14px">
                 <div style="font-weight:800;margin-bottom:10px">Pipeline</div>
                 <ol class="muted" style="padding-left:18px;line-height:1.85;margin:0;font-size:13px">
-                    <li>Submitted for audit</li>
-                    <li style="{{ $order->advance_required ? 'color:#d97706;font-weight:600' : '' }}">Pay now (only if collected at shop)</li>
-                    <li style="{{ $order->stock_reserved || in_array($order->status, ['approved','picking','picked','packed','dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Approved · stock reserved</li>
-                    <li style="{{ in_array($order->status, ['picked','packed','dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Picked</li>
-                    <li style="{{ in_array($order->status, ['packed','dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Packed</li>
-                    <li style="{{ in_array($order->status, ['dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Dispatched</li>
-                    <li style="{{ $order->status === 'delivered' ? 'color:#15803d;font-weight:600' : '' }}">Delivered · invoice &amp; collection</li>
+                    <li>Submitted</li>
+                    <li style="{{ $order->stock_reserved || $order->canDeliver() || $order->isDelivered() ? 'color:#15803d;font-weight:600' : '' }}">Approved</li>
+                    <li style="{{ $order->isDelivered() ? 'color:#15803d;font-weight:600' : '' }}">Delivered</li>
                 </ol>
+                <p class="muted" style="margin:10px 0 0;font-size:12px">Money can be collected at any of these stages.</p>
             </div>
         </aside>
     </div>

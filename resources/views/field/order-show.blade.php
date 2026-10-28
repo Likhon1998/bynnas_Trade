@@ -2,130 +2,213 @@
 @php
     $s = $order->simpleStatus();
     $phone = preg_replace('/[^0-9+]/', '', (string) $order->shop?->phone);
-    $steps = [1 => 'Sent', 2 => 'Approved', 3 => 'Packed', 4 => 'On the way', 5 => 'Delivered'];
+    $steps = [1 => 'Sent', 2 => 'Approved', 3 => 'Delivered'];
+    $settle = $order->settlement();
+    $baki = (float) $settle['baki'];
+    $openBaki = (float) $settle['remaining_due'];
+    $dueNow = (float) ($collectibleBalance ?? $baki);
+    $prevBaki = $order->previousShopBaki();
+    $totalBaki = round($openBaki + $prevBaki, 2);
+    $pendingAmt = (float) ($settle['pending_sales'] ?? 0);
 @endphp
 @section('title', 'Order '.$order->number)
 @section('heading', 'Order '.$order->number)
 @section('subheading', $order->shop?->name)
 @section('back', route('field.orders'))
 @section('content')
-    <div class="f-split">
-    <div>
-    <div class="f-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-            <div>
-                <div class="f-muted f-small">Order total</div>
-                <div style="font-size:22px;font-weight:800;color:var(--f-ink);letter-spacing:-.02em">{{ \App\Support\DemoData::taka($order->total) }}</div>
-                <div class="f-muted f-small">{{ $order->item_count }} pcs · sent {{ $order->submitted_at?->format('d M, g:i A') }}</div>
+    <div class="f-od">
+        <div class="f-od-main">
+            <div class="f-od-hero">
+                <div class="f-od-hero-top">
+                    <div>
+                        <div class="f-muted f-small">This order</div>
+                        <div class="f-od-amt">{{ \App\Support\DemoData::taka($order->total) }}</div>
+                        <div class="f-muted f-small">{{ $order->item_count }} pcs · {{ $order->submitted_at?->format('d M, g:i A') }}</div>
+                    </div>
+                    <span class="f-status {{ $s['tone'] }}">{{ $s['label'] }}</span>
+                </div>
+                @if ($s['step'] > 0)
+                    <div class="f-od-steps" style="--done: {{ $s['step'] >= 3 ? 100 : ($s['step'] - 1) / 2 * 100 }}%">
+                        <div class="bar"></div>
+                        @foreach ($steps as $n => $label)
+                            <div class="f-step {{ $n < $s['step'] || ($s['step'] === 3 && $n === 3) ? 'done' : ($n === $s['step'] ? 'now' : '') }}">
+                                <span class="dot"></span>{{ $label }}
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
             </div>
-            <span class="f-status {{ $s['tone'] }}">{{ $s['label'] }}</span>
-        </div>
 
-        @if ($s['step'] > 0)
-            <div class="f-steps" style="--done: {{ ($s['step'] - 1) / 4 * 100 }}%">
-                <div class="bar"></div>
-                @foreach ($steps as $n => $label)
-                    <div class="f-step {{ $n < $s['step'] ? 'done' : ($n === $s['step'] ? 'now' : '') }}">
-                        <span class="dot"></span>{{ $label }}
+            @if ($order->status === \App\Models\Order::STATUS_REJECTED && $order->rejection_reason)
+                <div class="f-flash err"><i data-lucide="circle-x"></i><span><strong>Rejected:</strong> {{ $order->rejection_reason }}</span></div>
+            @elseif ($order->status === \App\Models\Order::STATUS_CANCELLED && $order->cancellation_reason)
+                <div class="f-flash err"><i data-lucide="ban"></i><span><strong>Cancelled:</strong> {{ $order->cancellation_reason }}</span></div>
+            @elseif (! empty($pendingBill))
+                <div class="f-warn">Collected <b>{{ \App\Support\DemoData::taka($pendingBill->amount) }}</b> — waiting for office to confirm. This order baki stays until then.</div>
+            @elseif ($settle['fully_settled'])
+                <div class="f-flash ok"><i data-lucide="check-circle-2"></i><span>Paid in full.</span></div>
+            @endif
+
+            @if ($dueNow > 0.009)
+                <form id="collect-bill" class="f-od-pay" method="post" action="{{ route('field.orders.collect', $order) }}"
+                      x-data="{
+                          due: {{ json_encode($dueNow) }},
+                          prev: {{ json_encode($prevBaki) }},
+                          paidNow: {{ json_encode((float) old('amount', 0)) }},
+                          payMethod: {{ json_encode(old('method', 'cash')) }},
+                          taka(n) { return '৳ ' + Math.round(Number(n) || 0).toLocaleString('en-IN'); },
+                          baki() { return Math.max(0, Math.round((this.due - Number(this.paidNow || 0)) * 100) / 100); },
+                          totalBaki() { return Math.max(0, Math.round((this.baki() + Number(this.prev || 0)) * 100) / 100); }
+                      }">
+                    @csrf
+                    <div class="f-od-pay-head">
+                        <strong>Payment at shop</strong>
+                        <span>This order due {{ \App\Support\DemoData::taka($dueNow) }} · collect at any stage</span>
+                    </div>
+                    @if (! empty($pendingBill))
+                        <p class="f-muted f-small" style="margin:0">Office is confirming {{ \App\Support\DemoData::taka($pendingBill->amount) }}.</p>
+                    @endif
+                    <div class="f-pay-seg" role="group" aria-label="How much to collect">
+                        <button type="button" :class="Number(paidNow) === 0 ? 'active' : ''" @click="paidNow = 0">Full baki</button>
+                        <button type="button" :class="due > 0 && Number(paidNow) === Math.round(due / 2) ? 'active' : ''" @click="paidNow = Math.round(due / 2)">Half now</button>
+                        <button type="button" :class="due > 0 && Number(paidNow) >= due ? 'active' : ''" @click="paidNow = Math.round(due)">Pay all</button>
+                    </div>
+                    <div class="f-od-pay-row">
+                        <div class="f-money f-money-sm">
+                            <span>৳</span>
+                            <input id="collect-amount" type="number" inputmode="decimal" min="0" step="1" name="amount" x-model.number="paidNow" :max="Math.round(due)" placeholder="0">
+                        </div>
+                        <button class="f-btn f-btn-primary f-btn-sm" type="submit" :disabled="Number(paidNow) <= 0 || Number(paidNow) > due + 0.01">
+                            <span x-text="Number(paidNow) <= 0 ? 'Collect' : (baki() > 0.009 ? 'Collect ' + taka(paidNow) : 'Collect all')"></span>
+                        </button>
+                    </div>
+                    <div class="f-od-pay-left">
+                        <div><span>This order baki</span><b x-text="taka(baki())"></b></div>
+                        @if ($prevBaki > 0.009)
+                            <div class="is-total-baki"><span>Total baki</span><b x-text="taka(totalBaki())"></b></div>
+                        @endif
+                    </div>
+                    <template x-if="Number(paidNow) > 0">
+                        <div class="f-od-pay-how">
+                            <select id="collect-method" class="f-input" name="method" x-model="payMethod" aria-label="How did they pay?">
+                                <option value="cash">Cash</option>
+                                <option value="mobile_banking">bKash / Nagad / Rocket</option>
+                                <option value="bank_transfer">Bank transfer</option>
+                                <option value="cheque">Cheque</option>
+                            </select>
+                            <input id="collect-ref" class="f-input" type="text" name="reference" value="{{ old('reference') }}" maxlength="120" placeholder="Reference (optional)">
+                        </div>
+                    </template>
+                </form>
+            @endif
+
+            @if ($order->canDeliver())
+                <form class="f-od-deliver" method="post" action="{{ route('field.orders.deliver', $order) }}"
+                      onsubmit="return confirm('Mark this order as delivered?')">
+                    @csrf
+                    <div>
+                        <strong>Deliver</strong>
+                        <span class="f-muted f-small">One step after approval. Collection stays separate.</span>
+                    </div>
+                    <button class="f-btn f-btn-primary f-btn-sm" type="submit">Mark delivered</button>
+                </form>
+            @endif
+
+            <section class="f-od-sheet">
+                <div class="f-od-kicker">Items</div>
+                @foreach ($order->items as $item)
+                    <div class="f-line-item">
+                        <span>
+                            {{ $item->product_name }}
+                            <span class="f-muted">× {{ $item->quantity }} · {{ \App\Support\DemoData::taka($item->unit_price) }}</span>
+                            @if ($item->wasPriceChanged())
+                                <span class="f-muted"> · list {{ \App\Support\DemoData::taka($item->originalUnitPrice()) }}</span>
+                            @endif
+                        </span>
+                        <span>{{ \App\Support\DemoData::taka($item->line_total) }}</span>
                     </div>
                 @endforeach
-            </div>
-        @endif
-    </div>
-
-    @php
-        $settle = $order->settlement();
-        $paidNow = $settle['advance_paid'] > 0.009
-            ? $settle['advance_paid']
-            : (float) ($order->advance_amount ?: 0);
-        $baki = max(0, round((float) $order->total - $paidNow, 2));
-    @endphp
-
-    @if ($order->status === \App\Models\Order::STATUS_REJECTED && $order->rejection_reason)
-        <div class="f-flash err" style="margin:0 0 12px">
-            <i data-lucide="circle-x"></i>
-            <span><strong>Rejected:</strong> {{ $order->rejection_reason }}</span>
-        </div>
-    @elseif ($order->status === \App\Models\Order::STATUS_CANCELLED && $order->cancellation_reason)
-        <div class="f-flash err" style="margin:0 0 12px">
-            <i data-lucide="ban"></i>
-            <span><strong>Cancelled:</strong> {{ $order->cancellation_reason }}</span>
-        </div>
-    @elseif ($order->status === \App\Models\Order::STATUS_AWAITING_ADVANCE && ! $order->isAdvancePaid())
-        <div class="f-warn" style="margin:0 0 12px">
-            Collected <b>{{ \App\Support\DemoData::taka($paidNow) }}</b> at the shop — waiting for office to verify.
-            Baki <b>{{ \App\Support\DemoData::taka($baki) }}</b> after delivery.
-        </div>
-    @elseif ($settle['collectible'])
-        <div class="f-warn" style="margin:0 0 12px">
-            Delivered — <b>{{ \App\Support\DemoData::taka($settle['remaining_due']) }}</b> now due on the invoice.
-        </div>
-    @elseif ($settle['invoice_issued'] && $settle['fully_settled'])
-        <div class="f-flash ok" style="margin:0 0 12px">
-            <i data-lucide="check-circle-2"></i>
-            <span>Delivered and paid in full.</span>
-        </div>
-    @elseif ($settle['has_advance'] && $settle['advance_cleared'])
-        <div class="f-flash ok" style="margin:0 0 12px">
-            <i data-lucide="check-circle-2"></i>
-            <span>
-                Paid now <b>{{ \App\Support\DemoData::taka($paidNow) }}</b>
-                · rest <b>{{ \App\Support\DemoData::taka($baki) }}</b> after delivery
-            </span>
-        </div>
-    @elseif (! $settle['has_advance'] && ! $order->isDelivered())
-        <div class="f-warn" style="margin:0 0 12px">
-            Owner did not pay now. Payment starts when the goods are delivered.
-        </div>
-    @endif
-
-    <div class="f-section"><h2>Items</h2></div>
-    <div class="f-card" style="padding:4px 14px">
-        @foreach ($order->items as $item)
-            <div class="f-line-item">
-                <span>
-                    {{ $item->product_name }}
-                    <span class="f-muted">× {{ $item->quantity }} · {{ \App\Support\DemoData::taka($item->unit_price) }}</span>
-                    @if ($item->wasPriceChanged())
-                        <span class="f-muted"> · list {{ \App\Support\DemoData::taka($item->originalUnitPrice()) }}</span>
+                <div class="f-od-totals">
+                    @if ((float) $order->discount_total > 0)
+                        <div><span>Subtotal</span><span>{{ \App\Support\DemoData::taka($order->subtotal) }}</span></div>
+                        <div><span>Discount</span><span>− {{ \App\Support\DemoData::taka($order->discount_total) }}</span></div>
                     @endif
-                </span>
-                <span>{{ \App\Support\DemoData::taka($item->line_total) }}</span>
+                    <div class="is-total"><span>This order</span><strong>{{ \App\Support\DemoData::taka($order->total) }}</strong></div>
+                    @if ($settle['paid_to_date'] > 0.009)
+                        <div><span>Paid so far</span><span>{{ \App\Support\DemoData::taka($settle['paid_to_date']) }}</span></div>
+                    @endif
+                    @if ($pendingAmt > 0.009)
+                        <div><span>Waiting confirm</span><span>{{ \App\Support\DemoData::taka($pendingAmt) }}</span></div>
+                    @endif
+                    @if ($openBaki > 0.009)
+                        <div class="is-baki"><span>This order baki</span><span>{{ \App\Support\DemoData::taka($openBaki) }}</span></div>
+                    @endif
+                    @if ($prevBaki > 0.009)
+                        <div class="is-baki"><span>Previous shop baki</span><span>{{ \App\Support\DemoData::taka($prevBaki) }}</span></div>
+                    @endif
+                    @if ($totalBaki > 0.009 && $prevBaki > 0.009)
+                        <div class="is-grand is-baki"><span>Total baki</span><strong>{{ \App\Support\DemoData::taka($totalBaki) }}</strong></div>
+                    @endif
+                </div>
+
+                @if ($order->canApplyDiscount())
+                    <form class="f-od-disc" method="post" action="{{ route('field.orders.discount', $order) }}"
+                          x-data="{ extra: 0, current: {{ json_encode((float) $order->discount_total) }}, subtotal: {{ json_encode((float) $order->subtotal) }},
+                              add(n) { this.extra = Math.min(this.subtotal - this.current, Math.round((Number(this.extra) || 0) + n)); } }">
+                        @csrf
+                        <input type="hidden" name="add" value="1">
+                        <div class="f-od-disc-label">
+                            <strong>Reduce total</strong>
+                            @if ((float) $order->discount_total > 0.009)
+                                <span>Already −{{ \App\Support\DemoData::taka($order->discount_total) }}</span>
+                            @endif
+                        </div>
+                        <div class="f-disc-add" role="group" aria-label="Add more discount">
+                            <button type="button" @click="add(50)">+50</button>
+                            <button type="button" @click="add(100)">+100</button>
+                            <button type="button" @click="add(200)">+200</button>
+                        </div>
+                        <div class="f-od-pay-row">
+                            <div class="f-money f-money-sm">
+                                <span>৳</span>
+                                <input id="field-discount" type="number" name="discount_total" min="0" step="1" :max="Math.round(subtotal - current)" x-model.number="extra" placeholder="Add more">
+                            </div>
+                            <button class="f-btn f-btn-primary f-btn-sm" type="submit" :disabled="Number(extra) <= 0">Add discount</button>
+                        </div>
+                    </form>
+                @endif
+            </section>
+        </div>
+
+        <aside class="f-od-side">
+            <div class="f-od-shop">
+                <div class="f-od-kicker">Shop</div>
+                <div class="f-od-shop-name">{{ $order->shop?->name }}</div>
+                @if ($order->shop?->owner_name)<div class="f-kv"><span>Owner</span><span>{{ $order->shop->owner_name }}</span></div>@endif
+                @if ($order->shop?->phone)<div class="f-kv"><span>Phone</span><span>{{ $order->shop->phone }}</span></div>@endif
+                @if ($order->shop?->city)<div class="f-kv"><span>Area</span><span>{{ $order->shop->city }}</span></div>@endif
+                @if ($prevBaki > 0.009)
+                    <div class="f-kv"><span>Previous baki</span><span class="is-debt">{{ \App\Support\DemoData::taka($prevBaki) }}</span></div>
+                @endif
+                @if ($openBaki > 0.009)
+                    <div class="f-kv"><span>This order baki</span><span class="is-debt">{{ \App\Support\DemoData::taka($openBaki) }}</span></div>
+                @endif
+                @if ($totalBaki > 0.009 && $prevBaki > 0.009)
+                    <div class="f-kv"><span>Total baki</span><span class="is-debt">{{ \App\Support\DemoData::taka($totalBaki) }}</span></div>
+                @endif
+                <div class="f-od-shop-act">
+                    @if ($phone)
+                        <a class="f-btn f-btn-soft f-btn-sm" href="tel:{{ $phone }}"><i data-lucide="phone"></i> Call shop</a>
+                    @endif
+                    <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.shops') }}"><i data-lucide="store"></i> My shops</a>
+                </div>
             </div>
-        @endforeach
-        @if ((float) $order->discount_total > 0)
-            <div class="f-line-item"><span class="f-muted">Discount</span><span>− {{ \App\Support\DemoData::taka($order->discount_total) }}</span></div>
-        @endif
-        <div class="f-total-row"><span>Total</span><strong>{{ \App\Support\DemoData::taka($order->total) }}</strong></div>
-        @if ($settle['has_advance'] || $settle['invoice_issued'])
-            @if ($settle['has_advance'])
-                <div class="f-line-item"><span class="f-muted">Paid now</span><span>{{ \App\Support\DemoData::taka($paidNow) }}</span></div>
+            @if ($order->notes)
+                <div class="f-od-shop">
+                    <div class="f-od-kicker">Note</div>
+                    <div class="f-od-note">{{ $order->notes }}</div>
+                </div>
             @endif
-            <div class="f-line-item"><span class="f-muted">{{ $settle['collectible'] ? 'Due now' : 'After delivery' }}</span><span class="strong">{{ \App\Support\DemoData::taka($baki) }}</span></div>
-        @endif
-    </div>
-    </div>
-
-    <aside>
-        <div class="f-section f-desktop-only"><h2>Shop</h2></div>
-        <div class="f-card f-desktop-only">
-            <div class="f-kv"><span>Shop</span><span>{{ $order->shop?->name }}</span></div>
-            @if ($order->shop?->owner_name)<div class="f-kv"><span>Owner</span><span>{{ $order->shop->owner_name }}</span></div>@endif
-            @if ($order->shop?->phone)<div class="f-kv"><span>Phone</span><span>{{ $order->shop->phone }}</span></div>@endif
-            @if ($order->shop?->city)<div class="f-kv"><span>Area</span><span>{{ $order->shop->city }}</span></div>@endif
-        </div>
-
-        @if ($order->notes)
-            <div class="f-section"><h2>Your note</h2></div>
-            <div class="f-card">{{ $order->notes }}</div>
-        @endif
-
-        <div class="f-shop-actions" style="margin-top:16px">
-            @if ($phone)
-                <a class="f-btn f-btn-soft f-btn-lg" style="flex:1" href="tel:{{ $phone }}"><i data-lucide="phone"></i> Call shop</a>
-            @endif
-            <a class="f-btn f-btn-ghost f-btn-lg" style="flex:1" href="{{ route('field.shops') }}"><i data-lucide="store"></i> My shops</a>
-        </div>
-    </aside>
+        </aside>
     </div>
 @endsection

@@ -52,7 +52,13 @@ class PaymentService
             return $payment->fresh(['shop', 'invoice']);
         });
 
-        // Advance payments recorded by someone who may verify are applied immediately.
+        $applyNow = (bool) ($data['apply_now'] ?? false);
+
+        // Apply immediately for cash-on-delivery, or for advance collected by someone who may verify.
+        if ($payment->invoice_id && $applyNow) {
+            return $this->verify($payment, $actor);
+        }
+
         if ($payment->invoice_id && $actor?->can('payments.verify') && $this->isAdvanceInvoice((int) $payment->invoice_id)) {
             return $this->verify($payment, $actor);
         }
@@ -66,6 +72,59 @@ class PaymentService
         });
 
         return $payment;
+    }
+
+    /**
+     * Record a payment against a sales invoice after goods have reached the shop.
+     */
+    public function collectAgainstInvoice(
+        Invoice $invoice,
+        float $amount,
+        User $actor,
+        string $method = Payment::METHOD_CASH,
+        ?string $reference = null,
+        ?string $notes = null,
+        bool $applyNow = false,
+    ): Payment {
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Payment amount must be positive.']);
+        }
+
+        $invoice->refresh();
+        $pending = (float) Payment::query()
+            ->where('invoice_id', $invoice->id)
+            ->where('status', Payment::STATUS_PENDING)
+            ->sum('amount');
+        $available = round((float) $invoice->balance - $pending, 2);
+
+        if ($available <= 0.009) {
+            throw ValidationException::withMessages([
+                'amount' => $pending > 0.009
+                    ? 'A payment is already waiting for office confirmation.'
+                    : 'This bill is already settled.',
+            ]);
+        }
+
+        if ($amount > $available + 0.01) {
+            throw ValidationException::withMessages([
+                'amount' => 'Amount cannot exceed the remaining bill (৳ '.number_format($available, 2).').',
+            ]);
+        }
+
+        if (! in_array($method, Payment::METHODS, true)) {
+            throw ValidationException::withMessages(['method' => 'Choose a valid payment method.']);
+        }
+
+        return $this->record([
+            'shop_id' => $invoice->shop_id,
+            'invoice_id' => $invoice->id,
+            'amount' => $amount,
+            'method' => $method,
+            'reference' => $reference,
+            'notes' => $notes,
+            'apply_now' => $applyNow,
+        ], $actor);
     }
 
     public function verify(Payment $payment, ?User $actor = null): Payment

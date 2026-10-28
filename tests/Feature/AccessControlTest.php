@@ -162,6 +162,7 @@ class AccessControlTest extends TestCase
         $this->get(route('portal.orders.edit', $foreign))->assertNotFound();
         $this->put(route('portal.orders.update', $foreign), ['items' => []])->assertNotFound();
         $this->delete(route('portal.orders.destroy', $foreign))->assertNotFound();
+        $this->post(route('portal.orders.pay', $foreign), ['amount' => 10, 'method' => 'cash'])->assertNotFound();
         $this->assertNotNull(Order::find($foreign->id));
     }
 

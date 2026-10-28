@@ -144,11 +144,11 @@ class Order extends Model
             self::STATUS_AWAITING_ADVANCE => $this->isAdvancePaid()
                 ? 'Advance Paid · Ready to Approve'
                 : 'Awaiting Advance Payment',
-            self::STATUS_APPROVED => 'Approved · Stock Reserved',
-            self::STATUS_PICKING => 'Picking',
-            self::STATUS_PICKED => 'Picked',
-            self::STATUS_PACKED => 'Packed',
-            self::STATUS_DISPATCHED => 'Dispatched',
+            self::STATUS_APPROVED,
+            self::STATUS_PICKING,
+            self::STATUS_PICKED,
+            self::STATUS_PACKED,
+            self::STATUS_DISPATCHED => 'Approved',
             self::STATUS_DELIVERED => 'Delivered',
             self::STATUS_REJECTED => 'Rejected',
             self::STATUS_CANCELLED => 'Cancelled',
@@ -164,14 +164,9 @@ class Order extends Model
     public function simpleStatus(): array
     {
         return match ($this->status) {
-            self::STATUS_PENDING_AUDIT, self::STATUS_DRAFT => ['label' => 'Waiting for approval', 'tone' => 'amber', 'step' => 1],
-            self::STATUS_AWAITING_ADVANCE => $this->isAdvancePaid()
-                ? ['label' => 'Advance paid · approving', 'tone' => 'amber', 'step' => 1]
-                : ['label' => 'Needs advance payment', 'tone' => 'amber', 'step' => 1],
-            self::STATUS_APPROVED => ['label' => 'Approved', 'tone' => 'blue', 'step' => 2],
-            self::STATUS_PICKING, self::STATUS_PICKED, self::STATUS_PACKED => ['label' => 'Being packed', 'tone' => 'violet', 'step' => 3],
-            self::STATUS_DISPATCHED => ['label' => 'On the way', 'tone' => 'sky', 'step' => 4],
-            self::STATUS_DELIVERED => ['label' => 'Delivered', 'tone' => 'green', 'step' => 5],
+            self::STATUS_PENDING_AUDIT, self::STATUS_DRAFT, self::STATUS_AWAITING_ADVANCE => ['label' => 'Waiting for approval', 'tone' => 'amber', 'step' => 1],
+            self::STATUS_APPROVED, self::STATUS_PICKING, self::STATUS_PICKED, self::STATUS_PACKED, self::STATUS_DISPATCHED => ['label' => 'Approved', 'tone' => 'blue', 'step' => 2],
+            self::STATUS_DELIVERED => ['label' => 'Delivered', 'tone' => 'green', 'step' => 3],
             self::STATUS_REJECTED => ['label' => 'Rejected', 'tone' => 'red', 'step' => 0],
             self::STATUS_CANCELLED => ['label' => 'Cancelled', 'tone' => 'gray', 'step' => 0],
             default => ['label' => $this->statusLabel(), 'tone' => 'gray', 'step' => 0],
@@ -257,23 +252,82 @@ class Order extends Model
 
         $hasAdvance = $advanceRequired > 0.009 || (bool) $this->advance_required;
 
+        $pendingSales = 0.0;
+        if ($invoiceIssued && $salesInvoice) {
+            $pendingSales = round((float) Payment::query()
+                ->where('invoice_id', $salesInvoice->id)
+                ->where('status', Payment::STATUS_PENDING)
+                ->sum('amount'), 2);
+        }
+
+        $baki = max(0, round($remainingDue - $pendingSales, 2));
+
         return [
             'order_total' => $orderTotal,
             'advance_required' => $advanceRequired,
             'advance_paid' => $advancePaid,
             'sales_paid' => $salesPaid,
+            'pending_sales' => $pendingSales,
+            'paid_to_date' => round($advancePaid + $salesPaid, 2),
             'remaining_due' => $remainingDue,
+            'baki' => $baki,
             'has_advance' => $hasAdvance,
             'advance_cleared' => $advanceRequired <= 0.009 || $advancePaid + 0.009 >= $advanceRequired,
-            'fully_settled' => $remainingDue <= 0.009 && ($invoiceIssued || $hasAdvance),
+            'fully_settled' => $remainingDue <= 0.009 && ($invoiceIssued || $hasAdvance || $advancePaid > 0.009),
             'invoice_issued' => (bool) $invoiceIssued,
-            'collectible' => $invoiceIssued && $remainingDue > 0.009,
+            'collectible' => $remainingDue > 0.009 && ! in_array($this->status, [self::STATUS_REJECTED, self::STATUS_CANCELLED], true),
         ];
     }
 
     public function isDelivered(): bool
     {
         return $this->status === self::STATUS_DELIVERED;
+    }
+
+    public function goodsAreAtTheShop(): bool
+    {
+        if ($this->isDelivered()) {
+            return true;
+        }
+
+        $delivery = $this->relationLoaded('delivery')
+            ? $this->delivery
+            : $this->delivery()->first();
+
+        return $delivery && $delivery->status === Delivery::STATUS_OUT_FOR_DELIVERY;
+    }
+
+    public function pendingBillPayment(): ?Payment
+    {
+        if (! $this->invoice_id) {
+            return null;
+        }
+
+        return Payment::query()
+            ->where('invoice_id', $this->invoice_id)
+            ->where('status', Payment::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+    }
+
+    public function collectibleBalance(): float
+    {
+        if (in_array($this->status, [self::STATUS_REJECTED, self::STATUS_CANCELLED], true)) {
+            return 0.0;
+        }
+
+        return (float) $this->settlement()['baki'];
+    }
+
+    public function canDeliver(): bool
+    {
+        return in_array($this->status, [
+            self::STATUS_APPROVED,
+            self::STATUS_PICKING,
+            self::STATUS_PICKED,
+            self::STATUS_PACKED,
+            self::STATUS_DISPATCHED,
+        ], true);
     }
 
     public function canApproveNow(): bool
@@ -306,6 +360,30 @@ class Order extends Model
             ->whereIn('invoice_id', $invoiceIds)
             ->whereIn('status', [Payment::STATUS_PENDING, Payment::STATUS_VERIFIED])
             ->exists();
+    }
+
+    public function canApplyDiscount(): bool
+    {
+        return $this->isPendingAudit()
+            && ! $this->stock_reserved
+            && ! $this->advance_required
+            && ! $this->hasRecordedPayments();
+    }
+
+    /**
+     * Unpaid invoices already issued for this shop, excluding this order's remaining baki.
+     */
+    public function previousShopBaki(): float
+    {
+        $shopBaki = round((float) ($this->shop?->outstanding_balance ?? 0), 2);
+
+        if ($this->invoice_id || $this->isDelivered()) {
+            $thisOpen = round((float) $this->settlement()['remaining_due'], 2);
+
+            return max(0, round($shopBaki - $thisOpen, 2));
+        }
+
+        return $shopBaki;
     }
 
     public function isApproved(): bool

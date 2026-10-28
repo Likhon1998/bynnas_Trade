@@ -6,33 +6,48 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Shop;
+use App\Services\CollectionSummaryService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
-    public function __construct(private PaymentService $payments) {}
+    public function __construct(
+        private PaymentService $payments,
+        private CollectionSummaryService $collections,
+    ) {}
 
     public function index(Request $request)
     {
         abort_unless($request->user()->can('payments.view'), 403);
 
+        $view = $request->get('view', 'people');
+        $people = $this->collections->byShop($request->user(), $request->search);
+
         $payments = Payment::query()
             ->whereHas('shop', fn ($q) => $q->visibleTo($request->user()))
-            ->with(['shop', 'invoice', 'verifier'])
+            ->with(['shop', 'invoice', 'verifier', 'creator'])
             ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->when($request->search, function ($q, $search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('number', 'like', "%{$search}%")
                         ->orWhere('reference', 'like', "%{$search}%")
-                        ->orWhereHas('shop', fn ($s) => $s->where('name', 'like', "%{$search}%"));
+                        ->orWhereHas('shop', fn ($s) => $s->where('name', 'like', "%{$search}%")
+                            ->orWhere('owner_name', 'like', "%{$search}%"));
                 });
             })
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
-        return view('admin.payments.index', compact('payments'));
+        return view('admin.payments.index', [
+            'payments' => $payments,
+            'people' => $people,
+            'view' => in_array($view, ['people', 'receipts'], true) ? $view : 'people',
+            'receivedTotal' => round((float) $people->sum('received'), 2),
+            'pendingTotal' => round((float) $people->sum('pending'), 2),
+            'bakiTotal' => round((float) $people->sum('baki'), 2),
+        ]);
     }
 
     public function create(Request $request)

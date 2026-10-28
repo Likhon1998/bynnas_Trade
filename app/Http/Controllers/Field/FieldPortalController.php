@@ -9,6 +9,7 @@ use App\Models\CommissionRule;
 use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\PartnerInquiry;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Reward;
 use App\Models\SalesTarget;
@@ -18,8 +19,12 @@ use App\Models\User;
 use App\Services\SalaryService;
 use App\Rules\BangladeshPhone;
 use App\Services\AppNotificationService;
+use App\Services\CollectionSummaryService;
+use App\Services\FulfilmentService;
+use App\Services\InvoiceService;
 use App\Services\OrderService;
 use App\Services\PartnerInquiryService;
+use App\Services\PaymentService;
 use App\Services\ShopService;
 use App\Services\TargetService;
 use App\Services\VisitService;
@@ -50,6 +55,9 @@ class FieldPortalController extends Controller
         private PartnerInquiryService $partnerInquiries,
         private TargetService $targets,
         private SalaryService $salaries,
+        private PaymentService $payments,
+        private FulfilmentService $fulfilment,
+        private CollectionSummaryService $collections,
     ) {}
 
     public function dashboard(Request $request)
@@ -660,6 +668,7 @@ class FieldPortalController extends Controller
                 \App\Models\Payment::METHOD_BANK,
             ])],
             'payment_reference' => ['nullable', 'string', 'max:120'],
+            'discount_total' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
@@ -667,15 +676,19 @@ class FieldPortalController extends Controller
         ]);
 
         $paidNow = round((float) ($data['paid_now'] ?? 0), 2);
+        $discount = round((float) ($data['discount_total'] ?? 0), 2);
 
-        $order = DB::transaction(function () use ($request, $visit, $data, $paidNow) {
+        $order = DB::transaction(function () use ($request, $visit, $data, $paidNow, $discount) {
             $order = $this->orders->collectFromSalesman(
                 $request->user(),
                 $visit->shop,
                 $data['items'],
                 $visit,
                 $data['notes'] ?? null,
+                $discount,
             );
+
+            $paidNow = min($paidNow, (float) $order->total);
 
             if ($paidNow > 0) {
                 $order = $this->orders->recordFieldCollection(
@@ -692,6 +705,7 @@ class FieldPortalController extends Controller
             return $order;
         });
 
+        $paidNow = min($paidNow, (float) $order->total);
         $baki = max(0, round((float) $order->total - $paidNow, 2));
         $msg = 'Order '.$order->number.' sent for approval.';
         if ($paidNow > 0) {
@@ -718,7 +732,7 @@ class FieldPortalController extends Controller
         $filter = array_key_exists($request->query('status'), $filters) ? $request->query('status') : null;
 
         $orders = Order::query()
-            ->with('shop')
+            ->with(['shop', 'invoice', 'advanceInvoice', 'delivery'])
             ->where('salesman_id', $request->user()->id)
             ->when($filter, fn ($q) => $q->whereIn('status', $filters[$filter]))
             ->latest('submitted_at')
@@ -735,11 +749,109 @@ class FieldPortalController extends Controller
 
     public function showOrder(Request $request, Order $order)
     {
-        abort_unless($order->salesman_id === $request->user()->id, 403);
+        abort_unless($this->salesmanCanAccessOrder($request->user(), $order), 403);
 
-        $order->load(['shop', 'items', 'visit', 'advanceInvoice', 'invoice']);
+        $order->load(['shop', 'items', 'visit', 'advanceInvoice', 'invoice', 'delivery']);
 
-        return view('field.order-show', compact('order'));
+        if ($order->isDelivered() && ! $order->invoice_id) {
+            app(InvoiceService::class)->createFromOrder($order->fresh('items'), $request->user());
+            $order->refresh()->load(['shop', 'items', 'visit', 'advanceInvoice', 'invoice', 'delivery']);
+        }
+
+        return view('field.order-show', [
+            'order' => $order,
+            'pendingBill' => $order->pendingBillPayment(),
+            'collectibleBalance' => $order->collectibleBalance(),
+        ]);
+    }
+
+    public function discountOrder(Request $request, Order $order)
+    {
+        abort_unless($this->salesmanCanAccessOrder($request->user(), $order), 403);
+
+        $data = $request->validate([
+            'discount_total' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $posted = round((float) $data['discount_total'], 2);
+        $amount = $request->boolean('add')
+            ? round((float) $order->discount_total + $posted, 2)
+            : $posted;
+
+        $this->orders->applyDiscount($order, $amount, $request->user());
+
+        return back()->with('success', 'Order total reduced. Discount ৳ '.number_format($amount, 2).'.');
+    }
+
+    public function collectBill(Request $request, Order $order)
+    {
+        abort_unless($this->salesmanCanAccessOrder($request->user(), $order), 403);
+
+        $data = $request->validate([
+            'amount' => ['nullable', 'numeric', 'min:0'],
+            'method' => ['nullable', 'in:'.implode(',', Payment::METHODS)],
+            'reference' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        $order->load(['invoice', 'advanceInvoice', 'items']);
+
+        if ($amount > 0.009) {
+            $this->orders->collectAnytime(
+                $order,
+                $request->user(),
+                $amount,
+                $data['method'] ?? Payment::METHOD_CASH,
+                $data['reference'] ?? null,
+            );
+        }
+
+        $baki = $order->fresh(['invoice', 'advanceInvoice'])->collectibleBalance();
+        if ($amount > 0.009) {
+            $msg = 'Collected ৳ '.number_format($amount, 2).'.';
+            $msg .= $baki > 0.009
+                ? ' Baki ৳ '.number_format($baki, 2).' left — collect whenever they have cash.'
+                : ' Bill cleared. Office will confirm.';
+        } else {
+            $msg = 'Left as baki ৳ '.number_format($baki, 2).'. Collect later when the owner has cash.';
+        }
+
+        return redirect()->route('field.orders.show', $order)->with('success', $msg);
+    }
+
+    public function deliverOrder(Request $request, Order $order)
+    {
+        abort_unless($this->salesmanCanAccessOrder($request->user(), $order), 403);
+
+        $this->orders->deliver($order, $request->user(), 'Salesman marked the goods delivered');
+
+        return redirect()->route('field.orders.show', $order)
+            ->with('success', 'Order '.$order->number.' delivered. Collect remaining baki whenever they have cash.');
+    }
+
+    public function collections(Request $request)
+    {
+        $user = $request->user();
+        $people = $this->collections->byShop($user, $request->search);
+        $receipts = $this->collections->receipts($user);
+
+        return view('field.collections', [
+            'people' => $people,
+            'receipts' => $receipts,
+            'receivedTotal' => round((float) $people->sum('received'), 2),
+            'pendingTotal' => round((float) $people->sum('pending'), 2),
+            'youCollected' => round((float) $people->sum('you_collected'), 2),
+            'bakiTotal' => round((float) $people->sum('baki'), 2),
+        ]);
+    }
+
+    private function salesmanCanAccessOrder(User $user, Order $order): bool
+    {
+        if ((int) $order->salesman_id === (int) $user->id) {
+            return true;
+        }
+
+        return $user->assignedShops()->where('shops.id', $order->shop_id)->exists();
     }
 
     public function earnings(Request $request)
@@ -793,7 +905,7 @@ class FieldPortalController extends Controller
         $filter = array_key_exists($request->query('status'), $filters) ? $request->query('status') : null;
 
         $deliveries = (clone $base)
-            ->with(['shop', 'order.invoice', 'order.advanceInvoice', 'assignee'])
+            ->with(['shop', 'order.invoice', 'order.advanceInvoice', 'order.delivery', 'assignee'])
             ->when($filter, fn ($q) => $q->where('status', $filters[$filter]))
             ->orderByRaw("CASE status WHEN 'out_for_delivery' THEN 0 WHEN 'failed' THEN 1 ELSE 2 END")
             ->latest('dispatched_at')

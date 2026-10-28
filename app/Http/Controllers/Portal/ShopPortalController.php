@@ -5,17 +5,21 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Services\OrderService;
+use App\Services\PaymentService;
 use App\Services\ShopLedgerService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class ShopPortalController extends Controller
 {
     public function __construct(
         private OrderService $orders,
         private ShopLedgerService $ledger,
+        private PaymentService $payments,
     ) {}
 
     public function dashboard(Request $request)
@@ -260,9 +264,44 @@ class ShopPortalController extends Controller
         $shop = $request->attributes->get('shop');
         abort_unless($order->shop_id === $shop->id, 404);
 
-        $order->load(['items', 'salesman', 'auditor', 'advanceInvoice']);
+        $order->load(['items', 'salesman', 'auditor', 'advanceInvoice', 'invoice']);
+        $order->setRelation('shop', $shop);
 
-        return view('portal.orders.show', compact('shop', 'order'));
+        return view('portal.orders.show', [
+            'shop' => $shop,
+            'order' => $order,
+            'pendingBill' => $order->pendingBillPayment(),
+            'collectibleBalance' => $order->collectibleBalance(),
+        ]);
+    }
+
+    public function payBill(Request $request, Order $order)
+    {
+        /** @var Shop $shop */
+        $shop = $request->attributes->get('shop');
+        abort_unless($order->shop_id === $shop->id, 404);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'method' => ['required', 'in:'.implode(',', Payment::METHODS)],
+            'reference' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $this->orders->collectAnytime(
+            $order,
+            $request->user(),
+            (float) $data['amount'],
+            $data['method'],
+            $data['reference'] ?? null,
+        );
+
+        $baki = $order->fresh(['invoice', 'advanceInvoice'])->collectibleBalance();
+        $msg = 'Payment submitted. Office will confirm it on your statement.';
+        if ($baki > 0.009) {
+            $msg .= ' Baki left: ৳ '.number_format($baki, 2).'.';
+        }
+
+        return redirect()->route('portal.orders.show', $order)->with('success', $msg);
     }
 
     public function profile(Request $request)
@@ -279,6 +318,14 @@ class ShopPortalController extends Controller
         /** @var Shop $shop */
         $shop = $request->attributes->get('shop');
         $statement = $this->ledger->statement($shop);
+        $statement['receipts'] = Payment::query()
+            ->with('creator')
+            ->where('shop_id', $shop->id)
+            ->whereIn('status', [Payment::STATUS_VERIFIED, Payment::STATUS_PENDING])
+            ->latest('paid_at')
+            ->latest('id')
+            ->limit(80)
+            ->get();
 
         return view('portal.statement', $statement);
     }

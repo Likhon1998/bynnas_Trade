@@ -16,7 +16,7 @@
         <div class="card" style="padding:18px">
             <div class="section-title" style="margin-bottom:10px">Credit summary</div>
             <p class="muted">Credit limit: <strong style="color:var(--text)">{{ \App\Support\DemoData::taka($shop->credit_limit) }}</strong></p>
-            <p class="muted">Outstanding: <strong style="color:var(--text)">{{ \App\Support\DemoData::taka($shop->outstanding_balance) }}</strong></p>
+            <p class="muted">Baki: <strong style="color:var(--text)">{{ \App\Support\DemoData::taka($shop->outstanding_balance) }}</strong></p>
             <p class="muted">Available: <strong style="color:var(--text)">{{ \App\Support\DemoData::taka($shop->availableCredit()) }}</strong></p>
             <p class="muted">Payment terms: {{ $shop->payment_terms_days }} days</p>
             <p class="muted">Price group: {{ $shop->priceGroup?->name ?: 'Standard' }}</p>

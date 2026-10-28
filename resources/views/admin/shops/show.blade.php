@@ -62,7 +62,7 @@
     <div class="grid-4" style="margin-bottom:16px">
         @foreach ([
             ['Credit limit (report only)', \App\Support\DemoData::taka($shop->credit_limit)],
-            ['Outstanding', \App\Support\DemoData::taka($shop->outstanding_balance)],
+            ['Baki', \App\Support\DemoData::taka($shop->outstanding_balance)],
             ['Grade', $shop->grade ?: '—'],
             ['Rating', $shop->rating !== null ? $shop->rating.'/5' : '—'],
             ['Available credit', \App\Support\DemoData::taka($shop->availableCredit())],

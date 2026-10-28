@@ -65,7 +65,8 @@
                     @forelse ($deliveries as $delivery)
                         @php
                             $when = $delivery->delivered_at ?? $delivery->dispatched_at;
-                            $href = $delivery->order ? route('field.orders.show', $delivery->order) : null;
+                            $due = $delivery->order ? (float) $delivery->order->collectibleBalance() : 0;
+                            $href = $delivery->order ? route('field.orders.show', $delivery->order).($due > 0.009 ? '#collect-bill' : '') : null;
                         @endphp
                         <tr @if ($href) class="is-link" onclick="window.location='{{ $href }}'" @endif>
                             <td>
@@ -93,7 +94,12 @@
                             <td class="num strong">
                                 {{ $delivery->order ? \App\Support\DemoData::taka($delivery->order->total) : '—' }}
                             </td>
-                            <td><span class="f-status {{ $delivery->statusTone() }}">{{ $delivery->statusLabel() }}</span></td>
+                            <td>
+                                <span class="f-status {{ $delivery->statusTone() }}">{{ $delivery->statusLabel() }}</span>
+                                @if ($due > 0.009)
+                                    <span class="f-collect-pill">Baki {{ \App\Support\DemoData::taka($due) }}</span>
+                                @endif
+                            </td>
                             <td class="num">@if ($href)<i data-lucide="chevron-right" class="f-chev"></i>@endif</td>
                         </tr>
                     @empty

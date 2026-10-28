@@ -30,7 +30,7 @@
                 @if ($shop->status === \App\Models\Shop::STATUS_PENDING)
                     <span class="f-chip amber">Awaiting approval</span>
                 @else
-                    <span class="f-chip {{ $outstanding > 0 ? 'red' : '' }}">Outstanding {{ \App\Support\DemoData::taka($outstanding) }}</span>
+                    <span class="f-chip {{ $outstanding > 0 ? 'red' : '' }}">Baki {{ \App\Support\DemoData::taka($outstanding) }}</span>
                 @endif
                 @if ($shop->priceGroup)
                     <span class="f-chip">{{ $shop->priceGroup->name }}</span>

@@ -25,6 +25,13 @@ class Payment extends Model
 
     public const METHOD_MOBILE = 'mobile_banking';
 
+    public const METHODS = [
+        self::METHOD_CASH,
+        self::METHOD_BANK,
+        self::METHOD_CHEQUE,
+        self::METHOD_MOBILE,
+    ];
+
     protected $fillable = [
         'number', 'shop_id', 'invoice_id', 'amount', 'method', 'reference',
         'status', 'paid_at', 'verified_at', 'verified_by', 'notes',

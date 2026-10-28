@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
+use App\Models\Payment;
 use App\Services\FulfilmentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -30,7 +31,7 @@ class DeliveryController extends Controller
     {
         abort_unless($request->user()->can('deliveries.view'), 403);
 
-        $delivery->load(['order.items', 'shop', 'warehouse', 'assignee', 'fulfilment']);
+        $delivery->load(['order.items', 'order.advanceInvoice', 'order.invoice', 'shop', 'warehouse', 'assignee', 'fulfilment']);
 
         return view('admin.deliveries.show', compact('delivery'));
     }
@@ -53,10 +54,33 @@ class DeliveryController extends Controller
     {
         abort_unless($request->user()->can('deliveries.update_status'), 403);
 
-        $data = $request->validate(['notes' => ['nullable', 'string', 'max:1000']]);
-        $this->fulfilment->markDelivered($delivery, $request->user(), $data['notes'] ?? null);
+        $data = $request->validate([
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'collected_now' => ['nullable', 'numeric', 'min:0'],
+            'method' => ['nullable', 'in:'.implode(',', Payment::METHODS)],
+            'reference' => ['nullable', 'string', 'max:120'],
+        ]);
 
-        return back()->with('success', 'Marked as delivered.');
+        $collected = round((float) ($data['collected_now'] ?? 0), 2);
+        $delivery = $this->fulfilment->markDelivered(
+            $delivery,
+            $request->user(),
+            $data['notes'] ?? null,
+            $collected,
+            $data['method'] ?? Payment::METHOD_CASH,
+            $data['reference'] ?? null,
+        );
+
+        $baki = (float) ($delivery->order?->fresh(['invoice', 'advanceInvoice'])->collectibleBalance() ?? 0);
+        $message = 'Goods marked delivered.';
+        if ($collected > 0.009) {
+            $message .= ' Owner paid ৳ '.number_format($collected, 2).' at the shop.';
+        }
+        $message .= $baki > 0.009
+            ? ' Baki ৳ '.number_format($baki, 2).' left.'
+            : ' Bill cleared.';
+
+        return back()->with('success', $message);
     }
 
     public function markFailed(Request $request, Delivery $delivery)
