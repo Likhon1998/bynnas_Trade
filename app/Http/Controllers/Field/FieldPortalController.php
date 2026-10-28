@@ -497,13 +497,22 @@ class FieldPortalController extends Controller
 
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:1000'],
+            'paid_now' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
+            'payment_method' => ['nullable', Rule::in([
+                \App\Models\Payment::METHOD_CASH,
+                \App\Models\Payment::METHOD_MOBILE,
+                \App\Models\Payment::METHOD_BANK,
+            ])],
+            'payment_reference' => ['nullable', 'string', 'max:120'],
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'items.*.unit_price' => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
         ]);
 
-        $order = DB::transaction(function () use ($request, $visit, $data) {
+        $paidNow = round((float) ($data['paid_now'] ?? 0), 2);
+
+        $order = DB::transaction(function () use ($request, $visit, $data, $paidNow) {
             $order = $this->orders->collectFromSalesman(
                 $request->user(),
                 $visit->shop,
@@ -512,14 +521,34 @@ class FieldPortalController extends Controller
                 $data['notes'] ?? null,
             );
 
+            if ($paidNow > 0) {
+                $order = $this->orders->recordFieldCollection(
+                    $order,
+                    $request->user(),
+                    $paidNow,
+                    $data['payment_method'] ?? \App\Models\Payment::METHOD_CASH,
+                    $data['payment_reference'] ?? null,
+                );
+            }
+
             $this->visits->checkOut($visit->fresh(), ['outcome' => ShopVisit::OUTCOME_ORDER_TAKEN], $request->user());
 
             return $order;
         });
 
+        $baki = max(0, round((float) $order->total - $paidNow, 2));
+        $msg = 'Order '.$order->number.' sent for approval.';
+        if ($paidNow > 0) {
+            $msg .= ' Collected ৳ '.number_format($paidNow, 0).' now'
+                .($baki > 0.009 ? '; baki ৳ '.number_format($baki, 0).' later' : '')
+                .'. Office will verify the payment.';
+        } else {
+            $msg .= ' Full amount is baki (credit). You can select another shop next.';
+        }
+
         return redirect()
             ->route('field.orders.show', $order)
-            ->with('success', 'Order '.$order->number.' sent for approval. You can select another shop for the next order.');
+            ->with('success', $msg);
     }
 
     public function orders(Request $request)
@@ -552,7 +581,7 @@ class FieldPortalController extends Controller
     {
         abort_unless($order->salesman_id === $request->user()->id, 403);
 
-        $order->load(['shop', 'items', 'visit']);
+        $order->load(['shop', 'items', 'visit', 'advanceInvoice']);
 
         return view('field.order-show', compact('order'));
     }

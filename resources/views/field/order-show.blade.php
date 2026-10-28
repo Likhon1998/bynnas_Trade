@@ -33,6 +33,14 @@
         @endif
     </div>
 
+    @php
+        $settle = $order->settlement();
+        $paidNow = $settle['advance_paid'] > 0.009
+            ? $settle['advance_paid']
+            : (float) ($order->advance_amount ?: 0);
+        $baki = max(0, round((float) $order->total - $paidNow, 2));
+    @endphp
+
     @if ($order->status === \App\Models\Order::STATUS_REJECTED && $order->rejection_reason)
         <div class="f-flash err" style="margin:0 0 12px">
             <i data-lucide="circle-x"></i>
@@ -43,9 +51,18 @@
             <i data-lucide="ban"></i>
             <span><strong>Cancelled:</strong> {{ $order->cancellation_reason }}</span>
         </div>
-    @elseif ($order->status === \App\Models\Order::STATUS_AWAITING_ADVANCE && ! $order->advance_paid_at)
+    @elseif ($order->status === \App\Models\Order::STATUS_AWAITING_ADVANCE && ! $order->isAdvancePaid())
         <div class="f-warn" style="margin:0 0 12px">
-            The shop needs to pay an advance of <b>{{ \App\Support\DemoData::taka($order->advance_amount) }}</b> before this order is approved. Remind the owner when you call.
+            Collected <b>{{ \App\Support\DemoData::taka($paidNow) }}</b> at the shop — waiting for office to verify.
+            Baki <b>{{ \App\Support\DemoData::taka($baki) }}</b> later.
+        </div>
+    @elseif ($settle['has_advance'] && $settle['advance_cleared'])
+        <div class="f-flash ok" style="margin:0 0 12px">
+            <i data-lucide="check-circle-2"></i>
+            <span>
+                Paid now <b>{{ \App\Support\DemoData::taka($paidNow) }}</b>
+                · baki <b>{{ \App\Support\DemoData::taka($baki) }}</b>
+            </span>
         </div>
     @endif
 
@@ -67,6 +84,10 @@
             <div class="f-line-item"><span class="f-muted">Discount</span><span>− {{ \App\Support\DemoData::taka($order->discount_total) }}</span></div>
         @endif
         <div class="f-total-row"><span>Total</span><strong>{{ \App\Support\DemoData::taka($order->total) }}</strong></div>
+        @if ($settle['has_advance'])
+            <div class="f-line-item"><span class="f-muted">Paid now</span><span>{{ \App\Support\DemoData::taka($paidNow) }}</span></div>
+            <div class="f-line-item"><span class="f-muted">Baki (later)</span><span class="strong">{{ \App\Support\DemoData::taka($baki) }}</span></div>
+        @endif
     </div>
     </div>
 

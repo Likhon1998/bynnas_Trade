@@ -56,6 +56,43 @@ class OrderService
     }
 
     /**
+     * Record cash (or transfer) the salesman collected at the shop now; remainder stays as baki.
+     * Reuses the advance invoice path so office can verify the payment before approval.
+     */
+    public function recordFieldCollection(
+        Order $order,
+        User $salesman,
+        float $paidNow,
+        string $method = Payment::METHOD_CASH,
+        ?string $reference = null,
+    ): Order {
+        $paidNow = round($paidNow, 2);
+        if ($paidNow <= 0) {
+            return $order;
+        }
+
+        if ($order->source !== Order::SOURCE_SALESMAN) {
+            throw ValidationException::withMessages([
+                'paid_now' => 'Only field orders can record a collection at the shop.',
+            ]);
+        }
+
+        if ($paidNow > (float) $order->total + 0.01) {
+            throw ValidationException::withMessages([
+                'paid_now' => 'Collected amount cannot exceed the order total.',
+            ]);
+        }
+
+        $baki = max(0, round((float) $order->total - $paidNow, 2));
+        $note = 'Salesman collected ৳ '.number_format($paidNow, 2).' at the shop'
+            .($baki > 0.009 ? '; baki ৳ '.number_format($baki, 2).' later' : ' (full payment)');
+
+        $order = $this->requestAdvance($order, $salesman, $paidNow, $note);
+
+        return $this->collectAdvance($order, $salesman, $paidNow, $method, $reference);
+    }
+
+    /**
      * @param  list<array{product_id:int, quantity:int}>  $lines
      */
     public function placeFromShopPortal(User $shopUser, Shop $shop, array $lines, ?string $notes = null, ?int $salesmanId = null): Order

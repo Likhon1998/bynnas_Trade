@@ -92,26 +92,49 @@
             <div class="f-toolbar">
             <div class="f-search" style="margin-top:4px">
                 <i data-lucide="search"></i>
-                <input type="search" x-model="q" placeholder="Search product or SKU" autocomplete="off" aria-label="Search products">
+                <input type="search" x-model="q" @input="onSearch()" placeholder="Search product or SKU" autocomplete="off" aria-label="Search products">
             </div>
-            @if ($categories->count() > 1)
-                <div class="f-filters">
-                    <button type="button" class="f-filter" :class="cat === '' && 'active'" @click="cat = ''">All</button>
-                    @foreach ($categories as $category)
-                        <button type="button" class="f-filter" :class="cat === @js($category) && 'active'" @click="cat = @js($category)">{{ $category }}</button>
-                    @endforeach
-                    <button type="button" class="f-filter" :class="cat === '__picked' && 'active'" @click="cat = '__picked'" x-show="count() > 0" x-text="'In order (' + lines().length + ')'"></button>
-                </div>
-            @endif
+            <div class="f-filters" x-show="view === 'products'">
+                <button type="button" class="f-filter" @click="backToCategories()"><i data-lucide="layout-grid" style="width:14px;height:14px"></i> Categories</button>
+                <button type="button" class="f-filter" :class="cat === '' && !q && 'active'" @click="showAllProducts()">All</button>
+                <template x-for="c in categoryCards()" :key="c.name">
+                    <button type="button" class="f-filter" :class="cat === c.name && 'active'" @click="openCategory(c.name)" x-text="c.name"></button>
+                </template>
+                <button type="button" class="f-filter" :class="cat === '__picked' && 'active'" @click="showPicked()" x-show="count() > 0" x-text="'In order (' + lines().length + ')'"></button>
+            </div>
             </div>
 
-            <div class="f-card f-products" style="padding:4px 14px">
+            {{-- Category picker (default) --}}
+            <div class="f-cat-grid" x-show="view === 'categories' && !q" x-cloak>
+                <button type="button" class="f-cat-card tone-violet" @click="showAllProducts()">
+                    <span class="f-cat-ico"><i data-lucide="package"></i></span>
+                    <span class="f-cat-name">All products</span>
+                    <span class="f-cat-count" x-text="catalog.length + ' items'"></span>
+                </button>
+                <template x-for="(c, i) in categoryCards()" :key="c.name">
+                    <button type="button" class="f-cat-card" :class="'tone-' + ['blue','green','amber','rose','sky','teal','violet'][i % 7]" @click="openCategory(c.name)">
+                        <span class="f-cat-ico"><i data-lucide="tag"></i></span>
+                        <span class="f-cat-name" x-text="c.name"></span>
+                        <span class="f-cat-count" x-text="c.count + (c.count === 1 ? ' product' : ' products')"></span>
+                    </button>
+                </template>
+                <button type="button" class="f-cat-card tone-amber" @click="showPicked()" x-show="count() > 0">
+                    <span class="f-cat-ico"><i data-lucide="shopping-cart"></i></span>
+                    <span class="f-cat-name">In this order</span>
+                    <span class="f-cat-count" x-text="lines().length + ' · ' + taka(total())"></span>
+                </button>
+            </div>
+
+            <div class="f-card f-products" style="padding:4px 14px" x-show="view === 'products' || q" x-cloak>
+                <div class="f-muted f-small" style="padding:8px 0 4px" x-show="!q && cat && cat !== '__picked'" x-text="'Showing ' + cat"></div>
+                <div class="f-muted f-small" style="padding:8px 0 4px" x-show="cat === '__picked'">Products in this order — tap price to change</div>
                 <template x-for="p in filtered()" :key="p.id">
                     <div class="f-product" :class="qty[p.id] > 0 && 'picked'">
                         <template x-if="p.image"><img class="f-thumb" :src="p.image" alt="" loading="lazy"></template>
                         <template x-if="!p.image"><div class="f-thumb"><i data-lucide="package"></i></div></template>
                         <div class="f-product-info">
                             <div class="f-product-name" x-text="p.name"></div>
+                            <div class="f-muted f-small" x-show="!cat || cat === ''" x-text="p.category"></div>
                             <div class="f-product-price" x-show="!qty[p.id]" x-text="taka(p.price)"></div>
                             <label class="f-price-edit" x-show="qty[p.id] > 0" x-cloak>
                                 <span>৳</span>
@@ -199,12 +222,41 @@
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
                 <div class="f-warn" x-show="hasBelowMin()">Raise every selling price to at least the product minimum before sending.</div>
                 <div class="f-warn" x-show="total() > credit">
-                    This is <b x-text="taka(total() - credit)"></b> over the shop's credit limit. The office may ask for an advance payment before approving.
+                    This is <b x-text="taka(total() - credit)"></b> over the shop's credit limit. Collect some cash now if the owner can pay.
                 </div>
-                <label class="f-label" for="order-notes">Note for the office (optional)</label>
+
+                <div class="f-baki" style="margin-top:12px">
+                    <div class="f-label">Payment at shop</div>
+                    <p class="f-muted f-small" style="margin:0 0 8px">Owner can pay some now; rest stays as <b>baki</b> (credit).</p>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                        <button type="button" class="f-filter" :class="Number(paidNow) === 0 && 'active'" @click="paidNow = 0">Full baki</button>
+                        <button type="button" class="f-filter" @click="paidNow = Math.round(total() / 2)">Half now</button>
+                        <button type="button" class="f-filter" :class="Number(paidNow) >= total() && total() > 0 && 'active'" @click="paidNow = Math.round(total())">Pay all</button>
+                    </div>
+                    <label class="f-label" for="paid-now">Collected now (৳)</label>
+                    <input id="paid-now" class="f-input" type="number" inputmode="decimal" min="0" step="1" name="paid_now" x-model.number="paidNow" :max="Math.round(total())">
+                    <div class="f-kv" style="margin-top:8px">
+                        <span>Baki (later)</span>
+                        <strong x-text="taka(baki())"></strong>
+                    </div>
+                    <template x-if="Number(paidNow) > 0">
+                        <div style="margin-top:8px">
+                            <label class="f-label" for="pay-method">How did they pay?</label>
+                            <select id="pay-method" class="f-input" name="payment_method" x-model="payMethod">
+                                <option value="cash">Cash</option>
+                                <option value="mobile_banking">bKash / Nagad / Rocket</option>
+                                <option value="bank_transfer">Bank transfer</option>
+                            </select>
+                            <label class="f-label" for="pay-ref" style="margin-top:8px">Reference (optional)</label>
+                            <input id="pay-ref" class="f-input" type="text" name="payment_reference" maxlength="120" placeholder="Txn id or note">
+                        </div>
+                    </template>
+                </div>
+
+                <label class="f-label" for="order-notes" style="margin-top:12px">Note for the office (optional)</label>
                 <textarea id="order-notes" class="f-textarea" name="notes" rows="2" maxlength="1000" placeholder="e.g. deliver before Friday"></textarea>
-                <button class="f-btn f-btn-success f-btn-lg f-btn-block" style="margin-top:14px" type="submit" :disabled="submitting || count() === 0 || hasBelowMin()">
-                    <span x-text="submitting ? 'Sending…' : 'Send order for approval'"></span>
+                <button class="f-btn f-btn-success f-btn-lg f-btn-block" style="margin-top:14px" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || paidNow > total() + 0.01">
+                    <span x-text="submitting ? 'Sending…' : (Number(paidNow) > 0 ? 'Send order · collect ' + taka(paidNow) : 'Send order · full baki')"></span>
                 </button>
                 <button class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" type="button" @click="reviewSheet = false">Keep adding products</button>
             </form>
@@ -236,7 +288,9 @@
 function fieldOrder(catalog, credit) {
     return {
         catalog, credit,
-        q: '', cat: '', qty: {}, prices: {},
+        q: '', cat: '', view: 'categories',
+        qty: {}, prices: {},
+        paidNow: 0, payMethod: 'cash',
         reviewSheet: false, endSheet: false, submitting: false,
         taka(n) { return '৳ ' + Math.round(n || 0).toLocaleString('en-IN'); },
         sellPrice(p) {
@@ -258,12 +312,47 @@ function fieldOrder(catalog, credit) {
         hasBelowMin() {
             return this.lines().some((line) => this.belowMin(line));
         },
+        categoryCards() {
+            const map = {};
+            this.catalog.forEach((p) => {
+                const name = p.category || 'Other';
+                map[name] = (map[name] || 0) + 1;
+            });
+            return Object.keys(map).sort().map((name) => ({ name, count: map[name] }));
+        },
+        openCategory(name) {
+            this.cat = name;
+            this.q = '';
+            this.view = 'products';
+            this.$nextTick(() => window.lucide && lucide.createIcons());
+        },
+        showAllProducts() {
+            this.cat = '';
+            this.q = '';
+            this.view = 'products';
+            this.$nextTick(() => window.lucide && lucide.createIcons());
+        },
+        showPicked() {
+            this.cat = '__picked';
+            this.q = '';
+            this.view = 'products';
+            this.$nextTick(() => window.lucide && lucide.createIcons());
+        },
+        backToCategories() {
+            this.cat = '';
+            this.q = '';
+            this.view = 'categories';
+            this.$nextTick(() => window.lucide && lucide.createIcons());
+        },
+        onSearch() {
+            if (this.q.trim()) this.view = 'products';
+        },
         filtered() {
             const q = this.q.trim().toLowerCase();
             return this.catalog.filter((p) => {
                 if (this.cat === '__picked' && !(this.qty[p.id] > 0)) return false;
-                if (this.cat && this.cat !== '__picked' && p.category !== this.cat) return false;
-                return !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
+                if (!q && this.cat && this.cat !== '__picked' && p.category !== this.cat) return false;
+                return !q || p.name.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q);
             });
         },
         inc(id) { this.qty[id] = (this.qty[id] || 0) + 1; },
@@ -277,11 +366,12 @@ function fieldOrder(catalog, credit) {
         },
         count() { return Object.values(this.qty).reduce((a, b) => a + (b || 0), 0); },
         total() { return this.lines().reduce((sum, l) => sum + l.qty * l.sell, 0); },
+        baki() { return Math.max(0, this.total() - (Number(this.paidNow) || 0)); },
         init() {
             this.$watch('reviewSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
             this.$watch('endSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
             this.$nextTick(() => window.lucide && lucide.createIcons());
-            this.$watch('q', () => this.$nextTick(() => window.lucide && lucide.createIcons()));
+            this.$watch('view', () => this.$nextTick(() => window.lucide && lucide.createIcons()));
             this.$watch('cat', () => this.$nextTick(() => window.lucide && lucide.createIcons()));
         },
     };
