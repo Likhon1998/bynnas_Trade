@@ -126,6 +126,13 @@
     <div class="f-sheet-backdrop f-more-backdrop" x-show="moreOpen" x-transition.opacity x-cloak @click="moreOpen = false"></div>
     <div class="f-sheet f-more-sheet" x-show="moreOpen" x-transition x-cloak role="dialog" aria-label="More" @click.stop>
         <div class="f-sheet-grip"></div>
+        <div class="f-more-brand">
+            <img src="{{ asset('images/logo.png') }}" alt="Bynnas Trade">
+            <span>
+                <b>Bynnas Trade</b>
+                <small>Field sales app</small>
+            </span>
+        </div>
         <div class="f-more-head">
             <div class="f-avatar" aria-hidden="true">{{ strtoupper($initials ?: 'S') }}</div>
             <div>
