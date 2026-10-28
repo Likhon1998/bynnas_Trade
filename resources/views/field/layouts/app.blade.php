@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#16141F">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#4C1D95">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Field') · Bynnas Trade</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,8 +22,9 @@
     $user = auth()->user();
     $initials = collect(explode(' ', (string) $user?->name))->filter()->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
     $onVisitPage = request()->routeIs('field.visit.show') && optional(request()->route('visit'))->id === $fieldOpenVisit?->id;
+    $moreActive = request()->routeIs('field.partners*', 'field.earnings', 'field.announcements', 'field.notifications*', 'field.account.*');
 @endphp
-<body class="f-app">
+<body class="f-app" x-data="{ moreOpen: false }" @keydown.escape.window="moreOpen = false">
     <div class="f-shell @hasSection('has-bar') has-bar @endif">
         <header class="f-top">
             @php
@@ -45,8 +47,8 @@
                 <div class="f-top-sub">@yield('subheading', trim(($user?->name ?? '').($fieldProfile?->employee_code ? ' · '.$fieldProfile->employee_code : '')))</div>
             </div>
             <div class="f-top-actions">@yield('actions')</div>
-            <a class="f-icon-btn" href="{{ route('field.account.password') }}" aria-label="Change password" title="Change password"><i data-lucide="key-round"></i></a>
-            <form action="{{ route('field.logout') }}" method="post" onsubmit="return confirm('Sign out of the field app?')">
+            <a class="f-icon-btn f-desktop-only" href="{{ route('field.account.password') }}" aria-label="Change password" title="Change password"><i data-lucide="key-round"></i></a>
+            <form class="f-desktop-only" action="{{ route('field.logout') }}" method="post" onsubmit="return confirm('Sign out of the field app?')">
                 @csrf
                 <button type="submit" class="f-icon-btn" aria-label="Sign out" title="Sign out"><i data-lucide="log-out"></i></button>
             </form>
@@ -68,7 +70,7 @@
                     <span class="dot" aria-hidden="true"></span>
                     <span class="f-resume-text">
                         <strong>Visit in progress · {{ $fieldOpenVisit->shop?->name }}</strong>
-                        <span>Checked in {{ $fieldOpenVisit->checked_in_at?->diffForHumans() }} — tap to take the order</span>
+                        <span>Checked in {{ $fieldOpenVisit->checked_in_at?->diffForHumans() }} — tap to continue</span>
                     </span>
                     <span class="f-btn f-btn-warn f-btn-sm">Continue</span>
                 </a>
@@ -86,6 +88,7 @@
             </a>
             <button type="button" class="f-side-toggle" id="f-side-toggle" aria-label="Collapse sidebar" title="Collapse sidebar" aria-expanded="true"><i data-lucide="chevron-left"></i></button>
             <span class="f-nav-label">Menu</span>
+
             <a href="{{ route('field.dashboard') }}" title="Home" class="tone-violet {{ request()->routeIs('field.dashboard') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="layout-dashboard"></i></span><span class="f-nav-text">Home</span></a>
             <a href="{{ route('field.shops') }}" title="Shops" class="tone-blue {{ request()->routeIs('field.shops', 'field.shops.*', 'field.visit.*') ? 'active' : '' }}">
                 <span class="f-nav-ico"><i data-lucide="store"></i></span><span class="f-nav-text">Shops</span>
@@ -93,10 +96,17 @@
             </a>
             <a href="{{ route('field.orders') }}" title="Orders" class="tone-amber {{ request()->routeIs('field.orders*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="receipt-text"></i></span><span class="f-nav-text">Orders</span></a>
             <a href="{{ route('field.deliveries') }}" title="Deliveries" class="tone-sky {{ request()->routeIs('field.deliveries') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="truck"></i></span><span class="f-nav-text">Deliveries</span></a>
-            <a href="{{ route('field.partners') }}" title="Partners" class="tone-teal {{ request()->routeIs('field.partners*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="handshake"></i></span><span class="f-nav-text">Partners</span></a>
-            <a href="{{ route('field.earnings') }}" title="Earnings" class="tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
-            <a href="{{ route('field.announcements') }}" title="Announcements" class="tone-violet {{ request()->routeIs('field.announcements') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="megaphone"></i></span><span class="f-nav-text">News</span></a>
-            <a href="{{ route('field.notifications') }}" title="Notifications" class="tone-rose {{ request()->routeIs('field.notifications*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="bell"></i></span><span class="f-nav-text">Alerts</span></a>
+
+            <button type="button" class="f-nav-more-btn tone-teal {{ $moreActive ? 'active' : '' }}" @click="moreOpen = true" aria-label="More menu">
+                <span class="f-nav-ico"><i data-lucide="menu"></i></span>
+                <span class="f-nav-text">More</span>
+            </button>
+
+            <a href="{{ route('field.partners') }}" title="Partners" class="f-nav-extra tone-teal {{ request()->routeIs('field.partners*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="handshake"></i></span><span class="f-nav-text">Partners</span></a>
+            <a href="{{ route('field.earnings') }}" title="Earnings" class="f-nav-extra tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
+            <a href="{{ route('field.announcements') }}" title="Announcements" class="f-nav-extra tone-violet {{ request()->routeIs('field.announcements') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="megaphone"></i></span><span class="f-nav-text">News</span></a>
+            <a href="{{ route('field.notifications') }}" title="Notifications" class="f-nav-extra tone-rose {{ request()->routeIs('field.notifications*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="bell"></i></span><span class="f-nav-text">Alerts</span></a>
+
             <div class="f-nav-user">
                 <div class="f-avatar" aria-hidden="true">{{ strtoupper($initials ?: 'S') }}</div>
                 <div class="f-nav-user-text">
@@ -112,11 +122,39 @@
         </nav>
     </div>
 
+    {{-- Mobile More sheet --}}
+    <div class="f-sheet-backdrop f-more-backdrop" x-show="moreOpen" x-transition.opacity x-cloak @click="moreOpen = false"></div>
+    <div class="f-sheet f-more-sheet" x-show="moreOpen" x-transition x-cloak role="dialog" aria-label="More" @click.stop>
+        <div class="f-sheet-grip"></div>
+        <div class="f-more-head">
+            <div class="f-avatar" aria-hidden="true">{{ strtoupper($initials ?: 'S') }}</div>
+            <div>
+                <strong>{{ $user?->name }}</strong>
+                <div class="f-muted f-small">{{ $fieldProfile?->employee_code ?: 'Field salesman' }}</div>
+            </div>
+        </div>
+        <div class="f-more-grid">
+            <a class="f-more-item" href="{{ route('field.orders.create') }}" @click="moreOpen = false"><span class="f-ico tone-violet"><i data-lucide="shopping-bag"></i></span>New order</a>
+            <a class="f-more-item" href="{{ route('field.shops.create') }}" @click="moreOpen = false"><span class="f-ico tone-blue"><i data-lucide="plus"></i></span>Add shop</a>
+            <a class="f-more-item" href="{{ route('field.partners') }}" @click="moreOpen = false"><span class="f-ico tone-teal"><i data-lucide="handshake"></i></span>Partners</a>
+            <a class="f-more-item" href="{{ route('field.earnings') }}" @click="moreOpen = false"><span class="f-ico tone-green"><i data-lucide="wallet"></i></span>Earnings</a>
+            <a class="f-more-item" href="{{ route('field.announcements') }}" @click="moreOpen = false"><span class="f-ico tone-violet"><i data-lucide="megaphone"></i></span>News</a>
+            <a class="f-more-item" href="{{ route('field.notifications') }}" @click="moreOpen = false"><span class="f-ico tone-rose"><i data-lucide="bell"></i></span>Alerts</a>
+            <a class="f-more-item" href="{{ route('field.account.password') }}" @click="moreOpen = false"><span class="f-ico tone-amber"><i data-lucide="key-round"></i></span>Password</a>
+        </div>
+        <form action="{{ route('field.logout') }}" method="post" onsubmit="return confirm('Sign out of the field app?')" style="margin-top:12px">
+            @csrf
+            <button class="f-btn f-btn-ghost f-btn-block" type="submit"><i data-lucide="log-out"></i> Sign out</button>
+        </form>
+        <button type="button" class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" @click="moreOpen = false">Close</button>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => window.lucide && lucide.createIcons());
 
         (() => {
             const btn = document.getElementById('f-side-toggle');
+            if (!btn) return;
             const sync = () => {
                 const mini = document.documentElement.classList.contains('f-side-mini');
                 const label = mini ? 'Expand sidebar' : 'Collapse sidebar';

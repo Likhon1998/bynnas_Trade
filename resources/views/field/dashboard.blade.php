@@ -17,11 +17,17 @@
     <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.orders.create') }}"><i data-lucide="shopping-bag"></i> New order</a>
 @endsection
 @section('content')
+    <div class="f-quick f-mobile-only">
+        <a class="f-btn f-btn-primary" href="{{ route('field.orders.create') }}"><i data-lucide="shopping-bag"></i> New order</a>
+        <a class="f-btn f-btn-ghost" href="{{ route('field.shops.create') }}"><i data-lucide="plus"></i> Add shop</a>
+    </div>
+
     @include('field.partials.login-todo')
 
     @if (!empty($targetMet))
-        <div class="card" style="padding:14px 16px;margin-bottom:14px;background:linear-gradient(90deg,#ecfdf5,#f0fdf4);color:#166534;font-weight:600">
-            Congratulations — you achieved your monthly sales target!
+        <div class="f-flash ok" style="margin-bottom:12px">
+            <i data-lucide="check-circle-2"></i>
+            <span>Congratulations — you achieved your monthly sales target!</span>
         </div>
     @endif
 
