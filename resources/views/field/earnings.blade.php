@@ -11,7 +11,7 @@
     };
 @endphp
 @section('content')
-    <div class="f-kpis">
+    <div class="f-kpis five">
         <div class="f-kpi tone-violet">
             <div class="f-kpi-top"><span class="f-ico"><i data-lucide="banknote"></i></span><span class="f-kpi-label">Monthly salary</span></div>
             <div class="f-kpi-value">{{ $salary['current'] ? \App\Support\DemoData::taka($salary['current']->monthly_salary) : '—' }}</div>
@@ -68,7 +68,7 @@
                                 <td><span class="f-status {{ $toneFor($commission->status) }}">{{ $commission->statusLabel() }}</span></td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="empty">No commission yet. You earn commission when your shops pay their invoices.</td></tr>
+                            <tr><td colspan="7" class="empty">No commission yet. It appears after the office verifies a shop payment on your orders.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -92,7 +92,7 @@
                     <div class="f-empty">
                         <i data-lucide="wallet"></i>
                         <strong>No commission yet</strong>
-                        You earn commission when your shops pay their invoices.
+                        It appears after the office verifies a shop payment on your orders.
                     </div>
                 @endforelse
             </div>
