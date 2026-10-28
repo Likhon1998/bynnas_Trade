@@ -83,7 +83,10 @@
     <section class="f-panel" id="added" style="margin-top:14px">
         <div class="f-panel-head">
             <h2><span class="f-ico tone-rose"><i data-lucide="store"></i></span>Shops I added</h2>
-            <a href="{{ route('field.shops.create') }}">+ Add shop</a>
+            <span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <a href="{{ route('field.partners') }}">Owner logins</a>
+                <a href="{{ route('field.shops.create') }}">+ Add shop</a>
+            </span>
         </div>
         @if ($addedShops->isEmpty())
             <div class="f-panel-body">
@@ -123,9 +126,9 @@
                                         </form>
                                     @endif
                                     @if ($added->users_count > 0)
-                                        <span class="f-status green">Partner</span>
+                                        <span class="f-status green">Has login</span>
                                     @elseif ($added->status !== \App\Models\Shop::STATUS_REJECTED && $added->status !== \App\Models\Shop::STATUS_ON_HOLD)
-                                        <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.partners.create', ['shop' => $added->id]) }}" title="Apply for a partner login"><i data-lucide="handshake"></i> Partner</a>
+                                        <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.partners.create', ['shop' => $added->id]) }}" title="Request an owner login for this shop"><i data-lucide="user-plus"></i> Owner login</a>
                                     @endif
                                 </td>
                             </tr>
