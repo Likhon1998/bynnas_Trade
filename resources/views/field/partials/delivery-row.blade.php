@@ -26,6 +26,12 @@
             <span>{{ $delivery->number }}{{ $delivery->order ? ' · '.$delivery->order->number : '' }} · {{ $whenLabel }}</span>
             <span class="f-status {{ $delivery->statusTone() }}">{{ $delivery->statusLabel() }}</span>
         </div>
+        @if ($delivery->status === \App\Models\Delivery::STATUS_DELIVERED && $delivery->order)
+            @php $due = (float) $delivery->order->settlement()['remaining_due']; @endphp
+            @if ($due > 0.009)
+                <div class="f-muted f-small" style="margin-top:4px">Due now {{ \App\Support\DemoData::taka($due) }}</div>
+            @endif
+        @endif
         @if ($delivery->assignee?->name || $delivery->delivery_address)
             <div class="f-muted f-small" style="margin-top:4px">
                 @if ($delivery->assignee?->name)Rider {{ $delivery->assignee->name }}@endif

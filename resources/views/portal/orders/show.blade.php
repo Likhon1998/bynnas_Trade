@@ -30,15 +30,19 @@
         $order->loadMissing(['advanceInvoice', 'invoice']);
         $settle = $order->settlement();
     @endphp
-    @if ($settle['has_advance'] || $settle['remaining_due'] > 0.009)
+    @if ($settle['has_advance'] || $settle['invoice_issued'])
         <div class="card" style="padding:14px;margin-bottom:14px;border:1px solid {{ $settle['fully_settled'] ? '#bbf7d0' : '#fde68a' }};background:{{ $settle['fully_settled'] ? '#f0fdf4' : '#fffbeb' }}">
             <div style="font-weight:800;margin-bottom:8px;color:{{ $settle['fully_settled'] ? '#166534' : '#92400e' }}">
                 @if ($settle['fully_settled'])
                     Payment fully settled
-                @elseif ($settle['advance_cleared'])
-                    Advance received — remaining still due
+                @elseif ($settle['collectible'])
+                    Invoice ready — amount due
+                @elseif ($settle['has_advance'] && $settle['advance_cleared'])
+                    Paid at order — rest after delivery
+                @elseif ($settle['has_advance'])
+                    Waiting for office to confirm shop payment
                 @else
-                    Advance required
+                    Payment after delivery
                 @endif
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
@@ -47,11 +51,11 @@
                     <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['order_total']) }}</div>
                 </div>
                 <div>
-                    <div class="muted" style="font-size:11px">Advance paid</div>
+                    <div class="muted" style="font-size:11px">Paid at order</div>
                     <div style="font-weight:800">{{ \App\Support\DemoData::taka($settle['advance_paid']) }}</div>
                 </div>
                 <div>
-                    <div class="muted" style="font-size:11px">Remaining due</div>
+                    <div class="muted" style="font-size:11px">{{ $settle['collectible'] ? 'Due now' : 'After delivery' }}</div>
                     <div style="font-weight:800;font-size:18px;color:{{ $settle['fully_settled'] ? '#166534' : '#b45309' }}">
                         {{ \App\Support\DemoData::taka($settle['remaining_due']) }}
                     </div>
@@ -59,10 +63,12 @@
             </div>
             @if (! $settle['fully_settled'])
                 <p class="muted" style="margin:10px 0 0;font-size:12px">
-                    @if ($settle['advance_cleared'])
-                        Your advance is acknowledged. The remaining amount will be collected on the final invoice after delivery.
+                    @if ($settle['collectible'])
+                        Goods have been delivered. Please pay {{ \App\Support\DemoData::taka($settle['remaining_due']) }}.
+                    @elseif ($settle['has_advance'] && $settle['advance_cleared'])
+                        The rest will be collected after delivery.
                     @else
-                        Please pay the advance first. After that, {{ \App\Support\DemoData::taka($settle['remaining_due']) }} will still be due later.
+                        Office is confirming the amount paid at the shop.
                     @endif
                 </p>
             @endif

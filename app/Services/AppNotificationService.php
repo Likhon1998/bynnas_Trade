@@ -127,11 +127,16 @@ class AppNotificationService
 
     public function orderDelivered(Order $order): void
     {
-        $order->loadMissing(['shop.users', 'salesman']);
+        $order->loadMissing(['shop.users', 'salesman', 'invoice', 'advanceInvoice']);
+        $due = (float) $order->settlement()['remaining_due'];
+        $dueNote = $due > 0.009
+            ? ' · ৳ '.number_format($due, 2).' now due'
+            : '';
+
         $this->notifyUser(
             $order->salesman,
             "Order {$order->number} delivered",
-            ($order->shop?->name ?: 'Shop').' · delivery completed',
+            ($order->shop?->name ?: 'Shop').' · goods delivered'.$dueNote,
             '/field/orders/'.$order->id,
             'deliveries',
             'success',
@@ -141,7 +146,9 @@ class AppNotificationService
             $this->notifyUser(
                 $shopUser,
                 "Order {$order->number} delivered",
-                'Your order has been delivered. Check your account statement for the invoice.',
+                $due > 0.009
+                    ? 'Goods delivered. Invoice is ready — ৳ '.number_format($due, 2).' due.'
+                    : 'Your order has been delivered.',
                 '/portal/orders/'.$order->id,
                 'deliveries',
                 'success',

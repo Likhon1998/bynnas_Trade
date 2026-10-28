@@ -54,20 +54,22 @@
         </div>
 
     @php $settlement = $order->settlement(); @endphp
-    @if ($settlement['has_advance'] || $settlement['remaining_due'] > 0.009 || $settlement['advance_paid'] > 0.009)
+    @if ($settlement['has_advance'] || $settlement['invoice_issued'])
         <div class="order-settlement {{ $settlement['fully_settled'] ? 'is-settled' : ($settlement['advance_cleared'] ? 'is-partial' : 'is-due') }}">
             <div class="order-settlement-head">
-                <strong>Payment settlement</strong>
+                <strong>Payment</strong>
                 <span>
                     @if ($settlement['fully_settled'])
                         Fully settled
-                    @elseif ($settlement['advance_cleared'] && $settlement['remaining_due'] > 0.009)
-                        Collected at shop — baki still due
+                    @elseif ($settlement['collectible'])
+                        Invoice after delivery — collect baki
                     @elseif ($settlement['has_advance'] && ! $settlement['advance_cleared'])
-                        Pay-now still waiting for office verify
+                        Pay-now waiting for office verify
+                    @elseif ($settlement['has_advance'])
+                        Collected at shop — rest after delivery
                     @else
                         Balance outstanding
-    @endif
+                    @endif
                 </span>
             </div>
             <div class="order-settlement-grid">
@@ -91,14 +93,26 @@
                     <em>
                         @if ($settlement['fully_settled'])
                             Nothing left to collect
-                        @elseif ($order->invoice && (int) $order->invoice_id !== (int) $order->advance_invoice_id)
-                            On sales invoice {{ $order->invoice->number }}
+                        @elseif ($settlement['collectible'])
+                            On sales invoice {{ $order->invoice->number }} — collect now
+                        @elseif ($settlement['has_advance'])
+                            Rest is collected after the goods are delivered
                         @else
-                            Acknowledged after advance — collect on final invoice / delivery
+                            Collect after delivery
                         @endif
                     </em>
                     </div>
             </div>
+        </div>
+    @elseif (! in_array($order->status, [\App\Models\Order::STATUS_REJECTED, \App\Models\Order::STATUS_CANCELLED], true))
+        <div class="order-settlement is-partial">
+            <div class="order-settlement-head">
+                <strong>Payment</strong>
+                <span>Starts after delivery</span>
+            </div>
+            <p class="muted" style="margin:8px 0 0;font-size:13px">
+                Shop did not pay at order. Approve and ship as usual. The sales invoice and collection appear when the goods are delivered.
+            </p>
         </div>
     @endif
 
@@ -497,10 +511,11 @@
                         <a class="btn btn-ghost btn-sm" href="{{ route('invoices.show', $order->invoice) }}">Open</a>
                     </div>
                 </div>
-            @elseif (in_array($order->status, ['delivered', 'dispatched', 'packed', 'picked', 'approved'], true))
+            @elseif ($order->isDelivered())
                 @can('invoices.create')
                     <div class="card" style="padding:14px;margin-bottom:12px">
                         <div style="font-weight:800;margin-bottom:6px">No sales invoice yet</div>
+                        <p class="muted" style="font-size:12px;margin:0 0 8px">Invoice is raised when goods are delivered.</p>
                         <form method="post" action="{{ route('orders.invoice', $order) }}">@csrf<button class="btn btn-primary btn-sm" type="submit">Raise invoice</button></form>
                     </div>
                 @endcan
@@ -510,12 +525,12 @@
                 <div style="font-weight:800;margin-bottom:10px">Pipeline</div>
                 <ol class="muted" style="padding-left:18px;line-height:1.85;margin:0;font-size:13px">
                     <li>Submitted for audit</li>
-                    <li style="{{ $order->advance_required ? 'color:#d97706;font-weight:600' : '' }}">Advance (if required)</li>
+                    <li style="{{ $order->advance_required ? 'color:#d97706;font-weight:600' : '' }}">Pay now (only if collected at shop)</li>
                     <li style="{{ $order->stock_reserved || in_array($order->status, ['approved','picking','picked','packed','dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Approved · stock reserved</li>
                     <li style="{{ in_array($order->status, ['picked','packed','dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Picked</li>
                     <li style="{{ in_array($order->status, ['packed','dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Packed</li>
                     <li style="{{ in_array($order->status, ['dispatched','delivered'], true) ? 'color:#15803d;font-weight:600' : '' }}">Dispatched</li>
-                    <li style="{{ $order->status === 'delivered' ? 'color:#15803d;font-weight:600' : '' }}">Delivered</li>
+                    <li style="{{ $order->status === 'delivered' ? 'color:#15803d;font-weight:600' : '' }}">Delivered · invoice &amp; collection</li>
                 </ol>
             </div>
         </aside>

@@ -83,10 +83,7 @@ class CreditService
     {
         $pipeline = Order::query()
             ->where('shop_id', $shop->id)
-            ->whereIn('status', [
-                Order::STATUS_APPROVED, Order::STATUS_PICKING, Order::STATUS_PICKED,
-                Order::STATUS_PACKED, Order::STATUS_DISPATCHED, Order::STATUS_DELIVERED,
-            ])
+            ->where('status', Order::STATUS_DELIVERED)
             ->whereNull('invoice_id')
             ->when($exceptOrderId, fn ($q) => $q->whereKeyNot($exceptOrderId))
             ->with('advanceInvoice')

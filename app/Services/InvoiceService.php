@@ -22,9 +22,9 @@ class InvoiceService
             return Invoice::query()->findOrFail($order->invoice_id);
         }
 
-        if (! in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_DISPATCHED, Order::STATUS_APPROVED, Order::STATUS_PACKED, Order::STATUS_PICKED], true)) {
+        if ($order->status !== Order::STATUS_DELIVERED) {
             throw ValidationException::withMessages([
-                'order' => 'Invoice can only be raised for approved or fulfilled orders.',
+                'order' => 'The sales invoice is raised when the goods are delivered — not before.',
             ]);
         }
 

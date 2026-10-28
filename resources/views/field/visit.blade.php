@@ -234,7 +234,7 @@
 
                 <div class="f-baki" style="margin-top:12px">
                     <div class="f-label">Payment at shop</div>
-                    <p class="f-muted f-small" style="margin:0 0 8px">Owner can pay some now; rest stays as <b>baki</b> (pay later). No credit limit — they can buy as they like.</p>
+                    <p class="f-muted f-small" style="margin:0 0 8px">Pay some now if they have cash. If they pay nothing, collection starts <b>after delivery</b>.</p>
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
                         <button type="button" class="f-filter" :class="Number(paidNow) === 0 && 'active'" @click="paidNow = 0">Full baki</button>
                         <button type="button" class="f-filter" @click="paidNow = Math.round(total() / 2)">Half now</button>
@@ -243,7 +243,7 @@
                     <label class="f-label" for="paid-now">Collected now (৳)</label>
                     <input id="paid-now" class="f-input" type="number" inputmode="decimal" min="0" step="1" name="paid_now" x-model.number="paidNow" :max="Math.round(total())">
                     <div class="f-kv" style="margin-top:8px">
-                        <span>Baki (later)</span>
+                        <span>After delivery</span>
                         <strong x-text="taka(baki())"></strong>
                     </div>
                     <template x-if="Number(paidNow) > 0">

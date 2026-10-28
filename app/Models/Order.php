@@ -220,7 +220,9 @@ class Order extends Model
      *     remaining_due: float,
      *     has_advance: bool,
      *     advance_cleared: bool,
-     *     fully_settled: bool
+     *     fully_settled: bool,
+     *     invoice_issued: bool,
+     *     collectible: bool
      * }
      */
     public function settlement(): array
@@ -243,13 +245,17 @@ class Order extends Model
             ? $this->invoice
             : $this->invoice()->first();
 
+        $invoiceIssued = $salesInvoice && (int) $salesInvoice->id !== (int) ($this->advance_invoice_id ?: 0);
+
         $salesPaid = 0.0;
         $remainingDue = max(0, round($orderTotal - $advancePaid, 2));
 
-        if ($salesInvoice && (int) $salesInvoice->id !== (int) ($this->advance_invoice_id ?: 0)) {
+        if ($invoiceIssued) {
             $salesPaid = round((float) $salesInvoice->paid_amount, 2);
             $remainingDue = round((float) $salesInvoice->balance, 2);
         }
+
+        $hasAdvance = $advanceRequired > 0.009 || (bool) $this->advance_required;
 
         return [
             'order_total' => $orderTotal,
@@ -257,10 +263,17 @@ class Order extends Model
             'advance_paid' => $advancePaid,
             'sales_paid' => $salesPaid,
             'remaining_due' => $remainingDue,
-            'has_advance' => $advanceRequired > 0.009 || (bool) $this->advance_required,
+            'has_advance' => $hasAdvance,
             'advance_cleared' => $advanceRequired <= 0.009 || $advancePaid + 0.009 >= $advanceRequired,
-            'fully_settled' => $remainingDue <= 0.009,
+            'fully_settled' => $remainingDue <= 0.009 && ($invoiceIssued || $hasAdvance),
+            'invoice_issued' => (bool) $invoiceIssued,
+            'collectible' => $invoiceIssued && $remainingDue > 0.009,
         ];
+    }
+
+    public function isDelivered(): bool
+    {
+        return $this->status === self::STATUS_DELIVERED;
     }
 
     public function canApproveNow(): bool

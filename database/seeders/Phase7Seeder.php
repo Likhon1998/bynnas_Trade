@@ -35,15 +35,10 @@ class Phase7Seeder extends Seeder
                 }
             });
 
-        // Also invoice one approved/dispatched order if no invoices exist yet.
+        // Also invoice a delivered order if none exist yet (never before delivery).
         if (! Invoice::query()->exists()) {
             $order = Order::query()
-                ->whereIn('status', [
-                    Order::STATUS_DELIVERED,
-                    Order::STATUS_DISPATCHED,
-                    Order::STATUS_PACKED,
-                    Order::STATUS_APPROVED,
-                ])
+                ->where('status', Order::STATUS_DELIVERED)
                 ->whereNull('invoice_id')
                 ->with('items')
                 ->oldest('id')

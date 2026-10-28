@@ -157,5 +157,32 @@ class FieldOrderBakiTest extends TestCase
         $order = Order::query()->where('visit_id', $visit->id)->firstOrFail();
         $this->assertSame(Order::STATUS_PENDING_AUDIT, $order->status);
         $this->assertFalse((bool) $order->advance_required);
+        $this->assertNull($order->invoice_id);
+        $this->assertFalse($order->settlement()['invoice_issued']);
+        $this->assertFalse($order->settlement()['collectible']);
+
+        $this->actingAs($salesman)
+            ->get(route('field.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Payment starts when the goods are delivered');
+
+        $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
+        $this->actingAs($admin)
+            ->post(route('orders.invoice', $order))
+            ->assertSessionHasErrors('order');
+
+        $owedBefore = (float) $shop->fresh()->outstanding_balance;
+        $order->forceFill(['status' => Order::STATUS_DELIVERED])->save();
+        $this->post(route('orders.invoice', $order))->assertSessionHasNoErrors();
+
+        $order->refresh();
+        $this->assertNotNull($order->invoice_id);
+        $this->assertTrue($order->settlement()['invoice_issued']);
+        $this->assertTrue($order->settlement()['collectible']);
+        $this->assertEqualsWithDelta(
+            $owedBefore + (float) $order->total,
+            (float) $shop->fresh()->outstanding_balance,
+            0.05
+        );
     }
 }

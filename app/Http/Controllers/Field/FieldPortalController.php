@@ -699,7 +699,7 @@ class FieldPortalController extends Controller
                 .($baki > 0.009 ? '; baki ৳ '.number_format($baki, 0).' later' : '')
                 .'. Office will verify the payment.';
         } else {
-            $msg .= ' Full amount is baki (credit). You can select another shop next.';
+            $msg .= ' Shop did not pay now — collection starts after delivery.';
         }
 
         return redirect()
@@ -737,7 +737,7 @@ class FieldPortalController extends Controller
     {
         abort_unless($order->salesman_id === $request->user()->id, 403);
 
-        $order->load(['shop', 'items', 'visit', 'advanceInvoice']);
+        $order->load(['shop', 'items', 'visit', 'advanceInvoice', 'invoice']);
 
         return view('field.order-show', compact('order'));
     }
@@ -793,7 +793,7 @@ class FieldPortalController extends Controller
         $filter = array_key_exists($request->query('status'), $filters) ? $request->query('status') : null;
 
         $deliveries = (clone $base)
-            ->with(['shop', 'order', 'assignee'])
+            ->with(['shop', 'order.invoice', 'order.advanceInvoice', 'assignee'])
             ->when($filter, fn ($q) => $q->where('status', $filters[$filter]))
             ->orderByRaw("CASE status WHEN 'out_for_delivery' THEN 0 WHEN 'failed' THEN 1 ELSE 2 END")
             ->latest('dispatched_at')

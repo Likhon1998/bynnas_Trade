@@ -54,15 +54,28 @@
     @elseif ($order->status === \App\Models\Order::STATUS_AWAITING_ADVANCE && ! $order->isAdvancePaid())
         <div class="f-warn" style="margin:0 0 12px">
             Collected <b>{{ \App\Support\DemoData::taka($paidNow) }}</b> at the shop — waiting for office to verify.
-            Baki <b>{{ \App\Support\DemoData::taka($baki) }}</b> later.
+            Baki <b>{{ \App\Support\DemoData::taka($baki) }}</b> after delivery.
+        </div>
+    @elseif ($settle['collectible'])
+        <div class="f-warn" style="margin:0 0 12px">
+            Delivered — <b>{{ \App\Support\DemoData::taka($settle['remaining_due']) }}</b> now due on the invoice.
+        </div>
+    @elseif ($settle['invoice_issued'] && $settle['fully_settled'])
+        <div class="f-flash ok" style="margin:0 0 12px">
+            <i data-lucide="check-circle-2"></i>
+            <span>Delivered and paid in full.</span>
         </div>
     @elseif ($settle['has_advance'] && $settle['advance_cleared'])
         <div class="f-flash ok" style="margin:0 0 12px">
             <i data-lucide="check-circle-2"></i>
             <span>
                 Paid now <b>{{ \App\Support\DemoData::taka($paidNow) }}</b>
-                · baki <b>{{ \App\Support\DemoData::taka($baki) }}</b>
+                · rest <b>{{ \App\Support\DemoData::taka($baki) }}</b> after delivery
             </span>
+        </div>
+    @elseif (! $settle['has_advance'] && ! $order->isDelivered())
+        <div class="f-warn" style="margin:0 0 12px">
+            Owner did not pay now. Payment starts when the goods are delivered.
         </div>
     @endif
 
@@ -84,9 +97,11 @@
             <div class="f-line-item"><span class="f-muted">Discount</span><span>− {{ \App\Support\DemoData::taka($order->discount_total) }}</span></div>
         @endif
         <div class="f-total-row"><span>Total</span><strong>{{ \App\Support\DemoData::taka($order->total) }}</strong></div>
-        @if ($settle['has_advance'])
-            <div class="f-line-item"><span class="f-muted">Paid now</span><span>{{ \App\Support\DemoData::taka($paidNow) }}</span></div>
-            <div class="f-line-item"><span class="f-muted">Baki (later)</span><span class="strong">{{ \App\Support\DemoData::taka($baki) }}</span></div>
+        @if ($settle['has_advance'] || $settle['invoice_issued'])
+            @if ($settle['has_advance'])
+                <div class="f-line-item"><span class="f-muted">Paid now</span><span>{{ \App\Support\DemoData::taka($paidNow) }}</span></div>
+            @endif
+            <div class="f-line-item"><span class="f-muted">{{ $settle['collectible'] ? 'Due now' : 'After delivery' }}</span><span class="strong">{{ \App\Support\DemoData::taka($baki) }}</span></div>
         @endif
     </div>
     </div>
