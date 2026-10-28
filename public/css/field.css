@@ -116,6 +116,39 @@ a.f-kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -14px var(-
 .f-kpi-wide { grid-column: 1 / -1; }
 .f-kpi-wide .f-kpi-value { font-size: 23px; }
 
+/* Home dashboard — tight, no orphan KPI cells */
+.f-home { display: flex; flex-direction: column; gap: 12px; }
+.f-home > .f-flash,
+.f-home > .f-quick,
+.f-home > .pl-todo { margin-bottom: 0; }
+.f-home-hero {
+    margin: 0;
+    padding: 14px 14px 12px;
+}
+.f-home-hero .f-kpi-value { font-size: 24px; margin-top: 6px; }
+.f-home-hero .f-kpi-meta { white-space: normal; line-height: 1.35; }
+.f-home-stats { margin: 0; gap: 8px; }
+.f-home-stats .f-kpi { padding: 11px 12px; }
+.f-home-stats .f-kpi-value { font-size: 18px; margin-top: 6px; }
+.f-home-grid { display: flex; flex-direction: column; gap: 12px; }
+.f-home-grid > .f-panel,
+.f-home-side > .f-panel { margin-bottom: 0; }
+.f-home-side { display: flex; flex-direction: column; gap: 12px; }
+.f-home-links { display: flex; gap: 12px; align-items: center; }
+.f-home-links a { color: var(--f-brand); font-weight: 600; font-size: 12.5px; }
+.f-home-route-mobile { padding-top: 10px; padding-bottom: 10px; }
+.f-home-route-mobile .f-shop:last-child { margin-bottom: 0; }
+.f-home-note {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    margin: 8px 0 0; padding: 8px 10px; border-radius: 10px;
+    background: #ECFDF5; color: #047857; font-size: 12px; font-weight: 600;
+}
+.f-home-note .lucide { width: 14px; height: 14px; }
+.f-home-orders-body { padding-top: 10px; padding-bottom: 8px; }
+.f-home-orders-body .f-order:last-child { margin-bottom: 0; }
+.f-trend-wrap { position: relative; min-height: 148px; }
+.f-empty.compact { padding: 16px 12px; }
+
 /* 7-day trend */
 .f-trend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 130px; padding: 4px 2px 0; }
 .f-trend-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 5px; min-width: 0; }
@@ -696,6 +729,16 @@ a.f-kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -14px var(-
     .f-kpi-wide { grid-column: auto; }
     .f-kpi-value { font-size: 21px; margin-top: 10px; }
     .f-kpi-wide .f-kpi-value { font-size: 24px; }
+
+    .f-home { gap: 16px; }
+    .f-home-hero { padding: 16px 18px 14px; }
+    .f-home-hero .f-kpi-value { font-size: 28px; }
+    .f-home-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+    .f-home-stats .f-kpi { padding: 14px 16px; }
+    .f-home-stats .f-kpi-value { font-size: 22px; margin-top: 8px; }
+    .f-home-grid.f-grid-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); gap: 16px; align-items: start; }
+    .f-home-side { gap: 16px; }
+    .f-home-route .f-table td.empty { padding: 22px 14px; }
 
     /* Layout grids */
     .f-grid-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
