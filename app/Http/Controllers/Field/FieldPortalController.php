@@ -654,16 +654,40 @@ class FieldPortalController extends Controller
         $user = $request->user();
         $shopIds = $user->assignedShops()->pluck('shops.id');
 
-        $deliveries = Delivery::query()
-            ->with(['shop', 'order', 'assignee'])
+        $base = Delivery::query()
             ->where(function ($q) use ($user, $shopIds) {
                 $q->whereHas('order', fn ($o) => $o->where('salesman_id', $user->id))
                     ->orWhereIn('shop_id', $shopIds);
-            })
-            ->latest('dispatched_at')
-            ->paginate(25);
+            });
 
-        return view('field.deliveries', compact('deliveries'));
+        $byStatus = (clone $base)
+            ->selectRaw('status, COUNT(*) as n')
+            ->groupBy('status')
+            ->pluck('n', 'status');
+
+        $counts = [
+            'all' => (int) $byStatus->sum(),
+            'out' => (int) ($byStatus[Delivery::STATUS_OUT_FOR_DELIVERY] ?? 0),
+            'delivered' => (int) ($byStatus[Delivery::STATUS_DELIVERED] ?? 0),
+            'failed' => (int) ($byStatus[Delivery::STATUS_FAILED] ?? 0),
+        ];
+
+        $filters = [
+            'out' => Delivery::STATUS_OUT_FOR_DELIVERY,
+            'delivered' => Delivery::STATUS_DELIVERED,
+            'failed' => Delivery::STATUS_FAILED,
+        ];
+        $filter = array_key_exists($request->query('status'), $filters) ? $request->query('status') : null;
+
+        $deliveries = (clone $base)
+            ->with(['shop', 'order', 'assignee'])
+            ->when($filter, fn ($q) => $q->where('status', $filters[$filter]))
+            ->orderByRaw("CASE status WHEN 'out_for_delivery' THEN 0 WHEN 'failed' THEN 1 ELSE 2 END")
+            ->latest('dispatched_at')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('field.deliveries', compact('deliveries', 'filter', 'counts'));
     }
 
     public function announcements(Request $request)

@@ -66,4 +66,15 @@ class Delivery extends Model
             default => ucfirst(str_replace('_', ' ', $this->status)),
         };
     }
+
+    /** Field UI tone for status pills. */
+    public function statusTone(): string
+    {
+        return match ($this->status) {
+            self::STATUS_OUT_FOR_DELIVERY => 'sky',
+            self::STATUS_DELIVERED => 'green',
+            self::STATUS_FAILED => 'red',
+            default => 'gray',
+        };
+    }
 }
