@@ -83,10 +83,7 @@
     <section class="f-panel" id="added" style="margin-top:14px">
         <div class="f-panel-head">
             <h2><span class="f-ico tone-rose"><i data-lucide="store"></i></span>Shops I added</h2>
-            <span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                <a href="{{ route('field.partners') }}">Owner logins</a>
-                <a href="{{ route('field.shops.create') }}">+ Add shop</a>
-            </span>
+            <a href="{{ route('field.shops.create') }}">+ Add shop</a>
         </div>
         @if ($addedShops->isEmpty())
             <div class="f-panel-body">
@@ -126,9 +123,9 @@
                                         </form>
                                     @endif
                                     @if ($added->users_count > 0)
-                                        <span class="f-status green">Has login</span>
+                                        <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.shops.login', $added) }}" title="View or reset owner login"><i data-lucide="key-round"></i> Login</a>
                                     @elseif ($added->status !== \App\Models\Shop::STATUS_REJECTED && $added->status !== \App\Models\Shop::STATUS_ON_HOLD)
-                                        <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.partners.create', ['shop' => $added->id]) }}" title="Request an owner login for this shop"><i data-lucide="user-plus"></i> Owner login</a>
+                                        <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.shops.login', $added) }}" title="Create owner login"><i data-lucide="user-plus"></i> Add login</a>
                                     @endif
                                 </td>
                             </tr>

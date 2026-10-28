@@ -1,7 +1,7 @@
 @extends('field.layouts.app')
 @section('title', 'Add a shop')
 @section('heading', 'Add a shop')
-@section('subheading', 'Fill in what you know — nothing is required.')
+@section('subheading', 'Shop + owner login in one step — then you can take orders.')
 @section('back', route('field.shops'))
 @section('has-bar', '1')
 @php
@@ -14,6 +14,9 @@
         'address' => old('address', ''),
         'sells' => array_values((array) old('sells', [])),
         'interest' => old('interest', ''),
+        'createLogin' => (bool) old('create_login', true),
+        'loginEmail' => old('login_email', ''),
+        'loginPassword' => old('login_password', $suggestedPassword),
     ];
 @endphp
 @section('actions')
@@ -110,6 +113,38 @@
                 </div>
             </section>
 
+            {{-- Owner login --}}
+            <section class="f-panel as-sec">
+                <div class="as-sec-head"><span class="f-ico tone-green"><i data-lucide="key-round"></i></span><div><h2>Owner login</h2><p>So they can order online later</p></div></div>
+                <div class="as-sec-body">
+                    <label class="as-visit" style="margin:0 0 12px;border-style:dashed">
+                        <input type="hidden" name="create_login" value="0">
+                        <input type="checkbox" name="create_login" value="1" x-model="f.createLogin">
+                        <span class="as-switch" aria-hidden="true"></span>
+                        <span><b>Create login now</b>Fill email + password with the owner — shown once after save.</span>
+                    </label>
+                    <div class="as-two" x-show="f.createLogin" x-cloak>
+                        <label class="as-field">
+                            <span class="as-label">Login email <em class="as-req">*</em></span>
+                            <span class="as-prefix">
+                                <i data-lucide="mail"></i>
+                                <input class="f-input @error('login_email') is-invalid @enderror" name="login_email" type="email" x-model="f.loginEmail" maxlength="180" placeholder="owner@email.com" autocomplete="off" enterkeyhint="next">
+                            </span>
+                            @error('login_email')<span class="f-error">{{ $message }}</span>@enderror
+                        </label>
+                        <label class="as-field">
+                            <span class="as-label">Password <em class="as-req">*</em></span>
+                            <span class="as-prefix">
+                                <i data-lucide="lock"></i>
+                                <input class="f-input @error('login_password') is-invalid @enderror" name="login_password" type="text" x-model="f.loginPassword" minlength="8" maxlength="64" placeholder="At least 8 characters" autocomplete="off" enterkeyhint="done">
+                            </span>
+                            @error('login_password')<span class="f-error">{{ $message }}</span>@enderror
+                        </label>
+                    </div>
+                    <p class="f-muted f-small" style="margin:10px 0 0" x-show="f.createLogin" x-cloak>They sign in at the partner portal with this email and password.</p>
+                </div>
+            </section>
+
             {{-- Interest & notes --}}
             <section class="f-panel as-sec">
                 <div class="as-sec-head"><span class="f-ico tone-amber"><i data-lucide="flame"></i></span><div><h2>How interested are they?</h2><p>Tap again to clear</p></div></div>
@@ -159,22 +194,23 @@
                     <li :class="(f.city || f.address) && 'ok'"><i data-lucide="map-pin"></i><span x-text="[f.address, f.city].filter(Boolean).join(', ') || 'No address yet'"></span></li>
                     <li :class="state === 'ok' && 'ok'"><i data-lucide="locate-fixed"></i><span x-text="state === 'ok' ? 'GPS location saved' : 'No GPS location'"></span></li>
                     <li :class="f.sells.length && 'ok'"><i data-lucide="package"></i><span x-text="f.sells.length ? f.sells.join(', ') : 'Products not picked'"></span></li>
+                    <li :class="(!f.createLogin || (f.loginEmail && f.loginPassword)) && 'ok'"><i data-lucide="key-round"></i><span x-text="f.createLogin ? (f.loginEmail ? f.loginEmail : 'Login email needed') : 'Login skipped'"></span></li>
                 </ul>
                 <div class="as-meter">
-                    <div class="as-meter-top"><span>Details added</span><b x-text="filled() + ' of 6'"></b></div>
-                    <div class="as-meter-bar"><span :style="'width:' + Math.max(4, filled() / 6 * 100) + '%'"></span></div>
+                    <div class="as-meter-top"><span>Details added</span><b x-text="filled() + ' of 7'"></b></div>
+                    <div class="as-meter-bar"><span :style="'width:' + Math.max(4, filled() / 7 * 100) + '%'"></span></div>
                 </div>
                 <button class="f-btn f-btn-primary f-btn-lg f-btn-block" type="submit" :disabled="saving">
-                    <i data-lucide="check"></i> <span x-text="saving ? 'Saving…' : 'Save shop'"></span>
+                    <i data-lucide="check"></i> <span x-text="saving ? 'Saving…' : (f.createLogin ? 'Save shop + login' : 'Save shop')"></span>
                 </button>
-                <p class="as-foot"><i data-lucide="shield-check"></i> New shops are approved immediately so you can take orders. Admin can still edit or deactivate later.</p>
+                <p class="as-foot"><i data-lucide="shield-check"></i> Shop is approved immediately. Owner login lets them use the partner portal.</p>
             </section>
         </aside>
 
         {{-- Phone save bar --}}
         <div class="f-cartbar as-bar">
             <div class="f-cartbar-text">
-                <small x-text="filled() + ' of 6 details · ' + (state === 'ok' ? 'GPS saved' : 'no GPS')"></small>
+                <small x-text="filled() + ' of 7 · ' + (f.createLogin ? 'with login' : 'no login') + ' · ' + (state === 'ok' ? 'GPS' : 'no GPS')"></small>
                 <strong x-text="f.name || 'New shop'"></strong>
             </div>
             <button class="f-btn f-btn-success" type="submit" :disabled="saving">
@@ -191,8 +227,10 @@ function addShop(initial) {
         f: initial,
         lat: null, lng: null, accuracy: null, state: 'busy', saving: false,
         filled() {
-            return [this.f.name, this.f.owner, this.f.phone, this.f.city || this.f.address, this.f.sells.length, this.state === 'ok']
-                .filter(Boolean).length;
+            return [
+                this.f.name, this.f.owner, this.f.phone, this.f.city || this.f.address, this.f.sells.length, this.state === 'ok',
+                !this.f.createLogin || (this.f.loginEmail && this.f.loginPassword),
+            ].filter(Boolean).length;
         },
         locate() {
             if (!navigator.geolocation) { this.state = 'err'; return; }

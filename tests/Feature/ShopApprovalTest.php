@@ -91,6 +91,60 @@ class ShopApprovalTest extends TestCase
         $this->assertSame(Shop::STATUS_ACTIVE, $shop->fresh()->status);
     }
 
+    public function test_salesman_can_add_shop_with_owner_login_in_one_step(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+
+        $this->actingAs($salesman)->post(route('field.shops.store'), [
+            'name' => 'Login Ready Shop',
+            'owner_name' => 'Owner Mia',
+            'phone' => '01822334455',
+            'city' => 'Dhaka',
+            'create_login' => '1',
+            'login_email' => 'mia.owner@example.com',
+            'login_password' => 'MiaShop2026',
+        ])->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $shop = Shop::where('name', 'Login Ready Shop')->firstOrFail();
+        $this->assertSame(Shop::STATUS_ACTIVE, $shop->status);
+        $this->assertSame('mia.owner@example.com', $shop->email);
+        $this->assertTrue($shop->users()->where('email', 'mia.owner@example.com')->exists());
+
+        $owner = User::where('email', 'mia.owner@example.com')->firstOrFail();
+        $this->assertSame(User::PORTAL_SHOP, $owner->portal);
+        $this->assertTrue($owner->is_active);
+    }
+
+    public function test_salesman_can_add_login_to_existing_shop(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+        $shop = Shop::query()->create([
+            'code' => 'SHP-LOGIN1',
+            'name' => 'Needs Login Shop',
+            'owner_name' => 'Rafiq',
+            'phone' => '01833445566',
+            'status' => Shop::STATUS_ACTIVE,
+            'assigned_salesman_id' => $salesman->id,
+            'created_by' => $salesman->id,
+            'approved_at' => now(),
+            'credit_limit' => 50000,
+        ]);
+
+        $this->actingAs($salesman)
+            ->get(route('field.shops.login', $shop))
+            ->assertOk()
+            ->assertSee('Set owner login');
+
+        $this->post(route('field.shops.login.store', $shop), [
+            'login_email' => 'rafiq.shop@example.com',
+            'login_password' => 'Rafiq2026!',
+        ])->assertSessionHasNoErrors()
+            ->assertRedirect(route('field.shops.login', $shop));
+
+        $this->assertTrue($shop->fresh()->users()->where('email', 'rafiq.shop@example.com')->exists());
+    }
+
     public function test_salesman_cannot_approve_another_salesmans_shop(): void
     {
         $karim = User::where('email', 'karim@field.local')->firstOrFail();

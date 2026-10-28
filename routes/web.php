@@ -98,6 +98,8 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/shops', [FieldPortalController::class, 'shops'])->name('shops');
         Route::get('/shops/new', [FieldPortalController::class, 'createShop'])->name('shops.create');
         Route::post('/shops', [FieldPortalController::class, 'storeShop'])->middleware('throttle:30,1')->name('shops.store');
+        Route::get('/shops/{shop}/login', [FieldPortalController::class, 'shopLogin'])->name('shops.login');
+        Route::post('/shops/{shop}/login', [FieldPortalController::class, 'storeShopLogin'])->middleware('throttle:20,1')->name('shops.login.store');
         Route::post('/shops/{shop}/approve', [FieldPortalController::class, 'approveShop'])->name('shops.approve');
         Route::post('/shops/{shop}/check-in', [FieldPortalController::class, 'checkIn'])->name('shops.check-in');
         Route::post('/shops/{shop}/order', [FieldPortalController::class, 'placeOrder'])->name('shops.order');

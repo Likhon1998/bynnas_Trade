@@ -23,10 +23,13 @@ use App\Services\PartnerInquiryService;
 use App\Services\ShopService;
 use App\Services\TargetService;
 use App\Services\VisitService;
+use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -133,12 +136,14 @@ class FieldPortalController extends Controller
             'openVisit' => $this->openVisit($request->user()),
             'categories' => self::SHOP_CATEGORIES,
             'interests' => self::SHOP_INTEREST,
+            'suggestedPassword' => Str::password(10, symbols: false),
         ]);
     }
 
     public function storeShop(Request $request)
     {
         $user = $request->user();
+        $createLogin = $request->boolean('create_login');
 
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
@@ -152,6 +157,12 @@ class FieldPortalController extends Controller
             'interest' => ['nullable', Rule::in(array_keys(self::SHOP_INTEREST))],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'login_email' => [$createLogin ? 'required' : 'nullable', 'email', 'max:180'],
+            'login_password' => [$createLogin ? 'required' : 'nullable', 'string', 'min:8', 'max:64'],
+        ], [
+            'login_email.required' => 'Enter the owner\'s email for portal login.',
+            'login_password.required' => 'Set a password the owner can use to sign in.',
+            'login_password.min' => 'Use at least 8 characters so the account is safe.',
         ]);
 
         if (! empty($data['phone'])) {
@@ -173,13 +184,29 @@ class FieldPortalController extends Controller
         ])->filter()->implode("\n") ?: null;
         unset($data['sells'], $data['interest']);
 
+        $credential = null;
+        $plainPassword = null;
+        if ($createLogin) {
+            $loginEmail = strtolower(trim((string) $data['login_email']));
+            $plainPassword = (string) $data['login_password'];
+            $this->shops->assertLoginEmailFree(new Shop(), $loginEmail);
+            $data['email'] = $loginEmail;
+            $credential = [
+                'email' => $loginEmail,
+                'password' => $plainPassword,
+                'name' => $data['owner_name'] ?: $data['name'],
+                'phone' => $data['phone'] ?? null,
+            ];
+        }
+        unset($data['login_email'], $data['login_password']);
+
         $shop = $this->shops->create($data + [
             'status' => Shop::STATUS_ACTIVE,
             'assigned_salesman_id' => $user->id,
             'territory_id' => $user->salesmanProfile?->territory_id,
             // Match admin form default so orders are not blocked by a zero credit limit.
             'credit_limit' => $data['credit_limit'] ?? 150000,
-        ], $user);
+        ], $user, $credential);
 
         try {
             $this->notifications->shopAddedFromField($shop, $user);
@@ -188,18 +215,104 @@ class FieldPortalController extends Controller
         }
 
         if ($request->boolean('check_in') && ! $this->openVisit($user)) {
-            $visit = $this->visits->checkIn($user, $shop, [
+            $this->visits->checkIn($user, $shop, [
                 'purpose' => 'New shop',
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
             ]);
+        }
 
-            return redirect()->route('field.visit.show', $visit)
+        if ($credential && $plainPassword) {
+            return redirect()->route('field.shops.login', $shop)
+                ->with('login_result', $this->shopLoginResult($shop->fresh(['users']), $credential['email'], $plainPassword))
+                ->with('success', $shop->name.' added with owner login.');
+        }
+
+        $openVisit = $this->openVisit($user);
+        if ($openVisit && (int) $openVisit->shop_id === (int) $shop->id) {
+            return redirect()->route('field.visit.show', $openVisit)
                 ->with('success', $shop->name.' added and approved. You can take orders now.');
         }
 
         return redirect()->route('field.shops')
             ->with('success', $shop->name.' added and approved. You can take orders now.');
+    }
+
+    public function shopLogin(Request $request, Shop $shop)
+    {
+        abort_unless($this->shops->salesmanCanManage($shop, $request->user()), 403);
+
+        $shop->load('users');
+
+        return view('field.shop-login', [
+            'shop' => $shop,
+            'hasLogin' => $shop->users->isNotEmpty(),
+            'suggestedPassword' => Str::password(10, symbols: false),
+            'result' => $request->session()->get('login_result'),
+        ]);
+    }
+
+    public function storeShopLogin(Request $request, Shop $shop)
+    {
+        abort_unless($this->shops->salesmanCanManage($shop, $request->user()), 403);
+
+        if ($shop->status === Shop::STATUS_ON_HOLD || $shop->status === Shop::STATUS_REJECTED) {
+            throw ValidationException::withMessages([
+                'shop' => $shop->name.' was deactivated by the office. Ask admin to reactivate it.',
+            ]);
+        }
+
+        $data = $request->validate([
+            'login_email' => ['required', 'email', 'max:180'],
+            'login_password' => ['required', 'string', 'min:8', 'max:64'],
+        ], [
+            'login_password.min' => 'Use at least 8 characters so the account is safe.',
+        ]);
+
+        $email = strtolower(trim($data['login_email']));
+        $password = $data['login_password'];
+
+        try {
+            $this->shops->assertLoginEmailFree($shop, $email);
+        } catch (ValidationException $e) {
+            throw $e;
+        }
+
+        $this->shops->attachShopUser($shop, [
+            'email' => $email,
+            'password' => $password,
+            'name' => $shop->owner_name ?: $shop->name,
+            'phone' => $shop->phone,
+        ], $request->user());
+
+        if (! $shop->email) {
+            $shop->forceFill(['email' => $email])->save();
+        }
+
+        return redirect()->route('field.shops.login', $shop)
+            ->with('login_result', $this->shopLoginResult($shop->fresh(['users']), $email, $password));
+    }
+
+    /** @return array{ok:bool,checks:array<string,bool>,email:string,password:string,chat_url:?string} */
+    private function shopLoginResult(Shop $shop, string $email, string $password): array
+    {
+        $user = $shop->users->firstWhere('email', $email) ?: $shop->users->first();
+        $checks = [
+            'account' => (bool) ($user && $user->portal === User::PORTAL_SHOP && $user->is_active),
+            'password' => (bool) ($user && Hash::check($password, $user->password)),
+            'shop' => (bool) $user,
+            'active' => $shop->status === Shop::STATUS_ACTIVE,
+        ];
+
+        $whatsapp = app(WhatsAppService::class)->notifyApproval($shop->phone, $shop->name, $email, $password);
+
+        return [
+            'ok' => ! in_array(false, $checks, true),
+            'checks' => $checks,
+            'email' => $email,
+            'password' => $password,
+            'chat_url' => $whatsapp['chat_url'] ?? null,
+        ];
     }
 
     public function approveShop(Request $request, Shop $shop)
