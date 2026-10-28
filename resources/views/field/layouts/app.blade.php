@@ -25,8 +25,18 @@
 <body class="f-app">
     <div class="f-shell @hasSection('has-bar') has-bar @endif">
         <header class="f-top">
-            @hasSection('back')
-                <a class="f-back" href="@yield('back')" aria-label="Back"><i data-lucide="arrow-left"></i></a>
+            @php
+                $backPost = trim($__env->yieldContent('back_post'));
+                $backHref = trim($__env->yieldContent('back'));
+            @endphp
+            @if ($backPost !== '')
+                <form method="post" action="{{ $backPost }}" class="f-back-form" data-leave-visit>
+                    @csrf
+                    @yield('back_post_fields')
+                    <button type="submit" class="f-back" aria-label="Back" title="Save visit and go back"><i data-lucide="arrow-left"></i></button>
+                </form>
+            @elseif ($backHref !== '')
+                <a class="f-back" href="{{ $backHref }}" aria-label="Back"><i data-lucide="arrow-left"></i></a>
             @else
                 <div class="f-avatar" aria-hidden="true">{{ strtoupper($initials ?: 'S') }}</div>
             @endif

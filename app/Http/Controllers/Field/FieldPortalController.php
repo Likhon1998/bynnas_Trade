@@ -484,7 +484,50 @@ class FieldPortalController extends Controller
         $visit = $this->visits->checkOut($visit, $data, $request->user());
 
         return redirect()->route('field.dashboard')
-            ->with('success', 'Visit at '.$visit->shop?->name.' closed · '.$visit->outcomeLabel().'.');
+            ->with('success', 'Visit at '.$visit->shop?->name.' saved · '.$visit->outcomeLabel().'.');
+    }
+
+    /**
+     * Leave a shop visit (Back / nav away). Always stores the visit — with order or without.
+     */
+    public function leaveVisit(Request $request, ShopVisit $visit)
+    {
+        abort_unless($visit->salesman_id === $request->user()->id, 403);
+
+        $to = match ($request->input('redirect')) {
+            'dashboard', 'home' => route('field.dashboard'),
+            'orders' => route('field.orders'),
+            default => route('field.shops'),
+        };
+
+        if ($visit->isOpen()) {
+            $outcome = $visit->order_id
+                ? ShopVisit::OUTCOME_ORDER_TAKEN
+                : (string) $request->input('outcome', ShopVisit::OUTCOME_NO_ORDER);
+
+            if (! in_array($outcome, [
+                ShopVisit::OUTCOME_ORDER_TAKEN,
+                ShopVisit::OUTCOME_NO_ORDER,
+                ShopVisit::OUTCOME_CLOSED,
+                ShopVisit::OUTCOME_FOLLOW_UP,
+            ], true)) {
+                $outcome = ShopVisit::OUTCOME_NO_ORDER;
+            }
+
+            $visit = $this->visits->checkOut($visit, [
+                'outcome' => $outcome,
+                'notes' => $request->input('notes'),
+            ], $request->user());
+        }
+
+        if ($request->header('X-Beacon') === '1' || $request->boolean('beacon')) {
+            return response()->noContent();
+        }
+
+        $label = $visit->fresh()?->outcomeLabel() ?? 'Saved';
+
+        return redirect($to)
+            ->with('success', 'Visit at '.$visit->shop?->name.' saved · '.$label.'.');
     }
 
     public function submitOrder(Request $request, ShopVisit $visit)

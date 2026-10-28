@@ -104,6 +104,7 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/visits/{visit}', [FieldPortalController::class, 'showVisit'])->name('visit.show');
         Route::post('/visits/{visit}/order', [FieldPortalController::class, 'submitOrder'])->name('visit.order');
         Route::post('/visits/{visit}/check-out', [FieldPortalController::class, 'checkOut'])->name('visit.checkout');
+        Route::post('/visits/{visit}/leave', [FieldPortalController::class, 'leaveVisit'])->name('visit.leave');
         Route::get('/orders', [FieldPortalController::class, 'orders'])->name('orders');
         Route::get('/orders/create', [FieldPortalController::class, 'createOrder'])->name('orders.create');
         Route::redirect('/orders/new', '/field/orders/create');

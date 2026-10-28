@@ -8,7 +8,18 @@
 @section('title', 'Visit · '.$shop?->name)
 @section('heading', $shop?->name)
 @section('subheading', ($visit->isOpen() ? 'Checked in '.$visit->checked_in_at?->format('g:i A') : 'Visit closed').' · '.$visit->outcomeLabel())
-@section('back', route('field.shops'))
+@section('back')
+    {{ $visit->isOpen() ? '' : route('field.shops') }}
+@endsection
+@section('back_post')
+    {{ $visit->isOpen() ? route('field.visit.leave', $visit) : '' }}
+@endsection
+@section('back_post_fields')
+    @if ($visit->isOpen())
+        <input type="hidden" name="outcome" value="{{ $visit->order_id ? 'order_taken' : 'no_order' }}">
+        <input type="hidden" name="redirect" value="shops">
+    @endif
+@endsection
 @if ($taking)
     @section('has-bar', '1')
 @endif
@@ -277,6 +288,78 @@
         </div>
     @endif
 @endsection
+
+@if ($visit->isOpen())
+@push('scripts')
+<script>
+(function () {
+    const leaveUrl = @js(route('field.visit.leave', $visit));
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    let intentional = false;
+    const markIntentional = () => { intentional = true; };
+
+    document.querySelectorAll('form[action*="/visits/{{ $visit->id }}"]').forEach((form) => {
+        form.addEventListener('submit', markIntentional);
+    });
+
+    // Bottom nav / sidebar: save this visit first, then go.
+    document.querySelectorAll('.f-nav a[href]').forEach((link) => {
+        link.addEventListener('click', (e) => {
+            if (intentional) return;
+            e.preventDefault();
+            intentional = true;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = leaveUrl;
+            form.style.display = 'none';
+            const csrf = document.createElement('input');
+            csrf.name = '_token';
+            csrf.value = token || '';
+            form.appendChild(csrf);
+            [['outcome', @js($visit->order_id ? 'order_taken' : 'no_order')], ['redirect', 'shops']].forEach(([name, value]) => {
+                const input = document.createElement('input');
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            });
+            // Prefer landing on the nav target after save.
+            const href = link.getAttribute('href') || '';
+            let redirect = 'shops';
+            if (href.includes('/field/orders')) redirect = 'orders';
+            else if (href.includes('/field/dashboard') || href.endsWith('/field') || href.endsWith('/field/')) redirect = 'dashboard';
+            form.querySelector('[name=redirect]').value = redirect;
+            document.body.appendChild(form);
+            form.submit();
+        });
+    });
+
+    // Phone back / tab close — still store the visit.
+    window.addEventListener('pagehide', () => {
+        if (intentional || !token) return;
+        const body = new URLSearchParams({
+            _token: token,
+            outcome: @js($visit->order_id ? 'order_taken' : 'no_order'),
+            beacon: '1',
+        });
+        try {
+            fetch(leaveUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': token,
+                    'X-Beacon': '1',
+                    'Accept': 'application/json',
+                },
+                body,
+                keepalive: true,
+                credentials: 'same-origin',
+            }).catch(() => {});
+        } catch (e) {}
+    });
+})();
+</script>
+@endpush
+@endif
 
 @if ($taking)
 @push('scripts')

@@ -51,7 +51,8 @@ body.f-app { margin: 0; background: var(--f-bg); font-family: Inter, system-ui, 
 
 /* Header */
 .f-top { position: sticky; top: 0; z-index: 30; background: linear-gradient(120deg, #4C1D95 0%, #3730A3 60%, #1E3A8A 100%); color: #fff; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px; display: flex; align-items: center; gap: 10px; }
-.f-back { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,255,255,.14); color: #fff; flex: none; }
+.f-back { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,255,255,.14); color: #fff; flex: none; border: 0; padding: 0; cursor: pointer; }
+.f-back-form { display: contents; }
 .f-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #F472B6, #8B5CF6); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 12px; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
 .f-top-text { flex: 1; min-width: 0; }
 .f-top-title { font-size: 15px; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
