@@ -22,7 +22,7 @@
     $user = auth()->user();
     $initials = collect(explode(' ', (string) $user?->name))->filter()->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
     $onVisitPage = request()->routeIs('field.visit.show') && optional(request()->route('visit'))->id === $fieldOpenVisit?->id;
-    $moreActive = request()->routeIs('field.earnings', 'field.notifications*', 'field.account.*', 'field.shops.create');
+    $moreActive = request()->routeIs('field.earnings', 'field.notifications*', 'field.account.*');
 @endphp
 <body class="f-app" x-data="{ moreOpen: false }" @keydown.escape.window="moreOpen = false">
     <div class="f-shell @hasSection('has-bar') has-bar @endif">
@@ -139,8 +139,6 @@
             </div>
         </div>
         <div class="f-more-grid">
-            <a class="f-more-item" href="{{ route('field.orders.create') }}" @click="moreOpen = false"><span class="f-ico tone-violet"><i data-lucide="shopping-bag"></i></span>New order</a>
-            <a class="f-more-item" href="{{ route('field.shops.create') }}" @click="moreOpen = false"><span class="f-ico tone-blue"><i data-lucide="plus"></i></span>Add shop</a>
             <a class="f-more-item" href="{{ route('field.earnings') }}" @click="moreOpen = false"><span class="f-ico tone-green"><i data-lucide="wallet"></i></span>Earnings</a>
             <a class="f-more-item" href="{{ route('field.notifications') }}" @click="moreOpen = false"><span class="f-ico tone-rose"><i data-lucide="bell"></i></span>Alerts</a>
             <a class="f-more-item" href="{{ route('field.account.password') }}" @click="moreOpen = false"><span class="f-ico tone-amber"><i data-lucide="key-round"></i></span>Password</a>
