@@ -22,7 +22,7 @@
     $user = auth()->user();
     $initials = collect(explode(' ', (string) $user?->name))->filter()->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
     $onVisitPage = request()->routeIs('field.visit.show') && optional(request()->route('visit'))->id === $fieldOpenVisit?->id;
-    $moreActive = request()->routeIs('field.partners*', 'field.earnings', 'field.announcements', 'field.notifications*', 'field.account.*');
+    $moreActive = request()->routeIs('field.partners*', 'field.earnings', 'field.notifications*', 'field.account.*');
 @endphp
 <body class="f-app" x-data="{ moreOpen: false }" @keydown.escape.window="moreOpen = false">
     <div class="f-shell @hasSection('has-bar') has-bar @endif">
@@ -104,7 +104,6 @@
 
             <a href="{{ route('field.partners') }}" title="Partners" class="f-nav-extra tone-teal {{ request()->routeIs('field.partners*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="handshake"></i></span><span class="f-nav-text">Partners</span></a>
             <a href="{{ route('field.earnings') }}" title="Earnings" class="f-nav-extra tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
-            <a href="{{ route('field.announcements') }}" title="Announcements" class="f-nav-extra tone-violet {{ request()->routeIs('field.announcements') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="megaphone"></i></span><span class="f-nav-text">News</span></a>
             <a href="{{ route('field.notifications') }}" title="Notifications" class="f-nav-extra tone-rose {{ request()->routeIs('field.notifications*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="bell"></i></span><span class="f-nav-text">Alerts</span></a>
 
             <div class="f-nav-user">
@@ -145,7 +144,6 @@
             <a class="f-more-item" href="{{ route('field.shops.create') }}" @click="moreOpen = false"><span class="f-ico tone-blue"><i data-lucide="plus"></i></span>Add shop</a>
             <a class="f-more-item" href="{{ route('field.partners') }}" @click="moreOpen = false"><span class="f-ico tone-teal"><i data-lucide="handshake"></i></span>Partners</a>
             <a class="f-more-item" href="{{ route('field.earnings') }}" @click="moreOpen = false"><span class="f-ico tone-green"><i data-lucide="wallet"></i></span>Earnings</a>
-            <a class="f-more-item" href="{{ route('field.announcements') }}" @click="moreOpen = false"><span class="f-ico tone-violet"><i data-lucide="megaphone"></i></span>News</a>
             <a class="f-more-item" href="{{ route('field.notifications') }}" @click="moreOpen = false"><span class="f-ico tone-rose"><i data-lucide="bell"></i></span>Alerts</a>
             <a class="f-more-item" href="{{ route('field.account.password') }}" @click="moreOpen = false"><span class="f-ico tone-amber"><i data-lucide="key-round"></i></span>Password</a>
         </div>
