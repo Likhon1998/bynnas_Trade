@@ -8,7 +8,8 @@
 @endphp
 @section('subheading', $shops->count().' shops on your route · '.$visited.' visited today')
 @section('actions')
-    <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.shops.create') }}"><i data-lucide="plus"></i> Add shop</a>
+    <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.shops.create') }}"><i data-lucide="plus"></i> Add shop</a>
+    <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.orders.create') }}"><i data-lucide="shopping-bag"></i> New order</a>
 @endsection
 @section('content')
     <div class="f-kpis">
@@ -57,7 +58,7 @@
                         @forelse ($shops as $shop)
                             @include('field.partials.shop-row', ['shop' => $shop, 'openVisit' => $openVisit, 'filterable' => true, 'showGroup' => true])
                         @empty
-                            <tr><td colspan="6" class="empty">No shops assigned yet. Ask your manager to assign shops to your route.</td></tr>
+                            <tr><td colspan="7" class="empty">No shops on your route yet. Use <a href="{{ route('field.orders.create') }}">New order</a> to order for any active admin shop.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -72,8 +73,8 @@
             @empty
                 <div class="f-empty">
                     <i data-lucide="store"></i>
-                    <strong>No shops assigned yet</strong>
-                    Ask your manager to assign shops to your route.
+                    <strong>No shops on your route yet</strong>
+                    You can still take orders — open <a href="{{ route('field.orders.create') }}">New order</a> and pick any active admin shop.
                 </div>
             @endforelse
         </div>

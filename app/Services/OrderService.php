@@ -36,10 +36,11 @@ class OrderService
         ?ShopVisit $visit = null,
         ?string $notes = null,
     ): Order {
-        if ($shop->assigned_salesman_id && $shop->assigned_salesman_id !== $salesman->id
-            && ! $salesman->isSuperAdmin() && ! $salesman->hasGlobalAccessScope()) {
+        // Field officers may collect an order on behalf of any active shop.
+        // Credit and the salesman who took the order are tracked on the order itself.
+        if ($shop->status !== Shop::STATUS_ACTIVE) {
             throw ValidationException::withMessages([
-                'shop_id' => 'This shop is not assigned to you.',
+                'shop_id' => $shop->name.' is not active and cannot take orders.',
             ]);
         }
 

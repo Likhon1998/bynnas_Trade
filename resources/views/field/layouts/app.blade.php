@@ -128,7 +128,12 @@
             if (!form.matches('[data-checkin]') || form.dataset.located) return;
             e.preventDefault();
             const btn = form.querySelector('button[type=submit]');
-            if (btn) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = 'Checking in…'; }
+            if (btn) {
+                btn.disabled = true;
+                btn.dataset.label = btn.innerHTML;
+                const ordering = form.action.includes('/order');
+                btn.innerHTML = ordering ? 'Opening…' : 'Checking in…';
+            }
             const go = () => { form.dataset.located = '1'; form.submit(); };
             if (!navigator.geolocation) return go();
             const timer = setTimeout(go, 5000);

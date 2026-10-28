@@ -12,10 +12,14 @@ class VisitService
 {
     public function __construct(private AuditLogger $auditLogger) {}
 
-    public function checkIn(User $salesman, Shop $shop, array $data = []): ShopVisit
+    public function checkIn(User $salesman, Shop $shop, array $data = [], bool $onBehalf = false): ShopVisit
     {
-        if ($shop->assigned_salesman_id && $shop->assigned_salesman_id !== $salesman->id
-            && ! $salesman->isSuperAdmin() && ! $salesman->hasGlobalAccessScope()) {
+        // Route visits stay assigned-only. Order-on-behalf may open a visit at any active shop.
+        if (! $onBehalf
+            && $shop->assigned_salesman_id
+            && $shop->assigned_salesman_id !== $salesman->id
+            && ! $salesman->isSuperAdmin()
+            && ! $salesman->hasGlobalAccessScope()) {
             throw ValidationException::withMessages([
                 'shop_id' => 'This shop is not assigned to you.',
             ]);

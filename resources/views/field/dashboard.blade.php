@@ -14,7 +14,7 @@
 @section('actions')
     <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.shops.create') }}"><i data-lucide="plus"></i> Add shop</a>
     <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.orders') }}"><i data-lucide="receipt-text"></i> My orders</a>
-    <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.shops') }}"><i data-lucide="map-pin"></i> Start a visit</a>
+    <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.orders.create') }}"><i data-lucide="shopping-bag"></i> New order</a>
 @endsection
 @section('content')
     @include('field.partials.login-todo')

@@ -3,12 +3,16 @@
 @section('heading', 'My orders')
 @section('subheading', $counts['all'].' orders in total · '.$counts['waiting'].' waiting for approval')
 @section('actions')
-    <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.shops') }}"><i data-lucide="plus"></i> New order</a>
+    <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.orders.create') }}"><i data-lucide="plus"></i> New order</a>
 @endsection
 @section('content')
     @php
         $tabs = ['all' => 'All', 'waiting' => 'Waiting', 'active' => 'In progress', 'delivered' => 'Delivered', 'rejected' => 'Rejected'];
     @endphp
+
+    <a class="f-btn f-btn-primary f-btn-block f-mobile-only" style="margin-bottom:12px" href="{{ route('field.orders.create') }}">
+        <i data-lucide="plus"></i> New order
+    </a>
 
     <div class="f-kpis">
         <a class="f-kpi tone-amber" href="{{ route('field.orders', ['status' => 'waiting']) }}">
@@ -52,7 +56,18 @@
                             <td class="num"><i data-lucide="chevron-right" class="f-chev"></i></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="empty">{{ $filter ? 'No orders in this list.' : 'No orders yet. Check in at a shop to take your first order.' }}</td></tr>
+                        <tr>
+                            <td colspan="7" class="empty">
+                                @if ($filter)
+                                    No orders in this list.
+                                @else
+                                    No orders yet.
+                                    <div style="margin-top:10px">
+                                        <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.orders.create') }}"><i data-lucide="plus"></i> New order</a>
+                                    </div>
+                                @endif
+                            </td>
+                        </tr>
                     @endforelse
                 </tbody>
             </table>
@@ -66,7 +81,10 @@
             <div class="f-empty">
                 <i data-lucide="receipt-text"></i>
                 <strong>{{ $filter ? 'No orders here' : 'No orders yet' }}</strong>
-                {{ $filter ? 'Try another filter.' : 'Check in at a shop to take your first order.' }}
+                {{ $filter ? 'Try another filter.' : 'Select a shop and place an order on its behalf.' }}
+                @unless ($filter)
+                    <a class="f-btn f-btn-primary" style="margin-top:12px" href="{{ route('field.orders.create') }}"><i data-lucide="plus"></i> New order</a>
+                @endunless
             </div>
         @endforelse
     </div>

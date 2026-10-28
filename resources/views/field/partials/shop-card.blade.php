@@ -19,7 +19,7 @@
             <div class="f-shop-meta">{{ $shop->owner_name }}{{ $shop->city || $shop->territory ? ' · '.($shop->city ?: $shop->territory?->name) : '' }}</div>
             <div class="f-chips">
                 @if ($isOpenHere)
-                    <span class="f-chip amber">Visit in progress</span>
+                    <span class="f-chip amber">Order in progress</span>
                 @elseif ($shop->visited_today)
                     <span class="f-chip green">Visited today</span>
                 @elseif ($shop->last_visit_at)
@@ -45,14 +45,12 @@
         <a class="f-btn f-btn-ghost f-btn-icon" href="https://www.google.com/maps/search/?api=1&query={{ $mapQuery }}" target="_blank" rel="noopener" aria-label="Directions to {{ $shop->name }}"><i data-lucide="map-pin"></i></a>
         @if ($isOpenHere)
             <a class="f-btn f-btn-warn" style="flex:1" href="{{ route('field.visit.show', $openVisit) }}"><i data-lucide="shopping-cart"></i> Continue order</a>
-        @elseif ($openVisit)
-            <button class="f-btn f-btn-ghost" style="flex:1" type="button" disabled title="Finish your current visit first">Finish current visit first</button>
         @else
-            <form method="post" action="{{ route('field.shops.check-in', $shop) }}" data-checkin>
+            <form method="post" action="{{ route('field.shops.order', $shop) }}" data-checkin style="flex:1">
                 @csrf
                 <input type="hidden" name="latitude">
                 <input type="hidden" name="longitude">
-                <button class="f-btn f-btn-primary" type="submit"><i data-lucide="log-in"></i> Check in</button>
+                <button class="f-btn f-btn-primary" style="width:100%" type="submit"><i data-lucide="shopping-bag"></i> Order</button>
             </form>
         @endif
     </div>

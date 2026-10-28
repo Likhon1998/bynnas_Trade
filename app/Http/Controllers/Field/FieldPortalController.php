@@ -369,6 +369,68 @@ class FieldPortalController extends Controller
         return redirect()->route('field.visit.show', $visit)->with('success', 'Checked in at '.$shop->name);
     }
 
+    /** Pick an existing shop, then place an order on its behalf. */
+    public function createOrder(Request $request)
+    {
+        $user = $request->user();
+
+        return view('field.order-create', [
+            'shops' => $this->orderableShops($user),
+            'openVisit' => $this->openVisit($user),
+        ]);
+    }
+
+    /** Select any active admin shop and jump into the order screen on its behalf. */
+    public function placeOrder(Request $request, Shop $shop)
+    {
+        $this->assertCanOrderForShop($request, $shop);
+
+        if ($shop->status === Shop::STATUS_PENDING && $this->shops->salesmanCanManage($shop, $request->user())) {
+            $this->shops->approve($shop, $request->user());
+            $shop->refresh();
+        }
+
+        if ($shop->status !== Shop::STATUS_ACTIVE) {
+            throw ValidationException::withMessages([
+                'shop' => $shop->name.' cannot take orders ('.strtolower($shop->statusLabel()).'). Ask the office if it was deactivated.',
+            ]);
+        }
+
+        // Claim only unassigned shops. Do not steal shops already on another salesman's route.
+        if (! $shop->assigned_salesman_id) {
+            $shop->forceFill(['assigned_salesman_id' => $request->user()->id])->save();
+        }
+
+        $open = $this->openVisit($request->user());
+        if ($open && $open->shop_id === $shop->id) {
+            return redirect()->route('field.visit.show', $open)
+                ->with('success', 'Continue ordering for '.$shop->name.'.');
+        }
+
+        // Open visits never hold a submitted order (submit checks out). Closing lets the
+        // salesman switch shops without getting stuck behind a greyed-out Order button.
+        if ($open) {
+            $this->visits->checkOut($open, [
+                'outcome' => ShopVisit::OUTCOME_FOLLOW_UP,
+                'notes' => trim(($open->notes ? $open->notes."\n" : '').'Closed to start order at '.$shop->name),
+            ], $request->user());
+        }
+
+        $data = $request->validate([
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+        ]);
+
+        $visit = $this->visits->checkIn($request->user(), $shop->fresh(), [
+            'purpose' => 'Order collection',
+            'latitude' => $data['latitude'] ?? null,
+            'longitude' => $data['longitude'] ?? null,
+        ], onBehalf: true);
+
+        return redirect()->route('field.visit.show', $visit)
+            ->with('success', 'Ordering on behalf of '.$shop->name.'. Add products and send.');
+    }
+
     public function showVisit(Request $request, ShopVisit $visit)
     {
         abort_unless($visit->salesman_id === $request->user()->id, 403);
@@ -457,7 +519,7 @@ class FieldPortalController extends Controller
 
         return redirect()
             ->route('field.orders.show', $order)
-            ->with('success', 'Order '.$order->number.' sent for approval. Visit closed — you can check in at your next shop.');
+            ->with('success', 'Order '.$order->number.' sent for approval. You can select another shop for the next order.');
     }
 
     public function orders(Request $request)
@@ -636,10 +698,43 @@ class FieldPortalController extends Controller
 
     private function assertAssignedShop(Request $request, Shop $shop): void
     {
-        if ($shop->assigned_salesman_id !== $request->user()->id) {
+        if ((int) $shop->assigned_salesman_id !== (int) $request->user()->id) {
             throw ValidationException::withMessages([
                 'shop' => 'This shop is not assigned to you.',
             ]);
         }
+    }
+
+    /** Any active shop from admin can take a field order on its behalf. */
+    private function assertCanOrderForShop(Request $request, Shop $shop): void
+    {
+        if ($shop->status !== Shop::STATUS_ACTIVE
+            && ! ($shop->status === Shop::STATUS_PENDING && $this->shops->salesmanCanManage($shop, $request->user()))) {
+            throw ValidationException::withMessages([
+                'shop' => $shop->name.' is not active yet. Ask the office to approve it first.',
+            ]);
+        }
+    }
+
+    /** Every active shop in admin — salesman picks one and orders on its behalf. */
+    private function orderableShops(User $user): Collection
+    {
+        $lastVisits = ShopVisit::query()
+            ->where('salesman_id', $user->id)
+            ->selectRaw('shop_id, MAX(checked_in_at) as last_at')
+            ->groupBy('shop_id')
+            ->pluck('last_at', 'shop_id');
+
+        return Shop::query()
+            ->with(['territory', 'priceGroup', 'assignedSalesman'])
+            ->where('status', Shop::STATUS_ACTIVE)
+            ->orderBy('name')
+            ->get()
+            ->each(function (Shop $shop) use ($lastVisits, $user) {
+                $last = $lastVisits[$shop->id] ?? null;
+                $shop->last_visit_at = $last ? Carbon::parse($last) : null;
+                $shop->visited_today = $shop->last_visit_at?->isToday() ?? false;
+                $shop->is_mine = (int) $shop->assigned_salesman_id === (int) $user->id;
+            });
     }
 }

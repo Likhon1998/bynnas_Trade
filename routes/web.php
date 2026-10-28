@@ -100,11 +100,14 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::post('/shops', [FieldPortalController::class, 'storeShop'])->middleware('throttle:30,1')->name('shops.store');
         Route::post('/shops/{shop}/approve', [FieldPortalController::class, 'approveShop'])->name('shops.approve');
         Route::post('/shops/{shop}/check-in', [FieldPortalController::class, 'checkIn'])->name('shops.check-in');
+        Route::post('/shops/{shop}/order', [FieldPortalController::class, 'placeOrder'])->name('shops.order');
         Route::get('/visits/{visit}', [FieldPortalController::class, 'showVisit'])->name('visit.show');
         Route::post('/visits/{visit}/order', [FieldPortalController::class, 'submitOrder'])->name('visit.order');
         Route::post('/visits/{visit}/check-out', [FieldPortalController::class, 'checkOut'])->name('visit.checkout');
         Route::get('/orders', [FieldPortalController::class, 'orders'])->name('orders');
-        Route::get('/orders/{order}', [FieldPortalController::class, 'showOrder'])->name('orders.show');
+        Route::get('/orders/create', [FieldPortalController::class, 'createOrder'])->name('orders.create');
+        Route::redirect('/orders/new', '/field/orders/create');
+        Route::get('/orders/{order}', [FieldPortalController::class, 'showOrder'])->whereNumber('order')->name('orders.show');
         Route::get('/earnings', [FieldPortalController::class, 'earnings'])->name('earnings');
         Route::get('/deliveries', [FieldPortalController::class, 'deliveries'])->name('deliveries');
         Route::get('/announcements', [FieldPortalController::class, 'announcements'])->name('announcements');
