@@ -98,7 +98,7 @@
             <a href="{{ route('field.deliveries') }}" title="Deliveries" class="tone-sky {{ request()->routeIs('field.deliveries') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="truck"></i></span><span class="f-nav-text">Deliveries</span></a>
 
             <button type="button" class="f-nav-more-btn tone-teal {{ $moreActive ? 'active' : '' }}" @click="moreOpen = true" aria-label="More menu">
-                <span class="f-nav-ico"><i data-lucide="menu"></i></span>
+                <img class="f-nav-more-logo" src="{{ asset('images/logo.png') }}" alt="" width="22" height="22">
                 <span class="f-nav-text">More</span>
             </button>
 
