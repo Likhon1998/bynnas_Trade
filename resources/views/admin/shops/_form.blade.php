@@ -52,8 +52,9 @@
     </select>
 </div>
 <div>
-    <label class="label">Credit limit (৳)</label>
+    <label class="label">Credit limit (৳) — reporting only</label>
     <input class="input" style="width:100%" type="number" step="0.01" name="credit_limit" value="{{ old('credit_limit', $shop?->credit_limit ?? 150000) }}" @cannot('shops.manage_credit') readonly title="Needs the manage credit permission" @endcannot>
+    <p class="muted" style="margin:4px 0 0;font-size:12px">Does not block orders. Used for dues reports.</p>
 </div>
 <div>
     <label class="label">Payment terms (days)</label>

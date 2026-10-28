@@ -43,11 +43,11 @@
             </strong>
         </div>
         @if ($order->isPendingAudit() || $order->isAwaitingAdvance())
-            <div title="Limit {{ \App\Support\DemoData::taka($snapshot['credit_limit']) }} · already owed {{ \App\Support\DemoData::taka($snapshot['credit_exposure']) }}">
-                <span>Credit</span>
-                <strong style="color:{{ $snapshot['credit_ok'] ? '#15803d' : '#b91c1c' }}">
-                    {{ $snapshot['credit_ok'] ? 'Within limit' : 'Over limit' }}
-                    <small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">needs {{ \App\Support\DemoData::taka($snapshot['credit_needed']) }} · free {{ \App\Support\DemoData::taka($snapshot['credit_available']) }}</small>
+            <div title="Outstanding is tracked as baki. The credit figure does not block approval.">
+                <span>Shop dues</span>
+                <strong>
+                    {{ \App\Support\DemoData::taka($snapshot['credit_exposure']) }}
+                    <small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">this order {{ \App\Support\DemoData::taka($snapshot['credit_needed']) }} still due · does not block</small>
                 </strong>
             </div>
         @endif
@@ -62,9 +62,9 @@
                     @if ($settlement['fully_settled'])
                         Fully settled
                     @elseif ($settlement['advance_cleared'] && $settlement['remaining_due'] > 0.009)
-                        Advance received — remaining still due
+                        Collected at shop — baki still due
                     @elseif ($settlement['has_advance'] && ! $settlement['advance_cleared'])
-                        Advance still due
+                        Pay-now still waiting for office verify
                     @else
                         Balance outstanding
     @endif
@@ -76,7 +76,7 @@
                     <strong>{{ \App\Support\DemoData::taka($settlement['order_total']) }}</strong>
                 </div>
                 <div>
-                    <span>Advance paid</span>
+                    <span>Collected at shop</span>
                     <strong>{{ \App\Support\DemoData::taka($settlement['advance_paid']) }}</strong>
             </div>
                 @if ($settlement['sales_paid'] > 0.009)
@@ -86,7 +86,7 @@
                     </div>
                 @endif
                 <div class="order-settlement-rest">
-                    <span>Remaining due</span>
+                    <span>Baki (rest later)</span>
                     <strong>{{ \App\Support\DemoData::taka($settlement['remaining_due']) }}</strong>
                     <em>
                         @if ($settlement['fully_settled'])
@@ -402,7 +402,6 @@
                                         @unless ($snapshot['stock_ok'])
                                             <p class="order-decide-hint">Stock shortfall — cannot approve.</p>
                                         @endunless
-                                        @include('admin.orders.partials.credit-override')
                                         <button class="btn btn-approve btn-block" type="submit" @disabled(! $snapshot['stock_ok'])>Approve &amp; reserve</button>
                                     </form>
                                 @endif
@@ -429,7 +428,6 @@
                                     @unless ($snapshot['stock_ok'])
                                         <p class="order-decide-hint">Stock shortfall — cannot approve.</p>
                                     @endunless
-                                    @include('admin.orders.partials.credit-override')
                                     <button class="btn btn-approve btn-block" type="submit" @disabled(! $snapshot['stock_ok'])>Approve &amp; reserve</button>
                                 </form>
                             @endif

@@ -29,6 +29,7 @@ class ShopController extends Controller
         $shops = Shop::query()
             ->visibleTo($request->user())
             ->with(['territory', 'priceGroup', 'assignedSalesman', 'creator'])
+            ->withCount('users')
             ->latest()
             ->limit(500)
             ->get();
@@ -44,6 +45,7 @@ class ShopController extends Controller
             'source' => $shop->creator?->portal === User::PORTAL_SALESMAN ? 'field' : 'office',
             'added_by' => $shop->creator?->portal === User::PORTAL_SALESMAN ? $shop->creator->name : '',
             'added_on' => $shop->created_at?->format('d M Y'),
+            'has_login' => (int) $shop->users_count > 0,
             'credit' => \App\Support\DemoData::taka($shop->credit_limit),
             'outstanding' => \App\Support\DemoData::taka($shop->outstanding_balance),
             'status' => $shop->status,
@@ -63,6 +65,7 @@ class ShopController extends Controller
             'search' => (string) $request->get('search', ''),
             'status' => (string) $request->get('status', ''),
             'source' => $request->get('source') === 'field' ? 'field' : '',
+            'login' => $request->get('login') === 'missing' ? 'missing' : '',
         ];
 
         return view('admin.shops.index', compact('rows', 'initialFilters'));

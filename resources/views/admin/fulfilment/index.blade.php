@@ -18,7 +18,7 @@
         @keydown.escape.window="closeDetail()"
     >
         <div class="fw-top">
-            <div class="page-kicker"><strong>Warehouse desk</strong></div>
+            <div class="page-kicker"><strong>Warehouse desk</strong> / Pick · pack · dispatch — vans finish on Deliveries</div>
             <div class="fw-top-actions">
                 <button type="button" class="btn btn-ghost btn-sm" @click="listCollapsed = !listCollapsed; $nextTick(() => { if (window.lucide) lucide.createIcons(); })" :disabled="busy">
                     <span x-text="listCollapsed ? 'Show list' : 'Hide list'"></span>
@@ -212,18 +212,12 @@
                                     </button>
                                 </div>
 
-                                <div class="fw-action-card" x-show="detail.can_deliver">
-                                    <div class="fw-deliver-ref muted" x-show="detail.delivery_number">
-                                        <span x-text="detail.delivery_number"></span>
+                                <div class="fw-action-card" x-show="detail.delivery_url">
+                                    <div class="fw-deliver-ref muted">
+                                        Sent as <span x-text="detail.delivery_number"></span>
                                         <span x-show="detail.assignee"> · <span x-text="detail.assignee"></span></span>
                                     </div>
-                                    <input class="input input-sm" x-model="notes" placeholder="Notes (optional)" :disabled="busy">
-                                    <button type="button" class="btn btn-primary btn-sm" @click="run('deliver')" :disabled="busy">
-                                        <span class="fw-btn-inner">
-                                            <span class="fw-spinner sm light" x-show="busyAction === 'deliver'"></span>
-                                            <span x-text="busyAction === 'deliver' ? 'Saving…' : 'Mark delivered'"></span>
-                                        </span>
-                                    </button>
+                                    <a class="btn btn-ghost btn-sm" :href="detail.delivery_url">Open delivery</a>
                                 </div>
 
                                 <div class="fw-action-card is-done" x-show="detail.status === 'delivered'">

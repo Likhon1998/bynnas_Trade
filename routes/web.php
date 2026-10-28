@@ -258,6 +258,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])->name('deliveries.show');
         Route::get('/deliveries/{delivery}/challan', [DeliveryController::class, 'challan'])->name('deliveries.challan');
         Route::post('/deliveries/{delivery}/deliver', [DeliveryController::class, 'markDelivered'])->name('deliveries.deliver');
+        Route::post('/deliveries/{delivery}/fail', [DeliveryController::class, 'markFailed'])->name('deliveries.fail');
+        Route::post('/deliveries/{delivery}/retry', [DeliveryController::class, 'retry'])->name('deliveries.retry');
 
         // Phase 6 — Suppliers, purchases, China shipments, landed cost
         Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');

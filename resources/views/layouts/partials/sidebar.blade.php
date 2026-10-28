@@ -3,6 +3,7 @@
     $nav = [
         ['label' => 'SALES & ORDERS', 'items' => [
             ['name' => 'shops.index', 'label' => 'Shops', 'icon' => 'store'],
+            ['name' => 'partner-inquiries.index', 'label' => 'Website leads', 'icon' => 'handshake', 'permission' => 'shops.view'],
             ['name' => 'salesmen.index', 'label' => 'Salesmen', 'icon' => 'users', 'permission' => 'salesmen.view'],
             ['name' => 'orders.index', 'label' => 'Orders', 'icon' => 'shopping-bag', 'permission' => 'orders.view'],
             ['name' => 'fulfilment.index', 'label' => 'Warehouse desk', 'icon' => 'clipboard-check', 'permission' => 'fulfilment.view'],
@@ -18,7 +19,7 @@
             ['name' => 'commissions.index', 'label' => 'Commissions', 'icon' => 'percent', 'permission' => 'commissions.view'],
             ['name' => 'rewards.index', 'label' => 'Rewards', 'icon' => 'gift', 'permission' => 'rewards.view'],
             ['name' => 'salaries.index', 'label' => 'Salaries', 'icon' => 'banknote', 'permission' => 'salaries.view'],
-            ['name' => 'announcements.index', 'label' => 'Announcements', 'icon' => 'megaphone', 'permission' => 'announcements.view'],
+            ['name' => 'announcements.index', 'label' => 'Field alerts', 'icon' => 'megaphone', 'permission' => 'announcements.view'],
         ]],
         ['label' => 'PRODUCT & INVENTORY', 'items' => [
             ['name' => 'products.index', 'label' => 'Products', 'icon' => 'package'],
@@ -40,7 +41,6 @@
         ]],
         ['label' => 'SETTINGS', 'items' => [
             ['name' => 'website.edit', 'label' => 'Website', 'icon' => 'globe', 'permission' => 'website.view'],
-            ['name' => 'partner-inquiries.index', 'label' => 'Partner Leads', 'icon' => 'handshake', 'permission' => 'shops.view'],
             ['name' => 'users.index', 'label' => 'Users', 'icon' => 'user-cog', 'permission' => 'users.view'],
             ['name' => 'roles.index', 'label' => 'Roles & Permissions', 'icon' => 'shield', 'permission' => 'roles.view'],
             ['name' => 'price-groups.index', 'label' => 'Price Groups', 'icon' => 'tags', 'permission' => 'price_groups.view'],

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Announcements')
 @section('content')
-    <x-page-header title="Announcements" subtitle="Message all salesmen or selected field staff" />
+    <x-page-header title="Field alerts" subtitle="Messages land in the salesman’s Alerts tab — not a separate News page" />
 
     @if (session('success'))
         <div class="card" style="padding:12px 16px;margin-bottom:14px;background:#e8f8ee;color:#15803d">{{ session('success') }}</div>

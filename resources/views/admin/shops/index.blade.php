@@ -2,8 +2,11 @@
 @section('title', 'Shops')
 @section('content')
     <div x-data="shopBoard(@js($rows), @js($initialFilters))">
-        <x-page-header title="Shops" subtitle="Wholesale partners and portal access" action="{{ route('shops.create') }}" action-label="Add Shop">
-            <x-slot:description>Filters update instantly. Approved shops receive portal credentials.</x-slot:description>
+        <x-page-header title="Shops" subtitle="Retailers on your books — field-added shops are already active" action="{{ route('shops.create') }}" action-label="Add Shop">
+            <x-slot:description>Owner login is set on the shop (or by the salesman). Website applications sit under Website leads.</x-slot:description>
+            @can('shops.view')
+                <a class="btn btn-ghost" href="{{ route('partner-inquiries.index') }}">Website leads</a>
+            @endcan
         </x-page-header>
 
         @if (session('success'))
@@ -31,7 +34,11 @@
                     <option value="">All sources</option>
                     <option value="field">Added by salesmen</option>
                 </select>
-                <button type="button" class="btn btn-ghost" x-show="search || status || source" x-cloak @click="clearFilters()">Clear</button>
+                <select class="select" x-model="login" @change="syncUrl()">
+                    <option value="">Any login</option>
+                    <option value="missing">No owner login</option>
+                </select>
+                <button type="button" class="btn btn-ghost" x-show="search || status || source || login" x-cloak @click="clearFilters()">Clear</button>
                 <span class="muted" style="font-size:12px;margin-left:auto" x-text="filteredCountLabel()"></span>
             </div>
         </div>
@@ -50,6 +57,7 @@
                             <th>Credit</th>
                             <th>Outstanding</th>
                             <th>Status</th>
+                            <th>Login</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -71,6 +79,9 @@
                                 <td x-text="row.outstanding"></td>
                                 <td><span class="badge" :class="row.status_badge" x-text="row.status_label"></span></td>
                                 <td>
+                                    <span class="badge" :class="row.has_login ? 'badge-active' : 'badge-pending'" x-text="row.has_login ? 'Has login' : 'No login'"></span>
+                                </td>
+                                <td>
                                     <template x-if="row.can_approve && row.approve_url">
                                         <form :action="row.approve_url" method="post" style="display:inline">
                                             @csrf
@@ -82,7 +93,7 @@
                             </tr>
                         </template>
                         <tr x-show="filteredRows().length === 0">
-                            <td colspan="10" class="muted" style="padding:24px;text-align:center">No shops match these filters.</td>
+                            <td colspan="11" class="muted" style="padding:24px;text-align:center">No shops match these filters.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -99,11 +110,13 @@ function shopBoard(rows, initialFilters) {
         search: initialFilters?.search || '',
         status: initialFilters?.status || '',
         source: initialFilters?.source || '',
+        login: initialFilters?.login || '',
         filteredRows() {
             const q = (this.search || '').trim().toLowerCase();
             return this.rows.filter((row) => {
                 if (this.status && row.status !== this.status) return false;
                 if (this.source && row.source !== this.source) return false;
+                if (this.login === 'missing' && row.has_login) return false;
                 if (!q) return true;
                 return (
                     String(row.code).toLowerCase().includes(q) ||
@@ -124,6 +137,7 @@ function shopBoard(rows, initialFilters) {
             this.search = '';
             this.status = '';
             this.source = '';
+            this.login = '';
             this.syncUrl();
         },
         syncUrl() {
@@ -135,6 +149,7 @@ function shopBoard(rows, initialFilters) {
             setOrDel('search', (this.search || '').trim());
             setOrDel('status', this.status);
             setOrDel('source', this.source);
+            setOrDel('login', this.login);
             history.replaceState({}, '', u.pathname + u.search);
         },
     };

@@ -100,7 +100,7 @@ class PartnerInquiryService
                     'city' => $inquiry->city,
                     'price_group_id' => $priceGroupId,
                     'assigned_salesman_id' => $inquiry->isFromField() ? $inquiry->submitted_by : null,
-                    'credit_limit' => 0,
+                    'credit_limit' => 150000,
                     'payment_terms_days' => 21,
                     'status' => Shop::STATUS_ACTIVE,
                     'notes' => 'Accepted from partner application #'.$inquiry->id,

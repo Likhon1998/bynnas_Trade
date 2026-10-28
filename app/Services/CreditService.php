@@ -68,8 +68,8 @@ class CreditService
     }
 
     /**
-     * The shop is never put on hold automatically; the credit limit is enforced when an order is
-     * approved (see creditCheck / assertCanOrder).
+     * The shop is never put on hold automatically. Credit limit is reporting-only and does not
+     * block orders (see creditCheck / assertCanOrder).
      */
     public function enforceCreditHold(Shop $shop): Shop
     {

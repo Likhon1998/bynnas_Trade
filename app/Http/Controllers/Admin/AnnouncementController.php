@@ -69,7 +69,7 @@ class AnnouncementController extends Controller
                 new SystemAlert(
                     $announcement->title,
                     $announcement->body,
-                    '/field/announcements',
+                    '/field/notifications',
                     'announcements',
                     'info',
                 )

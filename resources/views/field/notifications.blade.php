@@ -1,7 +1,7 @@
 @extends('field.layouts.app')
 @section('title', 'Alerts')
 @section('heading', 'Alerts')
-@section('subheading', 'Order, delivery and payment updates')
+@section('subheading', 'Office messages, orders, deliveries and payments')
 @section('content')
     <div style="display:grid;gap:10px">
         @forelse ($notifications as $notification)
@@ -25,7 +25,7 @@
             <div class="f-empty">
                 <i data-lucide="bell"></i>
                 <strong>No alerts yet</strong>
-                Order and delivery updates will appear here.
+                Office messages, orders and deliveries appear here.
             </div>
         @endforelse
     </div>

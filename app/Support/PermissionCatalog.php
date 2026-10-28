@@ -75,7 +75,7 @@ class PermissionCatalog
                 'create' => 'Create orders',
                 'edit' => 'Edit orders',
                 'approve' => 'Approve orders',
-                'credit_override' => 'Approve orders over the shop credit limit',
+                'credit_override' => 'Legacy credit override (orders are not blocked by limit)',
                 'reject' => 'Reject orders',
                 'cancel' => 'Cancel orders',
                 'delete' => 'Delete orders',

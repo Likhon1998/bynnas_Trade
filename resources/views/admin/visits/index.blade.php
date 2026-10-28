@@ -7,7 +7,7 @@
     $query = fn (array $extra) => array_filter(array_merge(request()->only(['period', 'salesman_id', 'outcome', 'shop_id']), $extra), fn ($v) => $v !== null && $v !== '');
 @endphp
 @section('content')
-    <x-page-header title="Field Activity" subtitle="Shop visits, orders and new shops by each salesman">
+    <x-page-header title="Field Activity" subtitle="Assigned route visits. Salesmen can also take orders for any active shop.">
         <a class="btn btn-ghost" href="{{ route('shops.index', ['source' => 'field']) }}">Salesman-added shops</a>
         <a class="btn btn-ghost" href="{{ route('salesmen.index') }}">Salesmen</a>
     </x-page-header>

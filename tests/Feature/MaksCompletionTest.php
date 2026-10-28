@@ -139,6 +139,11 @@ class MaksCompletionTest extends TestCase
             ->assertOk()
             ->assertSee('Push collections');
 
+        $this->actingAs($this->salesman)
+            ->get(route('field.notifications'))
+            ->assertOk()
+            ->assertSee('Push collections');
+
         $this->actingAs($this->super)
             ->get(route('offers.index'))
             ->assertOk();

@@ -221,6 +221,48 @@ class FulfilmentService
         });
     }
 
+    public function markFailed(Delivery $delivery, User $actor, ?string $notes = null): Delivery
+    {
+        if ($delivery->status === Delivery::STATUS_DELIVERED) {
+            throw ValidationException::withMessages(['delivery' => 'A completed delivery cannot be marked failed.']);
+        }
+
+        if ($delivery->status === Delivery::STATUS_FAILED) {
+            return $delivery->fresh(['order', 'shop', 'fulfilment']);
+        }
+
+        return DB::transaction(function () use ($delivery, $actor, $notes) {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $delivery->update([
+                'status' => Delivery::STATUS_FAILED,
+                'notes' => $notes ?: $delivery->notes,
+            ]);
+
+            $this->auditLogger->log('deliveries', 'failed', "Delivery {$delivery->number} marked failed", $delivery, null, null, $actor);
+
+            return $delivery->fresh(['order', 'shop', 'fulfilment']);
+        });
+    }
+
+    public function retryDelivery(Delivery $delivery, User $actor, ?string $notes = null): Delivery
+    {
+        if ($delivery->status !== Delivery::STATUS_FAILED) {
+            throw ValidationException::withMessages(['delivery' => 'Only a failed delivery can be sent out again.']);
+        }
+
+        return DB::transaction(function () use ($delivery, $actor, $notes) {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $delivery->update([
+                'status' => Delivery::STATUS_OUT_FOR_DELIVERY,
+                'notes' => $notes ?: $delivery->notes,
+            ]);
+
+            $this->auditLogger->log('deliveries', 'retried', "Delivery {$delivery->number} sent out again", $delivery, null, null, $actor);
+
+            return $delivery->fresh(['order', 'shop', 'fulfilment']);
+        });
+    }
+
     public function nextDeliveryNumber(): string
     {
         return \App\Support\DocumentNumber::next(Delivery::class, 'DLV-'.now()->format('ymd').'-');

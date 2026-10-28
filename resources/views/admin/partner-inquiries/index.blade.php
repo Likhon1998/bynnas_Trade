@@ -4,9 +4,10 @@
     <div class="partner-desk">
         <div class="partner-desk-top">
             <div>
-                <div class="page-kicker"><strong>Partner requests</strong> / Review · accept · WhatsApp</div>
+                <div class="page-kicker"><strong>Website leads</strong> / Public applications — field shops are added under Shops</div>
             </div>
             <div class="partner-desk-top-actions">
+                <a class="btn btn-ghost btn-sm" href="{{ route('shops.index') }}">Shops</a>
                 <a class="btn btn-ghost btn-sm" href="{{ route('site.partner') }}" target="_blank">Apply form</a>
             </div>
         </div>

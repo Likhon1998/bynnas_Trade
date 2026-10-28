@@ -25,13 +25,33 @@
 
     @if ($delivery->status === \App\Models\Delivery::STATUS_OUT_FOR_DELIVERY)
         @can('deliveries.update_status')
-            <form class="card" style="padding:16px;margin-bottom:14px" method="post" action="{{ route('deliveries.deliver', $delivery) }}">
-                @csrf
+            <div class="card" style="padding:16px;margin-bottom:14px">
                 <div class="field" style="margin-bottom:10px">
                     <label class="label">Delivery notes</label>
+                    <textarea class="input" form="deliver-form" name="notes" rows="2">{{ old('notes', $delivery->notes) }}</textarea>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <form id="deliver-form" method="post" action="{{ route('deliveries.deliver', $delivery) }}">
+                        @csrf
+                        <button class="btn btn-primary" type="submit">Mark delivered</button>
+                    </form>
+                    <form method="post" action="{{ route('deliveries.fail', $delivery) }}" onsubmit="return confirm('Mark this drop as failed?')">
+                        @csrf
+                        <input type="hidden" name="notes" value="{{ old('notes', $delivery->notes) }}">
+                        <button class="btn btn-ghost" type="submit">Mark failed</button>
+                    </form>
+                </div>
+            </div>
+        @endcan
+    @elseif ($delivery->status === \App\Models\Delivery::STATUS_FAILED)
+        @can('deliveries.update_status')
+            <form class="card" style="padding:16px;margin-bottom:14px" method="post" action="{{ route('deliveries.retry', $delivery) }}">
+                @csrf
+                <div class="field" style="margin-bottom:10px">
+                    <label class="label">Retry notes</label>
                     <textarea class="input" name="notes" rows="2">{{ old('notes', $delivery->notes) }}</textarea>
                 </div>
-                <button class="btn btn-primary" type="submit">Mark delivered</button>
+                <button class="btn btn-primary" type="submit">Send out again</button>
             </form>
         @endcan
     @endif

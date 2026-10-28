@@ -58,4 +58,24 @@ class DeliveryController extends Controller
 
         return back()->with('success', 'Marked as delivered.');
     }
+
+    public function markFailed(Request $request, Delivery $delivery)
+    {
+        abort_unless($request->user()->can('deliveries.update_status'), 403);
+
+        $data = $request->validate(['notes' => ['nullable', 'string', 'max:1000']]);
+        $this->fulfilment->markFailed($delivery, $request->user(), $data['notes'] ?? null);
+
+        return back()->with('success', 'Marked as failed. The van can retry from this page.');
+    }
+
+    public function retry(Request $request, Delivery $delivery)
+    {
+        abort_unless($request->user()->can('deliveries.update_status'), 403);
+
+        $data = $request->validate(['notes' => ['nullable', 'string', 'max:1000']]);
+        $this->fulfilment->retryDelivery($delivery, $request->user(), $data['notes'] ?? null);
+
+        return back()->with('success', 'Sent out for delivery again.');
+    }
 }

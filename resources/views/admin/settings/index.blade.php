@@ -60,8 +60,8 @@
                     @endcan
                 </dd>
                 <dt>New shop payment terms</dt><dd>21 days</dd>
-                <dt>New shop credit limit</dt><dd>৳ 0 until set on the shop</dd>
-                <dt>Order audit</dt><dd>Every shop and salesman order needs Super Admin approval</dd>
+                <dt>New shop credit limit</dt><dd>৳ 150,000 default — for dues reporting only, does not block orders</dd>
+                <dt>Order audit</dt><dd>Every shop and salesman order needs Super Admin approval. Stock must be available.</dd>
             </dl>
         </div>
 
