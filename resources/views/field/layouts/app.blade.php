@@ -22,7 +22,7 @@
     $user = auth()->user();
     $initials = collect(explode(' ', (string) $user?->name))->filter()->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
     $onVisitPage = request()->routeIs('field.visit.show') && optional(request()->route('visit'))->id === $fieldOpenVisit?->id;
-    $moreActive = request()->routeIs('field.earnings', 'field.collections', 'field.notifications*', 'field.account.*');
+    $moreActive = request()->routeIs('field.earnings', 'field.collections', 'field.notifications*', 'field.account.*', 'field.visits', 'field.partners*', 'field.announcements');
 @endphp
 <body class="f-app" x-data="{ moreOpen: false }" @keydown.escape.window="moreOpen = false">
     <div class="f-shell @hasSection('has-bar') has-bar @endif">
@@ -66,14 +66,18 @@
             @endif
 
             @if ($fieldOpenVisit && ! $onVisitPage)
-                <a class="f-resume" href="{{ route('field.visit.show', $fieldOpenVisit) }}">
+                <div class="f-resume">
                     <span class="dot" aria-hidden="true"></span>
                     <span class="f-resume-text">
-                        <strong>Visit in progress · {{ $fieldOpenVisit->shop?->name }}</strong>
-                        <span>Checked in {{ $fieldOpenVisit->checked_in_at?->diffForHumans() }} — tap to continue</span>
+                        <strong>You're at {{ $fieldOpenVisit->shop?->name }}</strong>
+                        <span>Checked in {{ $fieldOpenVisit->checked_in_at?->diffForHumans() }} — continue the order, or leave the shop</span>
                     </span>
-                    <span class="f-btn f-btn-warn f-btn-sm">Continue</span>
-                </a>
+                    <a class="f-btn f-btn-warn f-btn-sm" href="{{ route('field.visit.show', $fieldOpenVisit) }}">Continue</a>
+                    @include('field.partials.leave-shop', [
+                        'leaveVisit' => $fieldOpenVisit,
+                        'leaveRedirect' => request()->routeIs('field.dashboard') ? 'dashboard' : (request()->routeIs('field.orders*') ? 'orders' : 'shops'),
+                    ])
+                </div>
             @endif
 
             @yield('content')
@@ -102,6 +106,9 @@
                 <span class="f-nav-text">More</span>
             </button>
 
+            <a href="{{ route('field.visits') }}" title="Visit log" class="f-nav-extra tone-blue {{ request()->routeIs('field.visits') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="clipboard-list"></i></span><span class="f-nav-text">Visit log</span></a>
+            <a href="{{ route('field.partners') }}" title="Partners" class="f-nav-extra tone-teal {{ request()->routeIs('field.partners*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="handshake"></i></span><span class="f-nav-text">Partners</span></a>
+            <a href="{{ route('field.announcements') }}" title="News" class="f-nav-extra tone-violet {{ request()->routeIs('field.announcements') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="megaphone"></i></span><span class="f-nav-text">News</span></a>
             <a href="{{ route('field.earnings') }}" title="Earnings" class="f-nav-extra tone-green {{ request()->routeIs('field.earnings') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="wallet"></i></span><span class="f-nav-text">Earnings</span></a>
             <a href="{{ route('field.collections') }}" title="Collected money" class="f-nav-extra tone-blue {{ request()->routeIs('field.collections') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="banknote"></i></span><span class="f-nav-text">Collected</span></a>
             <a href="{{ route('field.notifications') }}" title="Notifications" class="f-nav-extra tone-rose {{ request()->routeIs('field.notifications*') ? 'active' : '' }}"><span class="f-nav-ico"><i data-lucide="bell"></i></span><span class="f-nav-text">Alerts</span></a>
@@ -140,6 +147,9 @@
             </div>
         </div>
         <div class="f-more-grid">
+            <a class="f-more-item" href="{{ route('field.visits') }}" @click="moreOpen = false"><span class="f-ico tone-blue"><i data-lucide="clipboard-list"></i></span>Visit log</a>
+            <a class="f-more-item" href="{{ route('field.partners') }}" @click="moreOpen = false"><span class="f-ico tone-teal"><i data-lucide="handshake"></i></span>Partners</a>
+            <a class="f-more-item" href="{{ route('field.announcements') }}" @click="moreOpen = false"><span class="f-ico tone-violet"><i data-lucide="megaphone"></i></span>News</a>
             <a class="f-more-item" href="{{ route('field.earnings') }}" @click="moreOpen = false"><span class="f-ico tone-green"><i data-lucide="wallet"></i></span>Earnings</a>
             <a class="f-more-item" href="{{ route('field.collections') }}" @click="moreOpen = false"><span class="f-ico tone-blue"><i data-lucide="banknote"></i></span>Collected money</a>
             <a class="f-more-item" href="{{ route('field.notifications') }}" @click="moreOpen = false"><span class="f-ico tone-rose"><i data-lucide="bell"></i></span>Alerts</a>
@@ -153,6 +163,46 @@
     </div>
 
     <script>
+        function searchCombo(opts) {
+            const items = opts.items || [];
+            const placeholder = opts.placeholder || 'Select';
+            return {
+                open: false,
+                query: '',
+                hi: 0,
+                value: '',
+                items,
+                get filtered() {
+                    const q = String(this.query || '').trim().toLowerCase();
+                    if (!q) return this.items;
+                    return this.items.filter((item) => item.label.toLowerCase().includes(q) || String(item.value).toLowerCase().includes(q));
+                },
+                get display() {
+                    const hit = this.items.find((item) => String(item.value) === String(this.value));
+                    return hit ? hit.label : placeholder;
+                },
+                toggle() {
+                    this.open = !this.open;
+                    this.query = '';
+                    this.hi = 0;
+                    if (this.open) this.$nextTick(() => { this.$refs.query?.focus(); if (window.lucide) lucide.createIcons(); });
+                },
+                pick(value) {
+                    this.value = value;
+                    this.open = false;
+                    this.query = '';
+                },
+                onKey(event) {
+                    const rows = this.filtered;
+                    if (event.key === 'ArrowDown') { event.preventDefault(); this.hi = rows.length ? (this.hi + 1) % rows.length : 0; }
+                    else if (event.key === 'ArrowUp') { event.preventDefault(); this.hi = rows.length ? (this.hi - 1 + rows.length) % rows.length : 0; }
+                    else if (event.key === 'Enter') { event.preventDefault(); if (rows[this.hi]) this.pick(rows[this.hi].value); }
+                    else if (event.key === 'Escape') { event.preventDefault(); this.open = false; }
+                    else { this.hi = 0; }
+                },
+            };
+        }
+
         document.addEventListener('DOMContentLoaded', () => window.lucide && lucide.createIcons());
 
         (() => {

@@ -71,7 +71,12 @@
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div class="card">
-            <div style="padding:14px;font-weight:700;border-bottom:1px solid #eee">Assigned shops</div>
+            <div style="padding:14px;font-weight:700;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px">
+                Assigned shops
+                @can('salesmen.edit')
+                    <a class="link" href="{{ route('salesmen.edit', $salesman) }}#assign-shops">Assign dokan ›</a>
+                @endcan
+            </div>
             <div class="table-wrap">
                 <table class="data">
                     <tbody>

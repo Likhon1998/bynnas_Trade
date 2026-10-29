@@ -16,8 +16,10 @@ use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -33,6 +35,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::defaultView('vendor.pagination.admin');
         Paginator::defaultSimpleView('vendor.pagination.simple-admin');
+        $this->ensureShopGeoColumns();
+        $this->ensurePhotoEvidenceColumns();
 
         Gate::policy(Shop::class, ShopPolicy::class);
         Gate::policy(Product::class, ProductPolicy::class);
@@ -83,5 +87,43 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(20)->by($request->ip())->response($tooMany),
             ];
         });
+    }
+
+    private function ensureShopGeoColumns(): void
+    {
+        if (! Schema::hasTable('shops')) {
+            return;
+        }
+
+        $add = [];
+        foreach (['division' => 80, 'district' => 80, 'thana' => 80, 'post_office' => 120, 'location' => 160] as $column => $length) {
+            if (! Schema::hasColumn('shops', $column)) {
+                $add[$column] = $length;
+            }
+        }
+        if ($add === []) {
+            return;
+        }
+
+        Schema::table('shops', function (Blueprint $table) use ($add) {
+            foreach ($add as $column => $length) {
+                $table->string($column, $length)->nullable();
+            }
+        });
+    }
+
+    private function ensurePhotoEvidenceColumns(): void
+    {
+        if (Schema::hasTable('shop_visits') && ! Schema::hasColumn('shop_visits', 'photo_path')) {
+            Schema::table('shop_visits', function (Blueprint $table) {
+                $table->string('photo_path', 255)->nullable();
+            });
+        }
+
+        if (Schema::hasTable('shops') && ! Schema::hasColumn('shops', 'photo_path')) {
+            Schema::table('shops', function (Blueprint $table) {
+                $table->string('photo_path', 255)->nullable();
+            });
+        }
     }
 }

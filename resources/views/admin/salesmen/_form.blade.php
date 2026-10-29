@@ -56,14 +56,46 @@
         <input class="input" type="date" name="joined_at" value="{{ old('joined_at', optional($profile?->joined_at)->format('Y-m-d')) }}">
     </div>
     <div class="field" style="grid-column:1/-1">
-        <label class="label">Assigned shops</label>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:220px;overflow:auto;padding:8px;border:1px solid #e5e7eb;border-radius:8px">
-            @foreach ($shops as $shop)
-                <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
-                    <input type="checkbox" name="shop_ids[]" value="{{ $shop->id }}" @checked(in_array($shop->id, $selectedShops, true))>
-                    <span>{{ $shop->name }} <span class="muted">({{ $shop->code }}{{ $shop->status !== \App\Models\Shop::STATUS_ACTIVE ? ' · '.$shop->statusLabel() : '' }})</span></span>
-                </label>
-            @endforeach
+        <label class="label" id="assign-shops">Assign dokan (shops)</label>
+        <p class="muted" style="margin:0 0 8px;font-size:12px">Tick the shops this salesman will look after. Unassigned shops stay visible to every salesman until you assign them.</p>
+        @php
+            $salesmanId = (int) ($salesman?->id ?? 0);
+            $shopsByArea = $shops->groupBy(fn ($s) => $s->city ?: 'No area');
+        @endphp
+        <div class="sa-assign" x-data="{ q: '' }">
+            <input class="input" type="search" x-model="q" placeholder="Search shop or area" autocomplete="off" aria-label="Search shops to assign">
+            <div class="sa-assign-list">
+                @forelse ($shopsByArea as $area => $areaShops)
+                    <div class="sa-area" x-show="[...$el.querySelectorAll('[data-search]')].some(n => !q || n.dataset.search.includes(q.toLowerCase()))">
+                        <div class="sa-area-head">{{ $area }} <span>{{ $areaShops->count() }}</span></div>
+                        @foreach ($areaShops as $shop)
+                            @php
+                                $other = $shop->assigned_salesman_id && (int) $shop->assigned_salesman_id !== $salesmanId
+                                    ? $shop->assignedSalesman?->name
+                                    : null;
+                                $meta = $shop->code;
+                                if ($shop->status !== \App\Models\Shop::STATUS_ACTIVE) {
+                                    $meta .= ' · '.$shop->statusLabel();
+                                }
+                                if ($other) {
+                                    $meta .= ' · now '.$other;
+                                } elseif (! $shop->assigned_salesman_id) {
+                                    $meta .= ' · unassigned';
+                                }
+                            @endphp
+                            <label class="sa-shop" data-search="{{ strtolower($shop->name.' '.$shop->code.' '.$shop->city) }}" x-show="!q || ($el.dataset.search || '').includes(q.toLowerCase())">
+                                <input type="checkbox" name="shop_ids[]" value="{{ $shop->id }}" @checked(in_array($shop->id, $selectedShops, true))>
+                                <span>
+                                    <b>{{ $shop->name }}</b>
+                                    <small>{{ $meta }}</small>
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                @empty
+                    <p class="muted" style="padding:12px">No shops to assign yet.</p>
+                @endforelse
+            </div>
         </div>
     </div>
     <div class="field" style="grid-column:1/-1">

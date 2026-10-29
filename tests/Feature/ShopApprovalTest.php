@@ -31,6 +31,64 @@ class ShopApprovalTest extends TestCase
         $this->assertGreaterThan(0, (float) $shop->credit_limit);
     }
 
+    public function test_add_shop_form_uses_bangladesh_mobile_field(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+
+        $this->actingAs($salesman)
+            ->get(route('field.shops.create'))
+            ->assertOk()
+            ->assertSee('+880', false)
+            ->assertSee('1712-345678', false)
+            ->assertSee('inputmode="numeric"', false)
+            ->assertDontSee('01234534yr', false);
+    }
+
+    public function test_add_shop_form_uses_district_thana_post_office_and_location(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+
+        $this->actingAs($salesman)
+            ->get(route('field.shops.create'))
+            ->assertOk()
+            ->assertSee('Division', false)
+            ->assertSee('District', false)
+            ->assertSee('Thana', false)
+            ->assertSee('Post office', false)
+            ->assertSee('Location', false)
+            ->assertSee('Add a new location', false);
+
+        $this->actingAs($salesman)->post(route('field.shops.store'), [
+            'name' => 'Mirpur New Shop',
+            'owner_name' => 'Owner',
+            'phone' => '01811220011',
+            'division' => 'Dhaka',
+            'district' => 'Dhaka',
+            'thana' => 'Mirpur',
+            'post_office' => 'Mirpur',
+            'location' => 'Mirpur 10',
+        ])->assertSessionHasNoErrors();
+
+        $shop = Shop::where('name', 'Mirpur New Shop')->firstOrFail();
+        $this->assertSame('Dhaka', $shop->division);
+        $this->assertSame('Dhaka', $shop->district);
+        $this->assertSame('Mirpur', $shop->thana);
+        $this->assertSame('Mirpur', $shop->city);
+        $this->assertSame('Mirpur 10', $shop->location);
+    }
+
+    public function test_salesman_shop_phone_rejects_letters_and_junk(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+
+        $this->actingAs($salesman)->post(route('field.shops.store'), [
+            'name' => 'Bad Phone Shop',
+            'owner_name' => 'Owner',
+            'phone' => '01234534yr3ury38ry38',
+            'city' => 'Dhaka',
+        ])->assertSessionHasErrors('phone');
+    }
+
     public function test_salesman_can_approve_existing_pending_shop(): void
     {
         $salesman = User::where('email', 'karim@field.local')->firstOrFail();

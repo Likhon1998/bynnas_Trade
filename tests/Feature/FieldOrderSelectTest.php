@@ -30,7 +30,7 @@ class FieldOrderSelectTest extends TestCase
         $this->actingAs($salesman)
             ->get(route('field.orders.create'))
             ->assertOk()
-            ->assertSee('Select any active shop from admin')
+            ->assertSee('Your shops and other shops', false)
             ->assertSee($shop->name)
             ->assertSee('Order on behalf of shop');
 
@@ -78,7 +78,7 @@ class FieldOrderSelectTest extends TestCase
         $this->assertSame(1, ShopVisit::query()->where('salesman_id', $salesman->id)->whereNull('checked_out_at')->count());
     }
 
-    public function test_starting_order_at_another_shop_closes_the_open_visit(): void
+    public function test_starting_order_at_another_shop_requires_leaving_first(): void
     {
         $salesman = User::where('email', 'karim@field.local')->firstOrFail();
         $first = Shop::query()
@@ -111,12 +111,16 @@ class FieldOrderSelectTest extends TestCase
 
         $this->actingAs($salesman)
             ->post(route('field.shops.order', $second))
-            ->assertSessionHasNoErrors()
-            ->assertRedirect();
+            ->assertRedirect(route('field.visit.show', ['visit' => $firstVisit, 'leave' => 1]))
+            ->assertSessionHas('error');
 
-        $this->assertNotNull($firstVisit->fresh()->checked_out_at);
-        $this->assertSame(ShopVisit::OUTCOME_FOLLOW_UP, $firstVisit->fresh()->outcome);
-        $this->assertTrue(
+        $this->actingAs($salesman)
+            ->post(route('field.shops.check-in', $second), ['purpose' => 'Shop visit'])
+            ->assertRedirect(route('field.visit.show', ['visit' => $firstVisit, 'leave' => 1]))
+            ->assertSessionHas('error');
+
+        $this->assertNull($firstVisit->fresh()->checked_out_at);
+        $this->assertFalse(
             ShopVisit::query()
                 ->where('salesman_id', $salesman->id)
                 ->where('shop_id', $second->id)
@@ -154,7 +158,7 @@ class FieldOrderSelectTest extends TestCase
             ->assertSessionHasNoErrors()
             ->assertRedirect();
 
-        $this->assertSame($salesman->id, $shop->fresh()->assigned_salesman_id);
+        $this->assertNull($shop->fresh()->assigned_salesman_id);
         $this->assertTrue(
             ShopVisit::query()
                 ->where('salesman_id', $salesman->id)
@@ -197,5 +201,68 @@ class FieldOrderSelectTest extends TestCase
                 ->whereNull('checked_out_at')
                 ->exists()
         );
+    }
+
+    public function test_salesman_sees_assigned_and_other_shops_grouped_by_area(): void
+    {
+        $karim = User::where('email', 'karim@field.local')->firstOrFail();
+        $mine = Shop::query()
+            ->where('assigned_salesman_id', $karim->id)
+            ->where('status', Shop::STATUS_ACTIVE)
+            ->firstOrFail();
+        $mine->update(['city' => 'Dhaka']);
+
+        $other = Shop::query()->create([
+            'code' => 'SHP-AREA2',
+            'name' => 'Chattogram Corner',
+            'owner_name' => 'Area Owner',
+            'phone' => '01870002233',
+            'city' => 'Chattogram',
+            'status' => Shop::STATUS_ACTIVE,
+            'assigned_salesman_id' => null,
+            'credit_limit' => 50000,
+            'approved_at' => now(),
+        ]);
+
+        $this->actingAs($karim)
+            ->get(route('field.shops'))
+            ->assertOk()
+            ->assertSee('My shops', false)
+            ->assertSee('Other shops', false)
+            ->assertSee($mine->name)
+            ->assertSee($other->name)
+            ->assertSee('Dhaka', false)
+            ->assertSee('Chattogram', false)
+            ->assertSee('Unassigned', false);
+    }
+
+    public function test_admin_can_open_salesman_edit_and_assign_shops(): void
+    {
+        $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
+        $karim = User::where('email', 'karim@field.local')->firstOrFail();
+        $shop = Shop::query()->where('status', Shop::STATUS_ACTIVE)->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('salesmen.edit', $karim))
+            ->assertOk()
+            ->assertSee('Assign dokan', false)
+            ->assertSee('name="shop_ids[]"', false)
+            ->assertSee($shop->name);
+
+        $this->actingAs($admin)
+            ->put(route('salesmen.update', $karim), [
+                'name' => $karim->name,
+                'email' => $karim->email,
+                'phone' => $karim->phone,
+                'employee_code' => $karim->salesmanProfile?->employee_code,
+                'territory_id' => $karim->salesmanProfile?->territory_id,
+                'monthly_target' => $karim->salesmanProfile?->monthly_target ?? 0,
+                'is_active' => 1,
+                'shop_ids' => [$shop->id],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('salesmen.show', $karim));
+
+        $this->assertSame($karim->id, $shop->fresh()->assigned_salesman_id);
     }
 }

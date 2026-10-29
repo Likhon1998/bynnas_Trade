@@ -24,6 +24,11 @@ class ShopService
                 'email' => $data['email'] ?? null,
                 'address' => $data['address'] ?? null,
                 'city' => $data['city'] ?? null,
+                'division' => $data['division'] ?? null,
+                'district' => $data['district'] ?? null,
+                'thana' => $data['thana'] ?? null,
+                'post_office' => $data['post_office'] ?? null,
+                'location' => $data['location'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
                 'territory_id' => $data['territory_id'] ?? null,
@@ -33,6 +38,7 @@ class ShopService
                 'payment_terms_days' => $data['payment_terms_days'] ?? 21,
                 'status' => $data['status'] ?? Shop::STATUS_PENDING,
                 'notes' => $data['notes'] ?? null,
+                'photo_path' => $data['photo_path'] ?? null,
                 'grade' => $data['grade'] ?? null,
                 'rating' => $data['rating'] ?? null,
                 'created_by' => $actor?->id,
@@ -64,6 +70,7 @@ class ShopService
 
             $shop->update(collect($data)->only([
                 'name', 'owner_name', 'phone', 'email', 'address', 'city',
+                'division', 'district', 'thana', 'post_office', 'location',
                 'territory_id', 'price_group_id', 'assigned_salesman_id',
                 'credit_limit', 'payment_terms_days', 'status', 'notes', 'grade', 'rating',
             ])->all());

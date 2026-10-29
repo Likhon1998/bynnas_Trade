@@ -75,11 +75,16 @@ class VisitService
                 ]);
             }
 
-            $visit->update([
+            $payload = [
                 'checked_out_at' => now(),
                 'outcome' => $data['outcome'] ?? ($visit->order_id ? ShopVisit::OUTCOME_ORDER_TAKEN : ShopVisit::OUTCOME_NO_ORDER),
                 'notes' => $data['notes'] ?? $visit->notes,
-            ]);
+            ];
+            if (array_key_exists('photo_path', $data) && $data['photo_path']) {
+                $payload['photo_path'] = $data['photo_path'];
+            }
+
+            $visit->update($payload);
 
             return $visit;
         });

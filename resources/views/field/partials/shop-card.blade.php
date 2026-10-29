@@ -5,7 +5,11 @@
     $isOpenHere = $openVisit && $openVisit->shop_id === $shop->id;
     $tone = ['violet', 'blue', 'green', 'amber', 'rose', 'sky', 'teal'][crc32((string) $shop->name) % 7];
 @endphp
-<div class="f-shop {{ $shop->visited_today && ! $isOpenHere ? 'done' : '' }}" data-search="{{ strtolower($shop->name.' '.$shop->code.' '.$shop->owner_name.' '.$shop->city.' '.$shop->territory?->name) }}" data-state="{{ $shop->visited_today ? 'done' : 'todo' }}">
+<div class="f-shop {{ $shop->visited_today && ! $isOpenHere ? 'done' : '' }}"
+    data-search="{{ strtolower($shop->name.' '.$shop->code.' '.$shop->owner_name.' '.$shop->city.' '.$shop->territory?->name.' '.($shop->area_label ?? '')) }}"
+    data-state="{{ $shop->visited_today ? 'done' : 'todo' }}"
+    data-owner="{{ ! empty($shop->is_mine) ? 'mine' : 'other' }}"
+    data-area="{{ $shop->area_label ?? ($shop->city ?: $shop->territory?->name ?: 'No area') }}">
     <div class="f-shop-head">
         <div class="f-shop-ico tone-{{ $tone }} {{ $shop->visited_today ? 'done' : '' }}">
             @if ($shop->visited_today)
@@ -19,7 +23,7 @@
             <div class="f-shop-meta">{{ $shop->owner_name }}{{ $shop->city || $shop->territory ? ' · '.($shop->city ?: $shop->territory?->name) : '' }}</div>
             <div class="f-chips">
                 @if ($isOpenHere)
-                    <span class="f-chip amber">Order in progress</span>
+                    <span class="f-chip amber">I'm here</span>
                 @elseif ($shop->visited_today)
                     <span class="f-chip green">Visited today</span>
                 @elseif ($shop->last_visit_at)
@@ -31,6 +35,13 @@
                     <span class="f-chip amber">Awaiting approval</span>
                 @else
                     <span class="f-chip {{ $outstanding > 0 ? 'red' : '' }}">Baki {{ \App\Support\DemoData::taka($outstanding) }}</span>
+                @endif
+                @if (! empty($shop->is_mine))
+                    <span class="f-chip green">My shop</span>
+                @elseif ($shop->assignedSalesman)
+                    <span class="f-chip">{{ $shop->assignedSalesman->name }}</span>
+                @else
+                    <span class="f-chip amber">Unassigned</span>
                 @endif
                 @if ($shop->priceGroup)
                     <span class="f-chip">{{ $shop->priceGroup->name }}</span>
@@ -44,7 +55,27 @@
         @endif
         <a class="f-btn f-btn-ghost f-btn-icon" href="https://www.google.com/maps/search/?api=1&query={{ $mapQuery }}" target="_blank" rel="noopener" aria-label="Directions to {{ $shop->name }}"><i data-lucide="map-pin"></i></a>
         @if ($isOpenHere)
-            <a class="f-btn f-btn-warn" style="flex:1" href="{{ route('field.visit.show', $openVisit) }}"><i data-lucide="shopping-cart"></i> Continue order</a>
+            <a class="f-btn f-btn-warn" style="flex:1" href="{{ route('field.visit.show', $openVisit) }}"><i data-lucide="store"></i> Continue visit</a>
+            @include('field.partials.leave-shop', [
+                'leaveVisit' => $openVisit,
+                'leaveRedirect' => 'shops',
+                'leaveClass' => 'f-btn f-btn-ghost',
+            ])
+        @elseif ($openVisit)
+            @include('field.partials.leave-shop', [
+                'leaveVisit' => $openVisit,
+                'leaveRedirect' => 'shops',
+                'leaveClass' => 'f-btn f-btn-ghost',
+                'leaveLabel' => 'Leave '.$openVisit->shop?->name.' first',
+            ])
+        @elseif (! empty($shop->is_mine))
+            <form method="post" action="{{ route('field.shops.check-in', $shop) }}" data-checkin style="flex:1">
+                @csrf
+                <input type="hidden" name="purpose" value="Shop visit">
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
+                <button class="f-btn f-btn-primary" style="width:100%" type="submit"><i data-lucide="map-pin"></i> Visit</button>
+            </form>
         @else
             <form method="post" action="{{ route('field.shops.order', $shop) }}" data-checkin style="flex:1">
                 @csrf

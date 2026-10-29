@@ -51,12 +51,48 @@ class FieldOrderBakiTest extends TestCase
             ->assertSee('fieldOrder(', false)
             ->assertSee($product->name)
             ->assertSee('f-price-edit', false)
-            ->assertSee('paid_now', false)
+            ->assertDontSee('paid_now', false)
+            ->assertSee('No payment on this order now', false)
+            ->assertSee('What did you talk about with the owner?', false)
             ->assertSee('This order', false)
             ->assertSee('Previous baki', false)
             ->assertSee('Discount', false)
             ->assertSee('+50', false)
             ->assertSee('+100', false);
+    }
+
+    public function test_send_order_requires_talk_notes(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+        $shop = Shop::query()->where('status', Shop::STATUS_ACTIVE)->firstOrFail();
+        $shop->update(['assigned_salesman_id' => $salesman->id]);
+        $product = Product::query()
+            ->where('status', Product::STATUS_ACTIVE)
+            ->where('is_published', true)
+            ->firstOrFail();
+
+        ShopVisit::query()
+            ->where('salesman_id', $salesman->id)
+            ->whereNull('checked_out_at')
+            ->update(['checked_out_at' => now()]);
+
+        $visit = ShopVisit::query()->create([
+            'shop_id' => $shop->id,
+            'salesman_id' => $salesman->id,
+            'checked_in_at' => now(),
+        ]);
+
+        $this->actingAs($salesman)
+            ->post(route('field.visit.order', $visit), [
+                'items' => [[
+                    'product_id' => $product->id,
+                    'quantity' => 1,
+                    'unit_price' => (float) $product->priceForGroup($shop->priceGroup),
+                ]],
+            ])
+            ->assertSessionHasErrors('notes');
+
+        $this->assertTrue($visit->fresh()->isOpen());
     }
 
     public function test_salesman_can_reduce_order_total_with_discount(): void
@@ -93,6 +129,7 @@ class FieldOrderBakiTest extends TestCase
                 ]],
                 'discount_total' => $discount,
                 'paid_now' => 0,
+                'notes' => 'Talked about a small discount on this order.',
             ])
             ->assertSessionHasNoErrors();
 
@@ -159,7 +196,7 @@ class FieldOrderBakiTest extends TestCase
                 ]],
                 'paid_now' => $paidNow,
                 'payment_method' => Payment::METHOD_CASH,
-                'notes' => 'Owner paid half, rest baki',
+                'notes' => 'Owner will pay on delivery',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect();
@@ -168,10 +205,39 @@ class FieldOrderBakiTest extends TestCase
 
         $this->assertSame(Order::STATUS_PENDING_AUDIT, $order->status);
         $this->assertFalse((bool) $order->advance_required);
-        $this->assertNotNull($order->invoice_id);
+        $this->assertSame(0, Payment::query()->where('shop_id', $shop->id)->where('created_by', $salesman->id)->count());
 
-        $this->assertEqualsWithDelta($baki, $order->collectibleBalance(), 0.01);
+        $this->actingAs($salesman)
+            ->get(route('field.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Payment after delivery', false)
+            ->assertDontSee('name="amount"', false);
 
+        $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
+        $this->actingAs($admin)
+            ->post(route('orders.approve', $order), ['credit_override' => 1])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($salesman)
+            ->post(route('field.orders.collect', $order), [
+                'amount' => $paidNow,
+                'method' => Payment::METHOD_CASH,
+            ])
+            ->assertSessionHasErrors('amount');
+
+        $this->actingAs($salesman)
+            ->post(route('field.orders.deliver', $order))
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($salesman)
+            ->post(route('field.orders.collect', $order), [
+                'amount' => $paidNow,
+                'method' => Payment::METHOD_CASH,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $order->refresh();
+        $this->assertEqualsWithDelta($baki, $order->collectibleBalance(), 0.05);
         $this->assertTrue(
             Payment::query()
                 ->where('shop_id', $shop->id)
@@ -180,12 +246,6 @@ class FieldOrderBakiTest extends TestCase
                 ->where('amount', $paidNow)
                 ->exists()
         );
-
-        $this->actingAs($salesman)
-            ->get(route('field.orders.show', $order))
-            ->assertOk()
-            ->assertSee('Baki', false)
-            ->assertSee('Payment at shop', false);
     }
 
     public function test_full_baki_order_stays_pending_audit_without_advance(): void
@@ -217,6 +277,7 @@ class FieldOrderBakiTest extends TestCase
                     'unit_price' => (float) $product->priceForGroup($shop->priceGroup),
                 ]],
                 'paid_now' => 0,
+                'notes' => 'Owner will take the full amount as baki.',
             ])
             ->assertSessionHasNoErrors();
 
@@ -228,8 +289,8 @@ class FieldOrderBakiTest extends TestCase
         $this->actingAs($salesman)
             ->get(route('field.orders.show', $order))
             ->assertOk()
-            ->assertSee('Payment at shop', false)
-            ->assertDontSee('Payment starts when the goods are delivered');
+            ->assertSee('Payment after delivery', false)
+            ->assertDontSee('name="amount"', false);
 
         $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
         $owedBefore = (float) $shop->fresh()->outstanding_balance;
@@ -279,12 +340,18 @@ class FieldOrderBakiTest extends TestCase
                     'unit_price' => $unit,
                 ]],
                 'paid_now' => 0,
+                'notes' => 'Talked about paying this bill after delivery.',
             ])
             ->assertSessionHasNoErrors();
 
         $order = Order::query()->where('visit_id', $visit->id)->firstOrFail();
         $admin = User::where('email', 'admin@bynnastrade.com')->firstOrFail();
         $this->actingAs($admin)->post(route('orders.invoice', $order))->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('orders.approve', $order), ['credit_override' => 1])->assertSessionHasNoErrors();
+
+        $this->actingAs($salesman)
+            ->post(route('field.orders.deliver', $order))
+            ->assertSessionHasNoErrors();
 
         $order->refresh()->load(['shop', 'invoice']);
         $prevBefore = $order->previousShopBaki();

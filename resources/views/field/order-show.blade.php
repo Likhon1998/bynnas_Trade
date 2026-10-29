@@ -49,7 +49,7 @@
                 <div class="f-flash ok"><i data-lucide="check-circle-2"></i><span>Paid in full.</span></div>
             @endif
 
-            @if ($dueNow > 0.009)
+            @if ($dueNow > 0.009 && $order->canCollectNow())
                 <form id="collect-bill" class="f-od-pay" method="post" action="{{ route('field.orders.collect', $order) }}"
                       x-data="{
                           due: {{ json_encode($dueNow) }},
@@ -63,7 +63,7 @@
                     @csrf
                     <div class="f-od-pay-head">
                         <strong>Payment at shop</strong>
-                        <span>This order due {{ \App\Support\DemoData::taka($dueNow) }} · collect at any stage</span>
+                        <span>This order due {{ \App\Support\DemoData::taka($dueNow) }} · goods delivered, collect now</span>
                     </div>
                     @if (! empty($pendingBill))
                         <p class="f-muted f-small" style="margin:0">Office is confirming {{ \App\Support\DemoData::taka($pendingBill->amount) }}.</p>
@@ -100,6 +100,13 @@
                         </div>
                     </template>
                 </form>
+            @elseif ($dueNow > 0.009)
+                <div class="f-od-pay f-od-pay-wait">
+                    <div class="f-od-pay-head">
+                        <strong>Payment after delivery</strong>
+                        <span>This order is {{ \App\Support\DemoData::taka($dueNow) }} baki. Collect when the goods are delivered.</span>
+                    </div>
+                </div>
             @endif
 
             @if ($order->canDeliver())

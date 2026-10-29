@@ -505,7 +505,10 @@ class LogicGuardsTest extends TestCase
 
         $this->actingAs($this->salesman)->post(route('field.shops.check-in', $shop))->assertSessionHasNoErrors();
         $visit = ShopVisit::where('salesman_id', $this->salesman->id)->latest('id')->firstOrFail();
-        $items = ['items' => [['product_id' => $this->product()->id, 'quantity' => 1]]];
+        $items = [
+            'items' => [['product_id' => $this->product()->id, 'quantity' => 1]],
+            'notes' => 'Talked about restock.',
+        ];
         $stale = ShopVisit::findOrFail($visit->id);
 
         $this->post(route('field.visit.order', $visit), $items)->assertSessionHasNoErrors();
@@ -513,7 +516,10 @@ class LogicGuardsTest extends TestCase
         $this->assertSame(1, Order::where('visit_id', $visit->id)->count());
 
         $this->post(route('field.shops.check-in', $shop))->assertSessionHasNoErrors();
-        $this->post(route('field.shops.check-in', $shop))->assertSessionHasErrors();
+        $open = ShopVisit::where('salesman_id', $this->salesman->id)->whereNull('checked_out_at')->firstOrFail();
+        $this->post(route('field.shops.check-in', $shop))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('field.visit.show', $open));
         $this->assertSame(1, ShopVisit::where('salesman_id', $this->salesman->id)->whereNull('checked_out_at')->count());
     }
 

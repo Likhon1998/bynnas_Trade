@@ -139,6 +139,8 @@
                         <th>Salesman</th>
                         <th>Shop</th>
                         <th>Purpose</th>
+                        <th>Talked</th>
+                        <th>Photo</th>
                         <th>Outcome</th>
                         <th>Order</th>
                         <th>Duration</th>
@@ -159,6 +161,24 @@
                                 @endif
                             </td>
                             <td>{{ $visit->purpose ?: '—' }}</td>
+                            <td style="max-width:220px">
+                                @if ($visit->notes)
+                                    {{ \Illuminate\Support\Str::limit($visit->notes, 90) }}
+                                @else
+                                    <span class="muted">No note</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if ($visit->photoUrl())
+                                    <a href="{{ $visit->photoUrl() }}" target="_blank" rel="noopener">
+                                        <img src="{{ $visit->photoUrl() }}" alt="Visit photo" class="fa-thumb">
+                                    </a>
+                                @elseif ($visit->needsPhotoEvidence() && ! $visit->isOpen())
+                                    <span class="fa-pill low">No photo</span>
+                                @else
+                                    <span class="muted">—</span>
+                                @endif
+                            </td>
                             <td><x-badge :status="$visit->outcomeLabel()" /></td>
                             <td>
                                 @if ($visit->order)
@@ -176,7 +196,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="muted" style="padding:24px;text-align:center">No visits {{ $period === 'all' ? 'recorded' : $periodLabel }}.</td></tr>
+                        <tr><td colspan="9" class="muted" style="padding:24px;text-align:center">No visits {{ $period === 'all' ? 'recorded' : $periodLabel }}.</td></tr>
                     @endforelse
                 </tbody>
             </table>

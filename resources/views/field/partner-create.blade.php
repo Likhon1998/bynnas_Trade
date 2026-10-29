@@ -13,6 +13,11 @@
         'phone' => $s->phone,
         'email' => $s->email,
         'city' => $s->city,
+        'division' => $s->division,
+        'district' => $s->district,
+        'thana' => $s->thana,
+        'post_office' => $s->post_office,
+        'location' => $s->location,
     ])->values();
     $initial = [
         'shop_id' => (string) old('shop_id', $selectedShop?->id ?? ''),
@@ -21,6 +26,11 @@
         'email' => old('email', $selectedShop?->email ?? ''),
         'phone' => old('phone', $selectedShop?->phone ?? ''),
         'city' => old('city', $selectedShop?->city ?? ''),
+        'division' => old('division', $selectedShop?->division ?? ''),
+        'district' => old('district', $selectedShop?->district ?? ''),
+        'thana' => old('thana', $selectedShop?->thana ?? ''),
+        'post_office' => old('post_office', $selectedShop?->post_office ?? ''),
+        'location' => old('location', $selectedShop?->location ?? ''),
         'business_type' => old('business_type', 'retailer'),
     ];
 @endphp
@@ -70,11 +80,6 @@
                                     @endforeach
                                 </div>
                             </div>
-                            <label class="as-field">
-                                <span class="as-label">Area / city</span>
-                                <input class="f-input @error('city') is-invalid @enderror" name="city" x-model="f.city" maxlength="80" placeholder="e.g. Mirpur 10" autocapitalize="words">
-                                @error('city')<span class="f-error">{{ $message }}</span>@enderror
-                            </label>
                         </div>
                     </section>
                 </div>
@@ -98,16 +103,27 @@
                             </label>
                             <label class="as-field">
                                 <span class="as-label">Owner mobile <em class="as-req">*</em></span>
-                                <span class="as-prefix">
-                                    <i data-lucide="phone"></i>
-                                    <input class="f-input @error('phone') is-invalid @enderror" name="phone" x-model="f.phone" type="tel" inputmode="tel" maxlength="20" required placeholder="01XXXXXXXXX">
-                                </span>
+                                <div x-ref="phoneField" @bd-phone="f.phone = $event.detail">
+                                    <x-bd-phone-input
+                                        name="phone"
+                                        :value="old('phone', $selectedShop?->phone)"
+                                        variant="field"
+                                        :invalid="$errors->has('phone')"
+                                    />
+                                </div>
                                 @error('phone')<span class="f-error">{{ $message }}</span>@enderror
                             </label>
                         </div>
                     </section>
                 </div>
             </div>
+
+            <section class="f-panel as-sec">
+                <div class="as-sec-head"><span class="f-ico tone-teal"><i data-lucide="navigation"></i></span><div><h2>Address</h2><p>Division, district, thana, post office, then location</p></div></div>
+                <div class="as-sec-body">
+                    @include('field.partials.geo-picker')
+                </div>
+            </section>
 
             <section class="f-panel as-sec">
                 <div class="as-sec-body">
@@ -154,12 +170,19 @@
 @endsection
 
 @push('scripts')
+@include('field.partials.geo-cascade-script')
 <script>
 function partnerForm(initial, shops) {
     return {
+        ...geoCascade(),
         f: initial,
         shops,
         saving: false,
+        async init() {
+            this.syncCity();
+            await this.bootGeo();
+            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        },
         pick() {
             const s = this.shops.find((x) => String(x.id) === String(this.f.shop_id));
             if (!s) return;
@@ -167,7 +190,16 @@ function partnerForm(initial, shops) {
             this.f.contact_name = s.owner || '';
             this.f.phone = s.phone || '';
             this.f.email = s.email || this.f.email;
-            this.f.city = s.city || '';
+            this.applyGeo(s);
+            this.$nextTick(() => {
+                const el = this.$refs.phoneField?.querySelector('.bd-phone');
+                if (!el || typeof Alpine === 'undefined') return;
+                const data = Alpine.$data(el);
+                if (data && typeof data.normalize === 'function') {
+                    data.normalize(this.f.phone);
+                    if (typeof data.emit === 'function') data.emit();
+                }
+            });
         },
     };
 }

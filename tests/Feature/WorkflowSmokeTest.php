@@ -21,7 +21,9 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -452,12 +454,14 @@ class WorkflowSmokeTest extends TestCase
         $this->ok($this->get(route('field.visit.show', $visit)), 'visit page');
         $this->ok($this->post(route('field.visit.order', $visit), [
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'notes' => 'Talked about restock of chargers.',
         ]), 'visit order');
 
         $visit->refresh();
         $this->assertFalse($visit->isOpen(), 'Visit should close automatically once the order is sent.');
         $this->assertSame(ShopVisit::OUTCOME_ORDER_TAKEN, $visit->outcome);
         $this->assertNotNull($visit->order_id);
+        $this->assertStringContainsString('chargers', (string) $visit->notes);
 
         $this->ok($this->get(route('field.visit.show', $visit)), 'closed visit page');
         $this->ok($this->get(route('field.orders.show', $visit->order_id)), 'order page');
@@ -471,7 +475,12 @@ class WorkflowSmokeTest extends TestCase
         $second = ShopVisit::where('salesman_id', $this->salesman->id)->latest('id')->firstOrFail();
         $this->assertNotSame($visit->id, $second->id);
         $this->get(route('field.visit.show', $second))->assertOk()->assertSee('Review order');
-        $this->ok($this->post(route('field.visit.checkout', $second), ['outcome' => 'no_order', 'notes' => 'Owner away']), 'check out without order');
+        Storage::fake('public');
+        $this->ok($this->post(route('field.visit.checkout', $second), [
+            'outcome' => 'no_order',
+            'notes' => 'Owner away',
+            'photo' => UploadedFile::fake()->image('visit.jpg', 640, 480),
+        ]), 'check out without order');
         $this->assertFalse($second->fresh()->isOpen());
     }
 
@@ -504,7 +513,12 @@ class WorkflowSmokeTest extends TestCase
         $visit = ShopVisit::where('salesman_id', $this->salesman->id)->where('shop_id', $shop->id)->firstOrFail();
         $this->assertTrue($visit->isOpen(), 'Adding with check-in should start a visit.');
         $this->get(route('field.visit.show', $visit))->assertOk()->assertSee('Review order');
-        $this->ok($this->post(route('field.visit.checkout', $visit), ['outcome' => 'follow_up', 'notes' => 'Interested']), 'end visit');
+        Storage::fake('public');
+        $this->ok($this->post(route('field.visit.checkout', $visit), [
+            'outcome' => 'follow_up',
+            'notes' => 'Interested',
+            'photo' => UploadedFile::fake()->image('shop.jpg', 640, 480),
+        ]), 'end visit');
 
         $this->post(route('field.shops.store'), [
             'name' => 'Duplicate', 'owner_name' => 'Someone', 'phone' => '01987654321',

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Shop extends Model
 {
@@ -22,9 +23,10 @@ class Shop extends Model
 
     protected $fillable = [
         'code', 'name', 'owner_name', 'phone', 'email', 'address', 'city',
+        'division', 'district', 'thana', 'post_office', 'location',
         'latitude', 'longitude', 'territory_id', 'price_group_id', 'assigned_salesman_id',
         'credit_limit', 'outstanding_balance', 'payment_terms_days',
-        'status', 'notes', 'grade', 'rating', 'created_by', 'approved_at',
+        'status', 'notes', 'photo_path', 'grade', 'rating', 'created_by', 'approved_at',
     ];
 
     protected function casts(): array
@@ -42,6 +44,15 @@ class Shop extends Model
     public function isFieldAdded(): bool
     {
         return $this->created_by !== null && $this->created_by === $this->assigned_salesman_id;
+    }
+
+    public function photoUrl(): ?string
+    {
+        if (! $this->photo_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->photo_path);
     }
 
     public function mapUrl(): ?string

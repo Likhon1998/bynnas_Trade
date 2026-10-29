@@ -38,6 +38,7 @@ class SalesmanOrderPriceTest extends TestCase
                     'quantity' => 2,
                     'unit_price' => $sold,
                 ]],
+                'notes' => 'Owner asked for a better price on this line.',
             ])
             ->assertSessionHasNoErrors();
 

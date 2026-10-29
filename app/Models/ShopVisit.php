@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class ShopVisit extends Model
 {
@@ -19,7 +20,7 @@ class ShopVisit extends Model
 
     protected $fillable = [
         'salesman_id', 'shop_id', 'checked_in_at', 'checked_out_at',
-        'purpose', 'outcome', 'notes', 'latitude', 'longitude', 'order_id',
+        'purpose', 'outcome', 'notes', 'photo_path', 'latitude', 'longitude', 'order_id',
     ];
 
     protected function casts(): array
@@ -50,6 +51,25 @@ class ShopVisit extends Model
     public function isOpen(): bool
     {
         return $this->checked_out_at === null;
+    }
+
+    public function isAssignedRoute(): bool
+    {
+        return $this->shop_id && (int) $this->shop?->assigned_salesman_id === (int) $this->salesman_id;
+    }
+
+    public function needsPhotoEvidence(): bool
+    {
+        return $this->isAssignedRoute() && ! $this->order_id;
+    }
+
+    public function photoUrl(): ?string
+    {
+        if (! $this->photo_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->photo_path);
     }
 
     public function outcomeLabel(): string

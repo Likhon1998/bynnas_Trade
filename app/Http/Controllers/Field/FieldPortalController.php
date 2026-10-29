@@ -15,6 +15,7 @@ use App\Models\Reward;
 use App\Models\SalesTarget;
 use App\Models\Shop;
 use App\Models\ShopVisit;
+use App\Models\Territory;
 use App\Models\User;
 use App\Services\SalaryService;
 use App\Rules\BangladeshPhone;
@@ -25,6 +26,7 @@ use App\Services\InvoiceService;
 use App\Services\OrderService;
 use App\Services\PartnerInquiryService;
 use App\Services\PaymentService;
+use App\Services\BangladeshGeoService;
 use App\Services\ShopService;
 use App\Services\TargetService;
 use App\Services\VisitService;
@@ -58,6 +60,7 @@ class FieldPortalController extends Controller
         private PaymentService $payments,
         private FulfilmentService $fulfilment,
         private CollectionSummaryService $collections,
+        private BangladeshGeoService $geo,
     ) {}
 
     public function dashboard(Request $request)
@@ -106,6 +109,18 @@ class FieldPortalController extends Controller
             'progress' => $target > 0 ? min(100, round($achieved / $target * 100)) : null,
             'daysLeft' => (int) now()->diffInDays(now()->endOfMonth()) + 1,
             'todayVisits' => ShopVisit::query()->where('salesman_id', $user->id)->whereDate('checked_in_at', today())->count(),
+            'visitWeek' => $this->visitDayLog($user, today()->subDays(6), true)->values(),
+            'todayVisitList' => ShopVisit::query()->with('shop')
+                ->where('salesman_id', $user->id)
+                ->whereDate('checked_in_at', today())
+                ->latest('checked_in_at')
+                ->get(),
+            'todayAddedList' => Shop::query()
+                ->where('created_by', $user->id)
+                ->whereDate('created_at', today())
+                ->latest()
+                ->get(),
+            'todayAddedCount' => Shop::query()->where('created_by', $user->id)->whereDate('created_at', today())->count(),
             'todayOrderCount' => (clone $todayOrders)->count(),
             'todayOrderTotal' => (float) (clone $todayOrders)->sum('total'),
             'waitingApproval' => Order::query()->where('salesman_id', $user->id)
@@ -127,12 +142,66 @@ class FieldPortalController extends Controller
         ]);
     }
 
+    public function visitsLog(Request $request)
+    {
+        $user = $request->user();
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ]);
+
+        $fromInput = $data['from'] ?? null;
+        $toInput = $data['to'] ?? null;
+        if ($fromInput && ! $toInput) {
+            $toInput = $fromInput;
+        } elseif ($toInput && ! $fromInput) {
+            $fromInput = $toInput;
+        }
+
+        $filtered = (bool) ($fromInput || $toInput);
+        $from = $fromInput ? Carbon::parse($fromInput)->startOfDay() : now()->subDays(29)->startOfDay();
+        $to = $toInput ? Carbon::parse($toInput)->endOfDay() : now()->endOfDay();
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        $days = $this->visitDayLog($user, $from, false, $to);
+        if (! $filtered && ! $days->has(today()->toDateString())) {
+            $days = collect([
+                today()->toDateString() => [
+                    'date' => today(),
+                    'visits' => 0,
+                    'shops' => 0,
+                    'rows' => collect(),
+                ],
+            ])->merge($days);
+        }
+
+        $rows = $days->flatMap(fn ($day) => $day['rows']);
+
+        return view('field.visits', [
+            'days' => $days,
+            'shopTotal' => $rows->unique('shop_id')->count(),
+            'visitTotal' => $rows->count(),
+            'openVisit' => $this->openVisit($user),
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'filtered' => $filtered,
+            'singleDay' => $from->isSameDay($to),
+        ]);
+    }
+
     public function shops(Request $request)
     {
         $user = $request->user();
+        $shops = $this->catalogShops($user);
+        $mineCount = $shops->where('is_mine', true)->count();
 
         return view('field.shops', [
-            'shops' => $this->shopsWithVisits($user),
+            'shops' => $shops,
+            'mineCount' => $mineCount,
+            'otherCount' => $shops->count() - $mineCount,
+            'areaCounts' => $shops->groupBy('area_label')->map->count()->sortDesc(),
             'openVisit' => $this->openVisit($user),
             'addedShops' => Shop::query()->withCount('users')->where('created_by', $user->id)->latest()->limit(50)->get(),
         ]);
@@ -148,6 +217,31 @@ class FieldPortalController extends Controller
         ]);
     }
 
+    public function geoDivisions(): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(['data' => $this->geo->divisions()]);
+    }
+
+    public function geoDistricts(Request $request): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(['data' => $this->geo->districts((string) $request->query('division', ''))]);
+    }
+
+    public function geoThanas(Request $request): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(['data' => $this->geo->thanas((string) $request->query('district', ''))]);
+    }
+
+    public function geoPostOffices(Request $request): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(['data' => $this->geo->postOffices((string) $request->query('district', ''), (string) $request->query('thana', ''))]);
+    }
+
+    public function geoLocations(Request $request): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(['data' => $this->geo->locations((string) $request->query('thana', ''), $request->query('post_office'))]);
+    }
+
     public function storeShop(Request $request)
     {
         $user = $request->user();
@@ -159,12 +253,18 @@ class FieldPortalController extends Controller
             'phone' => ['nullable', 'string', new BangladeshPhone],
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:80'],
+            'division' => ['nullable', 'string', 'max:80'],
+            'district' => ['nullable', 'string', 'max:80'],
+            'thana' => ['nullable', 'string', 'max:80'],
+            'post_office' => ['nullable', 'string', 'max:120'],
+            'location' => ['nullable', 'string', 'max:160'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'sells' => ['nullable', 'array', 'max:8'],
             'sells.*' => ['string', Rule::in(self::SHOP_CATEGORIES)],
             'interest' => ['nullable', Rule::in(array_keys(self::SHOP_INTEREST))],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'login_email' => [$createLogin ? 'required' : 'nullable', 'email', 'max:180'],
             'login_password' => [$createLogin ? 'required' : 'nullable', 'string', 'min:8', 'max:64'],
         ], [
@@ -185,6 +285,17 @@ class FieldPortalController extends Controller
 
         $data['name'] = trim((string) ($data['name'] ?? '')) ?: 'New shop '.$this->shops->nextCode();
         $data['owner_name'] = trim((string) ($data['owner_name'] ?? ''));
+        foreach (['division', 'district', 'thana', 'post_office', 'location'] as $geoKey) {
+            $data[$geoKey] = trim((string) ($data[$geoKey] ?? '')) ?: null;
+        }
+        if (! empty($data['thana'])) {
+            $data['city'] = $data['thana'];
+        } elseif (! empty($data['district'])) {
+            $data['city'] = $data['district'];
+        }
+        if (! empty($data['location']) && empty($data['address'])) {
+            $data['address'] = $data['location'];
+        }
         $data['notes'] = collect([
             ! empty($data['sells']) ? 'Sells: '.implode(', ', $data['sells']) : null,
             ! empty($data['interest']) ? 'Interest: '.self::SHOP_INTEREST[$data['interest']] : null,
@@ -208,6 +319,8 @@ class FieldPortalController extends Controller
         }
         unset($data['login_email'], $data['login_password']);
 
+        unset($data['photo']);
+
         $shop = $this->shops->create($data + [
             'status' => Shop::STATUS_ACTIVE,
             'assigned_salesman_id' => $user->id,
@@ -215,6 +328,11 @@ class FieldPortalController extends Controller
             // Match admin form default so orders are not blocked by a zero credit limit.
             'credit_limit' => $data['credit_limit'] ?? 150000,
         ], $user, $credential);
+
+        if ($file = $request->file('photo')) {
+            $path = $file->store('shops/'.$shop->id, 'public');
+            $shop->forceFill(['photo_path' => $path])->save();
+        }
 
         try {
             $this->notifications->shopAddedFromField($shop, $user);
@@ -431,6 +549,11 @@ class FieldPortalController extends Controller
             'email' => ['required', 'email', 'max:180'],
             'phone' => ['required', 'string', 'max:20', new BangladeshPhone(required: true)],
             'city' => ['nullable', 'string', 'max:80'],
+            'division' => ['nullable', 'string', 'max:80'],
+            'district' => ['nullable', 'string', 'max:80'],
+            'thana' => ['nullable', 'string', 'max:80'],
+            'post_office' => ['nullable', 'string', 'max:120'],
+            'location' => ['nullable', 'string', 'max:160'],
             'business_type' => ['nullable', Rule::in(array_keys(PartnerInquiry::BUSINESS_TYPES))],
             'message' => ['nullable', 'string', 'max:2000'],
         ], [
@@ -438,6 +561,12 @@ class FieldPortalController extends Controller
         ]);
         $data['phone'] = BangladeshPhone::normalize($data['phone']);
         $data['email'] = strtolower(trim($data['email']));
+        if (! empty($data['thana'])) {
+            $data['city'] = $data['thana'];
+        } elseif (! empty($data['district'])) {
+            $data['city'] = $data['district'];
+        }
+        unset($data['division'], $data['district'], $data['thana'], $data['post_office'], $data['location']);
 
         if (User::query()->where('email', $data['email'])->where('portal', '!=', User::PORTAL_SHOP)->exists()) {
             throw ValidationException::withMessages(['email' => 'This email belongs to a staff or salesman account. Use the shop owner\'s own email.']);
@@ -485,6 +614,10 @@ class FieldPortalController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
+        if ($redirect = $this->continueOrLeaveOpenVisit($request, $shop, 'Continue visit at '.$shop->name.'.')) {
+            return $redirect;
+        }
+
         $visit = $this->visits->checkIn($request->user(), $shop, $data);
 
         return redirect()->route('field.visit.show', $visit)->with('success', 'Checked in at '.$shop->name);
@@ -495,8 +628,12 @@ class FieldPortalController extends Controller
     {
         $user = $request->user();
 
+        $shops = $this->catalogShops($user, activeOnly: true);
+
         return view('field.order-create', [
-            'shops' => $this->orderableShops($user),
+            'shops' => $shops,
+            'mineCount' => $shops->where('is_mine', true)->count(),
+            'areaCounts' => $shops->groupBy('area_label')->map->count()->sortDesc(),
             'openVisit' => $this->openVisit($user),
         ]);
     }
@@ -517,24 +654,8 @@ class FieldPortalController extends Controller
             ]);
         }
 
-        // Claim only unassigned shops. Do not steal shops already on another salesman's route.
-        if (! $shop->assigned_salesman_id) {
-            $shop->forceFill(['assigned_salesman_id' => $request->user()->id])->save();
-        }
-
-        $open = $this->openVisit($request->user());
-        if ($open && $open->shop_id === $shop->id) {
-            return redirect()->route('field.visit.show', $open)
-                ->with('success', 'Continue ordering for '.$shop->name.'.');
-        }
-
-        // Open visits never hold a submitted order (submit checks out). Closing lets the
-        // salesman switch shops without getting stuck behind a greyed-out Order button.
-        if ($open) {
-            $this->visits->checkOut($open, [
-                'outcome' => ShopVisit::OUTCOME_FOLLOW_UP,
-                'notes' => trim(($open->notes ? $open->notes."\n" : '').'Closed to start order at '.$shop->name),
-            ], $request->user());
+        if ($redirect = $this->continueOrLeaveOpenVisit($request, $shop, 'Continue ordering for '.$shop->name.'.')) {
+            return $redirect;
         }
 
         $data = $request->validate([
@@ -597,12 +718,7 @@ class FieldPortalController extends Controller
     {
         abort_unless($visit->salesman_id === $request->user()->id, 403);
 
-        $data = $request->validate([
-            'outcome' => ['required', 'in:order_taken,no_order,closed,follow_up'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        $visit = $this->visits->checkOut($visit, $data, $request->user());
+        $visit = $this->closeVisitFromRequest($request, $visit);
 
         return redirect()->route('field.dashboard')
             ->with('success', 'Visit at '.$visit->shop?->name.' saved · '.$visit->outcomeLabel().'.');
@@ -621,28 +737,16 @@ class FieldPortalController extends Controller
             default => route('field.shops'),
         };
 
-        if ($visit->isOpen()) {
-            $outcome = $visit->order_id
-                ? ShopVisit::OUTCOME_ORDER_TAKEN
-                : (string) $request->input('outcome', ShopVisit::OUTCOME_NO_ORDER);
+        $beacon = $request->header('X-Beacon') === '1' || $request->boolean('beacon');
 
-            if (! in_array($outcome, [
-                ShopVisit::OUTCOME_ORDER_TAKEN,
-                ShopVisit::OUTCOME_NO_ORDER,
-                ShopVisit::OUTCOME_CLOSED,
-                ShopVisit::OUTCOME_FOLLOW_UP,
-            ], true)) {
-                $outcome = ShopVisit::OUTCOME_NO_ORDER;
-            }
-
-            $visit = $this->visits->checkOut($visit, [
-                'outcome' => $outcome,
-                'notes' => $request->input('notes'),
-            ], $request->user());
+        // Phone back / tab close must not invent an empty visit. The resume banner
+        // keeps the check-in open until I'm leaving or an order is sent.
+        if ($beacon) {
+            return response()->noContent();
         }
 
-        if ($request->header('X-Beacon') === '1' || $request->boolean('beacon')) {
-            return response()->noContent();
+        if ($visit->isOpen()) {
+            $visit = $this->closeVisitFromRequest($request, $visit);
         }
 
         $label = $visit->fresh()?->outcomeLabel() ?? 'Saved';
@@ -660,7 +764,7 @@ class FieldPortalController extends Controller
         }
 
         $data = $request->validate([
-            'notes' => ['nullable', 'string', 'max:1000'],
+            'notes' => ['required', 'string', 'max:1000'],
             'paid_now' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'payment_method' => ['nullable', Rule::in([
                 \App\Models\Payment::METHOD_CASH,
@@ -673,12 +777,13 @@ class FieldPortalController extends Controller
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'items.*.unit_price' => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
+        ], [
+            'notes.required' => 'Write what you talked about with the owner.',
         ]);
 
-        $paidNow = round((float) ($data['paid_now'] ?? 0), 2);
         $discount = round((float) ($data['discount_total'] ?? 0), 2);
 
-        $order = DB::transaction(function () use ($request, $visit, $data, $paidNow, $discount) {
+        $order = DB::transaction(function () use ($request, $visit, $data, $discount) {
             $order = $this->orders->collectFromSalesman(
                 $request->user(),
                 $visit->shop,
@@ -688,33 +793,15 @@ class FieldPortalController extends Controller
                 $discount,
             );
 
-            $paidNow = min($paidNow, (float) $order->total);
-
-            if ($paidNow > 0) {
-                $order = $this->orders->recordFieldCollection(
-                    $order,
-                    $request->user(),
-                    $paidNow,
-                    $data['payment_method'] ?? \App\Models\Payment::METHOD_CASH,
-                    $data['payment_reference'] ?? null,
-                );
-            }
-
-            $this->visits->checkOut($visit->fresh(), ['outcome' => ShopVisit::OUTCOME_ORDER_TAKEN], $request->user());
+            $this->visits->checkOut($visit->fresh(), [
+                'outcome' => ShopVisit::OUTCOME_ORDER_TAKEN,
+                'notes' => $data['notes'],
+            ], $request->user());
 
             return $order;
         });
 
-        $paidNow = min($paidNow, (float) $order->total);
-        $baki = max(0, round((float) $order->total - $paidNow, 2));
-        $msg = 'Order '.$order->number.' sent for approval.';
-        if ($paidNow > 0) {
-            $msg .= ' Collected ৳ '.number_format($paidNow, 0).' now'
-                .($baki > 0.009 ? '; baki ৳ '.number_format($baki, 0).' later' : '')
-                .'. Office will verify the payment.';
-        } else {
-            $msg .= ' Shop did not pay now — collection starts after delivery.';
-        }
+        $msg = 'Order '.$order->number.' sent for approval. Payment is collected when you deliver.';
 
         return redirect()
             ->route('field.orders.show', $order)
@@ -786,6 +873,12 @@ class FieldPortalController extends Controller
     public function collectBill(Request $request, Order $order)
     {
         abort_unless($this->salesmanCanAccessOrder($request->user(), $order), 403);
+
+        if (! $order->canCollectNow()) {
+            throw ValidationException::withMessages([
+                'amount' => 'Payment starts when this order is delivered.',
+            ]);
+        }
 
         $data = $request->validate([
             'amount' => ['nullable', 'numeric', 'min:0'],
@@ -954,8 +1047,63 @@ class FieldPortalController extends Controller
         return ShopVisit::query()->where('salesman_id', $user->id)->whereNull('checked_out_at')->first();
     }
 
-    /** @return Collection<int, Shop> active and pending assigned shops, each with last_visit_at and visited_today */
+    /**
+     * Daily visit counts for a salesman since $from (newest day first).
+     *
+     * @return Collection<string, array{date: Carbon, visits: int, shops: int, rows: Collection}>
+     */
+    private function visitDayLog(User $user, Carbon $from, bool $fillDays = false, ?Carbon $to = null): Collection
+    {
+        $until = ($to ?? now())->copy()->endOfDay();
+
+        $visits = ShopVisit::query()
+            ->with('shop')
+            ->where('salesman_id', $user->id)
+            ->where('checked_in_at', '>=', $from->copy()->startOfDay())
+            ->where('checked_in_at', '<=', $until)
+            ->orderByDesc('checked_in_at')
+            ->get();
+
+        $grouped = $visits
+            ->groupBy(fn (ShopVisit $visit) => $visit->checked_in_at->toDateString())
+            ->map(fn ($rows, $date) => [
+                'date' => Carbon::parse($date),
+                'visits' => $rows->count(),
+                'shops' => $rows->unique('shop_id')->count(),
+                'rows' => $rows->values(),
+            ]);
+
+        if (! $fillDays) {
+            return $grouped;
+        }
+
+        $days = collect();
+        for ($day = $from->copy()->startOfDay(); $day->lte($until->copy()->startOfDay()); $day->addDay()) {
+            $key = $day->toDateString();
+            $days[$key] = $grouped[$key] ?? [
+                'date' => $day->copy(),
+                'visits' => 0,
+                'shops' => 0,
+                'rows' => collect(),
+            ];
+        }
+
+        return $days;
+    }
+
+    /** Today's route: only shops admin assigned to this salesman. */
     private function shopsWithVisits(User $user): Collection
+    {
+        return $this->catalogShops($user, assignedOnly: true);
+    }
+
+    /**
+     * Active (and pending) shops the salesman can see — assigned and not assigned —
+     * with visit flags and an area label for grouping.
+     *
+     * @return Collection<int, Shop>
+     */
+    private function catalogShops(User $user, bool $assignedOnly = false, bool $activeOnly = false): Collection
     {
         $lastVisits = ShopVisit::query()
             ->where('salesman_id', $user->id)
@@ -963,19 +1111,26 @@ class FieldPortalController extends Controller
             ->groupBy('shop_id')
             ->pluck('last_at', 'shop_id');
 
-        return $user->assignedShops()
-            ->with(['territory', 'priceGroup'])
-            ->whereIn('status', [Shop::STATUS_ACTIVE, Shop::STATUS_PENDING])
+        $shops = Shop::query()
+            ->with(['territory', 'priceGroup', 'assignedSalesman'])
+            ->when(
+                $activeOnly,
+                fn ($q) => $q->where('status', Shop::STATUS_ACTIVE),
+                fn ($q) => $q->whereIn('status', [Shop::STATUS_ACTIVE, Shop::STATUS_PENDING])
+            )
+            ->when($assignedOnly, fn ($q) => $q->where('assigned_salesman_id', $user->id))
             ->orderBy('name')
-            ->get()
-            ->each(function (Shop $shop) use ($lastVisits) {
-                $last = $lastVisits[$shop->id] ?? null;
-                $shop->last_visit_at = $last ? Carbon::parse($last) : null;
-                $shop->visited_today = $shop->last_visit_at?->isToday() ?? false;
-            });
+            ->get();
+
+        return $shops->each(function (Shop $shop) use ($lastVisits, $user) {
+            $last = $lastVisits[$shop->id] ?? null;
+            $shop->last_visit_at = $last ? Carbon::parse($last) : null;
+            $shop->visited_today = $shop->last_visit_at?->isToday() ?? false;
+            $shop->is_mine = (int) $shop->assigned_salesman_id === (int) $user->id;
+            $shop->area_label = trim((string) ($shop->thana ?: $shop->city ?: $shop->district ?: $shop->territory?->name ?: '')) ?: 'No area';
+        });
     }
 
-    /** @return Collection<int, PartnerInquiry> accepted applications still waiting for this salesman to create the owner's login */
     /**
      * A salesman sets the first login for a shop they still look after. Changing it later is an
      * office job, except for fixing a typo on the same device shortly after setting it.
@@ -1037,25 +1192,95 @@ class FieldPortalController extends Controller
         }
     }
 
-    /** Every active shop in admin — salesman picks one and orders on its behalf. */
+    /**
+     * One visit at a time. Same shop resumes; another shop must go through I'm leaving.
+     */
+    private function continueOrLeaveOpenVisit(Request $request, Shop $shop, string $continueMessage): ?\Illuminate\Http\RedirectResponse
+    {
+        $open = $this->openVisit($request->user());
+        if (! $open) {
+            return null;
+        }
+
+        if ((int) $open->shop_id === (int) $shop->id) {
+            return redirect()->route('field.visit.show', $open)->with('success', $continueMessage);
+        }
+
+        return redirect()
+            ->route('field.visit.show', ['visit' => $open, 'leave' => 1])
+            ->with('error', 'Leave '.$open->shop?->name.' first. Write what you talked about, then start at '.$shop->name.'.');
+    }
+
+    private function closeVisitFromRequest(Request $request, ShopVisit $visit): ShopVisit
+    {
+        $visit->loadMissing('shop');
+        $needsPhoto = $visit->needsPhotoEvidence();
+
+        $data = $request->validate([
+            'outcome' => ['nullable', 'in:order_taken,no_order,closed,follow_up'],
+            'notes' => ['required', 'string', 'max:1000'],
+            'photo' => [$needsPhoto ? 'required' : 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'notes.required' => 'Write what you talked about with the owner.',
+            'photo.required' => 'Take a photo at the shop as visit evidence.',
+            'photo.image' => 'Visit evidence must be a photo.',
+        ]);
+
+        $photoPath = $visit->photo_path;
+        if ($file = $request->file('photo')) {
+            $photoPath = $file->store('visits/'.$visit->id, 'public');
+        }
+
+        $outcome = $visit->order_id
+            ? ShopVisit::OUTCOME_ORDER_TAKEN
+            : (string) ($data['outcome'] ?? ShopVisit::OUTCOME_NO_ORDER);
+
+        if (! in_array($outcome, [
+            ShopVisit::OUTCOME_ORDER_TAKEN,
+            ShopVisit::OUTCOME_NO_ORDER,
+            ShopVisit::OUTCOME_CLOSED,
+            ShopVisit::OUTCOME_FOLLOW_UP,
+        ], true)) {
+            $outcome = ShopVisit::OUTCOME_NO_ORDER;
+        }
+
+        return $this->visits->checkOut($visit, [
+            'outcome' => $outcome,
+            'notes' => $data['notes'] ?? $visit->notes,
+            'photo_path' => $photoPath,
+        ], $request->user());
+    }
+
+    /** Every active shop — salesman picks one and orders on its behalf. */
     private function orderableShops(User $user): Collection
     {
-        $lastVisits = ShopVisit::query()
-            ->where('salesman_id', $user->id)
-            ->selectRaw('shop_id, MAX(checked_in_at) as last_at')
-            ->groupBy('shop_id')
-            ->pluck('last_at', 'shop_id');
+        return $this->catalogShops($user, activeOnly: true);
+    }
 
-        return Shop::query()
-            ->with(['territory', 'priceGroup', 'assignedSalesman'])
-            ->where('status', Shop::STATUS_ACTIVE)
+    /**
+     * Area names already used on shops, plus territory names, for the add-shop dropdown.
+     *
+     * @return list<string>
+     */
+    private function knownAreas(): array
+    {
+        $cities = Shop::query()
+            ->whereNotNull('city')
+            ->where('city', '!=', '')
+            ->distinct()
+            ->pluck('city');
+
+        $territories = Territory::query()
+            ->where('is_active', true)
             ->orderBy('name')
-            ->get()
-            ->each(function (Shop $shop) use ($lastVisits, $user) {
-                $last = $lastVisits[$shop->id] ?? null;
-                $shop->last_visit_at = $last ? Carbon::parse($last) : null;
-                $shop->visited_today = $shop->last_visit_at?->isToday() ?? false;
-                $shop->is_mine = (int) $shop->assigned_salesman_id === (int) $user->id;
-            });
+            ->pluck('name');
+
+        return $cities->merge($territories)
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique(fn ($name) => mb_strtolower($name))
+            ->sortBy(fn ($name) => mb_strtolower($name), SORT_NATURAL)
+            ->values()
+            ->all();
     }
 }

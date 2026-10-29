@@ -5,12 +5,16 @@
 @section('back', route('field.shops'))
 @section('has-bar', '1')
 @php
-    $territory = auth()->user()->salesmanProfile?->territory?->name;
     $initial = [
         'name' => old('name', ''),
         'owner' => old('owner_name', ''),
         'phone' => old('phone', ''),
-        'city' => old('city', $territory ?? ''),
+        'city' => old('city', ''),
+        'division' => old('division', ''),
+        'district' => old('district', ''),
+        'thana' => old('thana', ''),
+        'post_office' => old('post_office', ''),
+        'location' => old('location', ''),
         'address' => old('address', ''),
         'sells' => array_values((array) old('sells', [])),
         'interest' => old('interest', ''),
@@ -24,8 +28,8 @@
     <button class="f-btn f-btn-primary f-btn-sm" type="submit" form="add-shop"><i data-lucide="check"></i> Save shop</button>
 @endsection
 @section('content')
-    <form id="add-shop" method="post" action="{{ route('field.shops.store') }}" class="f-split as-form"
-          x-data="addShop(@js($initial))" x-init="locate()" @submit="saving = true">
+    <form id="add-shop" method="post" action="{{ route('field.shops.store') }}" class="f-split as-form" enctype="multipart/form-data"
+          x-data="addShop(@js($initial))" @submit="saving = true">
         @csrf
         <input type="hidden" name="latitude" :value="lat ?? ''">
         <input type="hidden" name="longitude" :value="lng ?? ''">
@@ -76,7 +80,7 @@
             {{-- Owner --}}
             <section class="f-panel as-sec">
                 <div class="as-sec-head"><span class="f-ico tone-blue"><i data-lucide="user-round"></i></span><div><h2>Owner &amp; contact</h2><p>Who to call for orders</p></div></div>
-                <div class="as-sec-body as-two">
+                <div class="as-sec-body" style="display:grid;gap:12px">
                     <label class="as-field">
                         <span class="as-label">Owner name</span>
                         <input class="f-input @error('owner_name') is-invalid @enderror" name="owner_name" x-model="f.owner" maxlength="120" placeholder="e.g. Abdur Rahim" autocomplete="off" autocapitalize="words" enterkeyhint="next">
@@ -84,10 +88,15 @@
                     </label>
                     <label class="as-field">
                         <span class="as-label">Mobile number</span>
-                        <span class="as-prefix">
-                            <i data-lucide="phone"></i>
-                            <input class="f-input @error('phone') is-invalid @enderror" name="phone" x-model="f.phone" type="tel" inputmode="tel" maxlength="20" placeholder="01XXXXXXXXX" autocomplete="off" enterkeyhint="next">
-                        </span>
+                        <div @bd-phone="f.phone = $event.detail">
+                            <x-bd-phone-input
+                                name="phone"
+                                :value="old('phone')"
+                                variant="field"
+                                :required="false"
+                                :invalid="$errors->has('phone')"
+                            />
+                        </div>
                         @error('phone')<span class="f-error">{{ $message }}</span>@enderror
                     </label>
                 </div>
@@ -98,18 +107,9 @@
 
             {{-- Address --}}
             <section class="f-panel as-sec">
-                <div class="as-sec-head"><span class="f-ico tone-teal"><i data-lucide="navigation"></i></span><div><h2>Address</h2><p>Helps the delivery team find it</p></div></div>
-                <div class="as-sec-body as-two">
-                    <label class="as-field">
-                        <span class="as-label">Area / city</span>
-                        <input class="f-input @error('city') is-invalid @enderror" name="city" x-model="f.city" maxlength="80" placeholder="e.g. Mirpur 10" autocomplete="off" autocapitalize="words" enterkeyhint="next">
-                        @error('city')<span class="f-error">{{ $message }}</span>@enderror
-                    </label>
-                    <label class="as-field">
-                        <span class="as-label">Market / road / landmark</span>
-                        <input class="f-input @error('address') is-invalid @enderror" name="address" x-model="f.address" maxlength="255" placeholder="e.g. Shah Ali Plaza, 2nd floor" autocomplete="off" enterkeyhint="next">
-                        @error('address')<span class="f-error">{{ $message }}</span>@enderror
-                    </label>
+                <div class="as-sec-head"><span class="f-ico tone-teal"><i data-lucide="navigation"></i></span><div><h2>Address</h2><p>Division, district, thana, post office, then location</p></div></div>
+                <div class="as-sec-body">
+                    @include('field.partials.geo-picker')
                 </div>
             </section>
 
@@ -159,10 +159,23 @@
                         @endforeach
                     </div>
                     <label class="as-field" style="margin-top:14px">
-                        <span class="as-label">Notes for the office</span>
-                        <textarea class="f-textarea @error('notes') is-invalid @enderror" name="notes" rows="2" maxlength="1000" placeholder="Shop size, brands they stock, best time to visit…">{{ old('notes') }}</textarea>
+                        <span class="as-label">What did you talk about with the owner?</span>
+                        <textarea class="f-textarea @error('notes') is-invalid @enderror" name="notes" rows="2" maxlength="1000" placeholder="e.g. they want chargers next week, asked about credit, shop was busy…">{{ old('notes') }}</textarea>
                         @error('notes')<span class="f-error">{{ $message }}</span>@enderror
                     </label>
+                    <label class="f-photo" style="margin-top:14px" x-data="{ preview: '' }">
+                        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" @change="preview = $event.target.files[0] ? URL.createObjectURL($event.target.files[0]) : ''">
+                        <span class="f-photo-box" x-show="!preview">
+                            <i data-lucide="camera"></i>
+                            <b>Photo of the shop</b>
+                            <small>Shopfront evidence for the office — not a visit.</small>
+                        </span>
+                        <span class="f-photo-box has-img" x-show="preview" x-cloak>
+                            <img :src="preview" alt="Shop photo">
+                            <small>Tap to retake</small>
+                        </span>
+                    </label>
+                    @error('photo')<span class="f-error">{{ $message }}</span>@enderror
                 </div>
             </section>
             </div>
@@ -172,9 +185,9 @@
                 <div class="f-warn" style="margin-top:0">You're still checked in at <b>{{ $openVisit->shop?->name }}</b>. Finish that visit to start one at the new shop.</div>
             @else
                 <label class="as-visit">
-                    <input type="checkbox" name="check_in" value="1" @checked(old('check_in', true))>
+                    <input type="checkbox" name="check_in" value="1" @checked(old('check_in'))>
                     <span class="as-switch" aria-hidden="true"></span>
-                    <span><b>I'm at this shop now</b>Start a visit right after saving — it counts towards today.</span>
+                    <span><b>Also start a visit now</b>Adding a shop is not a visit. Tick this only if you are standing in the shop and want to check in separately.</span>
                 </label>
             @endif
         </div>
@@ -191,7 +204,7 @@
                 </div>
                 <ul class="as-facts">
                     <li :class="f.phone && 'ok'"><i data-lucide="phone"></i><span x-text="f.phone || 'No phone yet'"></span></li>
-                    <li :class="(f.city || f.address) && 'ok'"><i data-lucide="map-pin"></i><span x-text="[f.address, f.city].filter(Boolean).join(', ') || 'No address yet'"></span></li>
+                    <li :class="(f.thana || f.district || f.division || f.location) && 'ok'"><i data-lucide="map-pin"></i><span x-text="[f.location, f.thana, f.district, f.division].filter(Boolean).join(', ') || 'No address yet'"></span></li>
                     <li :class="state === 'ok' && 'ok'"><i data-lucide="locate-fixed"></i><span x-text="state === 'ok' ? 'GPS location saved' : 'No GPS location'"></span></li>
                     <li :class="f.sells.length && 'ok'"><i data-lucide="package"></i><span x-text="f.sells.length ? f.sells.join(', ') : 'Products not picked'"></span></li>
                     <li :class="(!f.createLogin || (f.loginEmail && f.loginPassword)) && 'ok'"><i data-lucide="key-round"></i><span x-text="f.createLogin ? (f.loginEmail ? f.loginEmail : 'Login email needed') : 'Login skipped'"></span></li>
@@ -221,14 +234,22 @@
 @endsection
 
 @push('scripts')
+@include('field.partials.geo-cascade-script')
 <script>
 function addShop(initial) {
     return {
+        ...geoCascade(),
         f: initial,
         lat: null, lng: null, accuracy: null, state: 'busy', saving: false,
+        async init() {
+            this.syncCity();
+            this.locate();
+            await this.bootGeo();
+            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        },
         filled() {
             return [
-                this.f.name, this.f.owner, this.f.phone, this.f.city || this.f.address, this.f.sells.length, this.state === 'ok',
+                this.f.name, this.f.owner, this.f.phone, this.f.thana || this.f.district || this.f.division || this.f.location, this.f.sells.length, this.state === 'ok',
                 !this.f.createLogin || (this.f.loginEmail && this.f.loginPassword),
             ].filter(Boolean).length;
         },

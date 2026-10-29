@@ -330,6 +330,12 @@ class Order extends Model
         ], true);
     }
 
+    /** Salesman collects only after the goods are marked delivered. */
+    public function canCollectNow(): bool
+    {
+        return $this->isDelivered();
+    }
+
     public function canApproveNow(): bool
     {
         if ($this->isPendingAudit() && ! $this->advance_required) {

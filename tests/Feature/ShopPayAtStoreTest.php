@@ -55,10 +55,9 @@ class ShopPayAtStoreTest extends TestCase
                 'amount' => 400,
                 'method' => Payment::METHOD_CASH,
             ])
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasErrors('amount');
 
         $this->assertSame(Order::STATUS_PENDING_AUDIT, $order->fresh()->status);
-        $this->assertEqualsWithDelta(0, $order->fresh(['invoice', 'advanceInvoice'])->collectibleBalance(), 0.05);
     }
 
     public function test_van_collects_cash_when_goods_arrive(): void
@@ -191,9 +190,22 @@ class ShopPayAtStoreTest extends TestCase
 
         $this->get(route('field.orders.show', $order))
             ->assertOk()
+            ->assertSee('Payment after delivery')
+            ->assertSee('Mark delivered')
+            ->assertDontSee('name="amount"', false);
+
+        $this->post(route('field.orders.collect', $order), [
+            'amount' => 510,
+            'method' => Payment::METHOD_CASH,
+        ])->assertSessionHasErrors('amount');
+
+        $this->post(route('field.orders.deliver', $order))->assertSessionHasNoErrors();
+        $this->assertSame(Order::STATUS_DELIVERED, $order->fresh()->status);
+
+        $this->get(route('field.orders.show', $order))
+            ->assertOk()
             ->assertSee('Payment at shop')
-            ->assertSee('Full baki')
-            ->assertSee('Mark delivered');
+            ->assertSee('Full baki');
 
         $this->post(route('field.orders.collect', $order), [
             'amount' => 510,
@@ -201,12 +213,8 @@ class ShopPayAtStoreTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $order->refresh();
-        $this->assertSame(Order::STATUS_DISPATCHED, $order->status);
         $this->assertNotNull($order->invoice_id);
         $this->assertSame(Payment::STATUS_PENDING, Payment::query()->where('invoice_id', $order->invoice_id)->value('status'));
-
-        $this->post(route('field.orders.deliver', $order))->assertSessionHasNoErrors();
-        $this->assertSame(Order::STATUS_DELIVERED, $order->fresh()->status);
     }
 
     public function test_salesman_can_leave_baki_after_delivery_and_collect_in_parts(): void

@@ -23,6 +23,15 @@
 @if ($taking)
     @section('has-bar', '1')
 @endif
+@section('actions')
+    @if ($visit->isOpen())
+        @include('field.partials.leave-shop', [
+            'leaveVisit' => $visit,
+            'leaveRedirect' => 'shops',
+            'leaveClass' => 'f-btn f-btn-ghost f-btn-sm',
+        ])
+    @endif
+@endsection
 @section('content')
     <div class="f-card" style="padding:14px">
         <div style="display:flex;gap:12px;align-items:center">
@@ -44,6 +53,16 @@
             @if ($shop?->priceGroup)<span class="f-chip">{{ $shop->priceGroup->name }} prices</span>@endif
             @if ($shop?->payment_terms_days)<span class="f-chip">{{ $shop->payment_terms_days }}-day terms</span>@endif
         </div>
+        @if ($visit->isOpen())
+            <div class="f-here">
+                <span><b>You're at this shop now</b>Tap I'm leaving when you walk out.</span>
+                @include('field.partials.leave-shop', [
+                    'leaveVisit' => $visit,
+                    'leaveRedirect' => 'shops',
+                    'leaveClass' => 'f-btn f-btn-ghost f-btn-sm',
+                ])
+            </div>
+        @endif
     </div>
 
     @if ($visit->order)
@@ -59,18 +78,28 @@
             <a class="f-btn f-btn-ghost f-btn-block" style="margin-top:12px" href="{{ route('field.orders.show', $visit->order) }}">View order {{ $visit->order->number }}</a>
         </div>
         @if ($visit->isOpen())
-            <form method="post" action="{{ route('field.visit.checkout', $visit) }}">
-                @csrf
-                <input type="hidden" name="outcome" value="order_taken">
-                <button class="f-btn f-btn-primary f-btn-lg f-btn-block" type="submit"><i data-lucide="log-out"></i> Finish visit</button>
-            </form>
+            <button class="f-btn f-btn-primary f-btn-lg f-btn-block" type="button"
+                onclick="window.dispatchEvent(new CustomEvent('open-leave', { detail: 'shops' }))">
+                <i data-lucide="log-out"></i> Finish visit
+            </button>
         @endif
     @elseif (! $visit->isOpen())
         <div class="f-empty">
             <i data-lucide="calendar-check"></i>
             <strong>Visit closed · {{ $visit->outcomeLabel() }}</strong>
-            {{ $visit->checked_out_at?->format('d M, g:i A') }}{{ $visit->notes ? ' — '.$visit->notes : '' }}
+            {{ $visit->checked_out_at?->format('d M, g:i A') }}
         </div>
+        @if ($visit->notes)
+            <div class="f-card" style="margin-top:10px">
+                <div class="f-muted f-small">Talked with the owner</div>
+                <div style="margin-top:4px">{{ $visit->notes }}</div>
+            </div>
+        @endif
+        @if ($visit->photoUrl())
+            <div class="f-card" style="margin-top:10px;padding:8px">
+                <img src="{{ $visit->photoUrl() }}" alt="Visit evidence" style="width:100%;border-radius:10px;display:block">
+            </div>
+        @endif
         <a class="f-btn f-btn-primary f-btn-block f-btn-lg" style="margin-top:12px" href="{{ route('field.shops') }}">Back to my shops</a>
     @elseif (! $canOrder)
         <div class="f-warn" style="margin:0 0 12px">
@@ -84,18 +113,10 @@
                 <b>{{ $shop?->name }} cannot take orders</b> ({{ strtolower($shop?->statusLabel() ?? 'unavailable') }}). Ask the office if it was deactivated.
             @endif
         </div>
-        <form class="f-card" method="post" action="{{ route('field.visit.checkout', $visit) }}">
-            @csrf
-            <h3 style="margin:0 0 10px;font-size:14px">End visit</h3>
-            <div class="f-choices">
-                <label class="f-choice"><input type="radio" name="outcome" value="follow_up" checked><span><i data-lucide="calendar-clock"></i>Follow up later</span></label>
-                <label class="f-choice"><input type="radio" name="outcome" value="no_order"><span><i data-lucide="x-circle"></i>No order today</span></label>
-                <label class="f-choice"><input type="radio" name="outcome" value="closed"><span><i data-lucide="lock"></i>Shop closed</span></label>
-            </div>
-            <label class="f-label" for="visit-notes">Note (optional)</label>
-            <textarea id="visit-notes" class="f-textarea" name="notes" rows="2" maxlength="1000" placeholder="e.g. owner interested in phone accessories"></textarea>
-            <button class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" type="submit"><i data-lucide="log-out"></i> End visit</button>
-        </form>
+        <button class="f-btn f-btn-primary f-btn-lg f-btn-block" type="button"
+            onclick="window.dispatchEvent(new CustomEvent('open-leave', { detail: 'shops' }))">
+            <i data-lucide="log-out"></i> End visit
+        </button>
     @else
         <div x-data="fieldOrder(@js($catalog))" x-cloak>
           <div class="f-visit">
@@ -171,8 +192,8 @@
                 <div x-show="filtered().length === 0" class="f-muted" style="padding:24px 0;text-align:center">No products match your search.</div>
             </div>
 
-            <button type="button" class="f-btn f-btn-ghost f-btn-block f-mobile-only" @click="endSheet = true" style="margin-top:4px">
-                <i data-lucide="door-open"></i> End visit without order
+            <button type="button" class="f-btn f-btn-ghost f-btn-block f-mobile-only" @click="window.dispatchEvent(new CustomEvent('open-leave', { detail: 'shops' }))" style="margin-top:4px">
+                <i data-lucide="log-out"></i> I'm leaving
             </button>
           </div>
 
@@ -194,7 +215,7 @@
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
                 <div class="f-warn" x-show="hasBelowMin()">A selling price is below the product minimum. Raise it before sending.</div>
                 <button type="button" class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" :disabled="count() === 0 || hasBelowMin()" @click="reviewSheet = true">Review &amp; send order</button>
-                <button type="button" class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" @click="endSheet = true"><i data-lucide="door-open"></i> End visit without order</button>
+                <button type="button" class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" @click="window.dispatchEvent(new CustomEvent('open-leave', { detail: 'shops' }))"><i data-lucide="log-out"></i> I'm leaving</button>
             </div>
           </aside>
           </div>
@@ -274,64 +295,23 @@
                     </div>
                 </div>
 
-                <div class="f-pay">
-                    <div class="f-pay-title">Collect now <span class="f-muted" style="font-weight:600">· this order only</span></div>
-                    <div class="f-pay-seg" role="group" aria-label="How much to collect">
-                        <button type="button" :class="Number(paidNow) === 0 && 'active'" @click="paidNow = 0">Full baki</button>
-                        <button type="button" :class="payable() > 0 && Number(paidNow) === Math.round(payable() / 2) && 'active'" @click="paidNow = Math.round(payable() / 2)">Half</button>
-                        <button type="button" :class="payable() > 0 && Number(paidNow) >= payable() && 'active'" @click="paidNow = Math.round(payable())">Pay all</button>
-                    </div>
-                    <div class="f-money f-money-sm">
-                        <span>৳</span>
-                        <input id="paid-now" type="number" inputmode="decimal" min="0" step="1" name="paid_now" x-model.number="paidNow" :max="Math.round(payable())" placeholder="0">
-                    </div>
-                    <div class="f-review-row" x-show="Number(paidNow) > 0.009">
-                        <span>Left on this order</span>
-                        <strong x-text="taka(thisBaki())"></strong>
-                    </div>
-                    <div class="f-review-row is-old" x-show="previousBaki > 0.009 && Number(paidNow) > 0.009">
-                        <span>Shop still owes</span>
-                        <strong x-text="taka(shopDue())"></strong>
-                    </div>
-                    <template x-if="Number(paidNow) > 0">
-                        <div class="f-pay-how">
-                            <select id="pay-method" class="f-input" name="payment_method" x-model="payMethod" aria-label="How did they pay?">
-                                <option value="cash">Cash</option>
-                                <option value="mobile_banking">bKash / Nagad / Rocket</option>
-                                <option value="bank_transfer">Bank transfer</option>
-                            </select>
-                            <input id="pay-ref" class="f-input" type="text" name="payment_reference" maxlength="120" placeholder="Reference (optional)">
-                        </div>
-                    </template>
-                </div>
+                <p class="f-review-pay-note">No payment on this order now. Collect when you deliver.</p>
 
-                <textarea id="order-notes" class="f-textarea f-review-note" name="notes" rows="1" maxlength="1000" placeholder="Note for the office (optional)"></textarea>
+                <label class="f-label" for="order-notes">What did you talk about with the owner? <em class="as-req">*</em></label>
+                <textarea id="order-notes" class="f-textarea f-review-note" name="notes" rows="2" maxlength="1000" required placeholder="e.g. restock of chargers, owner will pay on delivery">{{ old('notes') }}</textarea>
                 <div class="f-review-foot">
-                    <button class="f-btn f-btn-success f-btn-lg f-btn-block" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || paidNow > payable() + 0.01 || discountAmount() > total() + 0.01">
+                    <button class="f-btn f-btn-success f-btn-lg f-btn-block" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || discountAmount() > total() + 0.01">
                         <span x-text="submitting ? 'Sending…' : sendLabel()"></span>
                     </button>
                     <button class="f-review-back" type="button" @click="reviewSheet = false">Keep adding products</button>
                 </div>
             </form>
 
-            {{-- End visit without order --}}
-            <div class="f-sheet-backdrop" x-show="endSheet" x-transition.opacity @click="endSheet = false"></div>
-            <form class="f-sheet" x-show="endSheet" x-transition method="post" action="{{ route('field.visit.checkout', $visit) }}" @keydown.escape.window="endSheet = false">
-                @csrf
-                <div class="f-sheet-grip"></div>
-                <h3>End visit</h3>
-                <div class="f-muted f-small" style="margin-bottom:12px">What happened at {{ $shop?->name }}?</div>
-                <div class="f-choices">
-                    <label class="f-choice"><input type="radio" name="outcome" value="no_order" checked><span><i data-lucide="x-circle"></i>No order today</span></label>
-                    <label class="f-choice"><input type="radio" name="outcome" value="closed"><span><i data-lucide="lock"></i>Shop closed</span></label>
-                    <label class="f-choice"><input type="radio" name="outcome" value="follow_up"><span><i data-lucide="calendar-clock"></i>Follow up later</span></label>
-                </div>
-                <label class="f-label" for="visit-notes">Note (optional)</label>
-                <textarea id="visit-notes" class="f-textarea" name="notes" rows="2" maxlength="1000" placeholder="e.g. owner asked to come back next week"></textarea>
-                <button class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" type="submit">End visit</button>
-                <button class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" type="button" @click="endSheet = false">Back to order</button>
-            </form>
         </div>
+    @endif
+
+    @if ($visit->isOpen())
+        @include('field.partials.leave-sheet', ['visit' => $visit, 'leaveRedirect' => 'shops'])
     @endif
 @endsection
 
@@ -339,8 +319,6 @@
 @push('scripts')
 <script>
 (function () {
-    const leaveUrl = @js(route('field.visit.leave', $visit));
-    const token = document.querySelector('meta[name="csrf-token"]')?.content;
     let intentional = false;
     const markIntentional = () => { intentional = true; };
 
@@ -348,59 +326,22 @@
         form.addEventListener('submit', markIntentional);
     });
 
-    // Bottom nav / sidebar: save this visit first, then go.
-    document.querySelectorAll('.f-nav a[href]').forEach((link) => {
+    document.querySelector('[data-leave-visit]')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-leave', { detail: 'shops' }));
+    });
+
+    // Bottom nav / sidebar / More: collect notes + photo before leaving an open visit.
+    document.querySelectorAll('.f-nav a[href], .f-more-item[href]').forEach((link) => {
         link.addEventListener('click', (e) => {
             if (intentional) return;
             e.preventDefault();
-            intentional = true;
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = leaveUrl;
-            form.style.display = 'none';
-            const csrf = document.createElement('input');
-            csrf.name = '_token';
-            csrf.value = token || '';
-            form.appendChild(csrf);
-            [['outcome', @js($visit->order_id ? 'order_taken' : 'no_order')], ['redirect', 'shops']].forEach(([name, value]) => {
-                const input = document.createElement('input');
-                input.name = name;
-                input.value = value;
-                form.appendChild(input);
-            });
-            // Prefer landing on the nav target after save.
             const href = link.getAttribute('href') || '';
             let redirect = 'shops';
             if (href.includes('/field/orders')) redirect = 'orders';
             else if (href.includes('/field/dashboard') || href.endsWith('/field') || href.endsWith('/field/')) redirect = 'dashboard';
-            form.querySelector('[name=redirect]').value = redirect;
-            document.body.appendChild(form);
-            form.submit();
+            window.dispatchEvent(new CustomEvent('open-leave', { detail: redirect }));
         });
-    });
-
-    // Phone back / tab close — still store the visit.
-    window.addEventListener('pagehide', () => {
-        if (intentional || !token) return;
-        const body = new URLSearchParams({
-            _token: token,
-            outcome: @js($visit->order_id ? 'order_taken' : 'no_order'),
-            beacon: '1',
-        });
-        try {
-            fetch(leaveUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRF-TOKEN': token,
-                    'X-Beacon': '1',
-                    'Accept': 'application/json',
-                },
-                body,
-                keepalive: true,
-                credentials: 'same-origin',
-            }).catch(() => {});
-        } catch (e) {}
     });
 })();
 </script>
@@ -415,7 +356,7 @@ function fieldOrder(catalog) {
         catalog,
         q: '', cat: '', view: 'categories',
         qty: {}, prices: {},
-        paidNow: 0, payMethod: 'cash', discount: 0,
+        discount: 0,
         previousBaki: {{ json_encode($outstanding) }},
         reviewSheet: false, endSheet: false, submitting: false,
         taka(n) { return '৳ ' + Math.round(n || 0).toLocaleString('en-IN'); },
@@ -495,25 +436,17 @@ function fieldOrder(catalog) {
         total() { return this.money(this.lines().reduce((sum, l) => sum + l.qty * l.sell, 0)); },
         discountAmount() { return Math.min(this.total(), this.money(this.discount)); },
         payable() { return this.money(this.total() - this.discountAmount()); },
-        thisBaki() { return this.money(this.payable() - (Number(this.paidNow) || 0)); },
-        baki() { return this.thisBaki(); },
-        shopDue() { return this.money(this.thisBaki() + (Number(this.previousBaki) || 0)); },
         addDiscount(n) { this.discount = this.money(Math.min(this.total(), this.discountAmount() + this.money(n))); },
         addPercent(p) { this.addDiscount(this.total() * p / 100); },
         clearDiscount() { this.discount = 0; },
-        sendLabel() {
-            if (Number(this.paidNow) > 0) return 'Send · collect ' + this.taka(this.paidNow);
-            return 'Send · baki ' + this.taka(this.thisBaki());
-        },
-        clampPayAndDiscount() {
+        sendLabel() { return 'Send for approval · ৳ ' + Math.round(this.payable()).toLocaleString('en-IN'); },
+        clampDiscount() {
             if (this.discountAmount() > this.total()) this.discount = this.total();
-            if (Number(this.paidNow) > this.payable()) this.paidNow = Math.round(this.payable());
         },
         init() {
             this.$watch('reviewSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
             this.$watch('endSheet', (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
-            this.$watch('discount', () => this.clampPayAndDiscount());
-            this.$watch('paidNow', () => this.clampPayAndDiscount());
+            this.$watch('discount', () => this.clampDiscount());
             this.$nextTick(() => window.lucide && lucide.createIcons());
             this.$watch('view', () => this.$nextTick(() => window.lucide && lucide.createIcons()));
             this.$watch('cat', () => this.$nextTick(() => window.lucide && lucide.createIcons()));

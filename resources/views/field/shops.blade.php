@@ -1,43 +1,57 @@
 @extends('field.layouts.app')
-@section('title', 'My shops')
-@section('heading', 'My shops')
+@section('title', 'Shops')
+@section('heading', 'Shops')
 @php
-    $visited = $shops->where('visited_today', true)->count();
+    $visited = $shops->where('is_mine', true)->where('visited_today', true)->count();
     $addedPending = $addedShops->where('status', \App\Models\Shop::STATUS_PENDING)->count();
     $addedMonth = $addedShops->filter(fn ($s) => $s->created_at?->gte(now()->startOfMonth()))->count();
+    $addedToday = $addedShops->filter(fn ($s) => $s->created_at?->isToday())->count();
+    $byArea = $shops->groupBy('area_label');
 @endphp
-@section('subheading', $shops->count().' shops on your route · '.$visited.' visited today')
+@section('subheading', $mineCount.' assigned to you · '.$otherCount.' not assigned to you')
 @section('actions')
     <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.shops.create') }}"><i data-lucide="plus"></i> Add shop</a>
+    <a class="f-btn f-btn-ghost f-btn-sm" href="{{ route('field.partners.create') }}"><i data-lucide="handshake"></i> Partner</a>
     <a class="f-btn f-btn-primary f-btn-sm" href="{{ route('field.orders.create') }}"><i data-lucide="shopping-bag"></i> New order</a>
 @endsection
 @section('content')
     <div class="f-kpis">
         <div class="f-kpi tone-violet">
-            <div class="f-kpi-top"><span class="f-ico"><i data-lucide="store"></i></span><span class="f-kpi-label">Assigned shops</span></div>
-            <div class="f-kpi-value">{{ $shops->count() }}</div>
-            <div class="f-kpi-meta">On your route</div>
+            <div class="f-kpi-top"><span class="f-ico"><i data-lucide="store"></i></span><span class="f-kpi-label">My shops</span></div>
+            <div class="f-kpi-value">{{ $mineCount }}</div>
+            <div class="f-kpi-meta">Assigned by admin</div>
+        </div>
+        <div class="f-kpi tone-blue">
+            <div class="f-kpi-top"><span class="f-ico"><i data-lucide="map"></i></span><span class="f-kpi-label">Other shops</span></div>
+            <div class="f-kpi-value">{{ $otherCount }}</div>
+            <div class="f-kpi-meta">Not on your route</div>
         </div>
         <div class="f-kpi tone-green">
             <div class="f-kpi-top"><span class="f-ico"><i data-lucide="check-circle-2"></i></span><span class="f-kpi-label">Visited today</span></div>
             <div class="f-kpi-value">{{ $visited }}</div>
-            <div class="f-kpi-bar"><span style="width: {{ $shops->count() ? max(2, round($visited / $shops->count() * 100)) : 2 }}%"></span></div>
-        </div>
-        <div class="f-kpi tone-amber">
-            <div class="f-kpi-top"><span class="f-ico"><i data-lucide="clock"></i></span><span class="f-kpi-label">Still to visit</span></div>
-            <div class="f-kpi-value">{{ $shops->count() - $visited }}</div>
-            <div class="f-kpi-meta">Today</div>
+            <div class="f-kpi-meta">Of your shops</div>
         </div>
         <a class="f-kpi tone-rose" href="#added">
             <div class="f-kpi-top"><span class="f-ico"><i data-lucide="store"></i></span><span class="f-kpi-label">Shops I added</span>@if ($addedPending)<span class="f-kpi-badge">{{ $addedPending }} pending</span>@endif</div>
             <div class="f-kpi-value">{{ $addedShops->count() }}</div>
-            <div class="f-kpi-meta"><b>{{ $addedMonth }}</b> this month</div>
+            <div class="f-kpi-meta"><b>{{ $addedToday }}</b> today · {{ $addedMonth }} this month</div>
         </a>
     </div>
 
     <a class="f-btn f-btn-primary f-btn-block f-mobile-only" style="margin-bottom:12px" href="{{ route('field.shops.create') }}"><i data-lucide="plus"></i> Add a new shop</a>
 
-    <div x-data="{ q: '', show: 'all', ok(el) { const d = el.dataset; return (!this.q || d.search.includes(this.q.toLowerCase())) && (this.show === 'all' || this.show === d.state); } }">
+    <div x-data="{
+        q: '', show: 'all', area: '',
+        ok(el) {
+            const d = el.dataset;
+            return (!this.q || (d.search || '').includes(this.q.toLowerCase()))
+                && (this.show === 'all' || this.show === d.owner || this.show === d.state)
+                && (this.area === '' || d.area === this.area);
+        },
+        hasVisible(section) {
+            return [...section.querySelectorAll('[data-search]')].some((el) => this.ok(el));
+        }
+    }">
         <div class="f-toolbar">
             <div class="f-search">
                 <i data-lucide="search"></i>
@@ -45,39 +59,70 @@
             </div>
             <div class="f-filters" role="tablist">
                 <button type="button" class="f-filter" :class="show === 'all' && 'active'" @click="show = 'all'">All <span class="n">{{ $shops->count() }}</span></button>
-                <button type="button" class="f-filter" :class="show === 'todo' && 'active'" @click="show = 'todo'">Not visited <span class="n">{{ $shops->count() - $visited }}</span></button>
-                <button type="button" class="f-filter" :class="show === 'done' && 'active'" @click="show = 'done'">Visited today <span class="n">{{ $visited }}</span></button>
+                <button type="button" class="f-filter" :class="show === 'mine' && 'active'" @click="show = 'mine'">My shops <span class="n">{{ $mineCount }}</span></button>
+                <button type="button" class="f-filter" :class="show === 'other' && 'active'" @click="show = 'other'">Not mine <span class="n">{{ $otherCount }}</span></button>
+                <button type="button" class="f-filter" :class="show === 'todo' && 'active'" @click="show = 'todo'">Not visited</button>
+                <button type="button" class="f-filter" :class="show === 'done' && 'active'" @click="show = 'done'">Visited today</button>
             </div>
+            @include('field.partials.area-select')
         </div>
 
-        <section class="f-panel f-desktop-only">
-            <div class="f-table-wrap">
-                <table class="f-table">
-                    <thead><tr><th>Shop</th><th>Area</th><th>Last visit</th><th class="num">Baki</th><th>Price group</th><th></th></tr></thead>
-                    <tbody>
-                        @forelse ($shops as $shop)
-                            @include('field.partials.shop-row', ['shop' => $shop, 'openVisit' => $openVisit, 'filterable' => true, 'showGroup' => true])
-                        @empty
-                            <tr><td colspan="7" class="empty">No shops on your route yet. Use <a href="{{ route('field.orders.create') }}">New order</a> to order for any active admin shop.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
+        @forelse ($byArea as $areaName => $areaShops)
+            <section class="f-area f-mobile-only" x-show="hasVisible($el)">
+                <div class="f-area-head">
+                    <h3><i data-lucide="map-pin"></i> {{ $areaName }}</h3>
+                    <span>{{ $areaShops->count() }} {{ \Illuminate\Support\Str::plural('shop', $areaShops->count()) }}</span>
+                </div>
+                @foreach ($areaShops as $shop)
+                    <div x-show="ok($el.firstElementChild)">
+                        @include('field.partials.shop-card', ['shop' => $shop, 'openVisit' => $openVisit])
+                    </div>
+                @endforeach
+            </section>
+        @empty
+            <div class="f-empty">
+                <i data-lucide="store"></i>
+                <strong>No shops yet</strong>
+                Ask the office to add shops and assign them, or <a href="{{ route('field.shops.create') }}">add a shop</a>.
             </div>
-        </section>
+        @endforelse
 
-        <div class="f-mobile-only">
-            @forelse ($shops as $shop)
-                <div x-show="ok($el.firstElementChild)">
-                    @include('field.partials.shop-card', ['shop' => $shop, 'openVisit' => $openVisit])
+        @if ($byArea->isNotEmpty())
+            <section class="f-panel f-desktop-only">
+                <div class="f-table-wrap">
+                    <table class="f-table f-table-shops">
+                        <thead>
+                            <tr>
+                                <th>Shop</th>
+                                <th>Last visit</th>
+                                <th class="num">Baki</th>
+                                <th>Who</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        @foreach ($byArea as $areaName => $areaShops)
+                            <tbody x-show="hasVisible($el)">
+                                <tr class="f-area-row">
+                                    <td colspan="5">
+                                        <span class="f-area-row-title"><i data-lucide="map-pin"></i> {{ $areaName }}</span>
+                                        <span class="f-area-row-meta">{{ $areaShops->count() }} {{ \Illuminate\Support\Str::plural('shop', $areaShops->count()) }}</span>
+                                    </td>
+                                </tr>
+                                @foreach ($areaShops as $shop)
+                                    @include('field.partials.shop-row', [
+                                        'shop' => $shop,
+                                        'openVisit' => $openVisit,
+                                        'filterable' => true,
+                                        'showGroup' => true,
+                                        'hideArea' => true,
+                                    ])
+                                @endforeach
+                            </tbody>
+                        @endforeach
+                    </table>
                 </div>
-            @empty
-                <div class="f-empty">
-                    <i data-lucide="store"></i>
-                    <strong>No shops on your route yet</strong>
-                    You can still take orders — open <a href="{{ route('field.orders.create') }}">New order</a> and pick any active admin shop.
-                </div>
-            @endforelse
-        </div>
+            </section>
+        @endif
     </div>
 
     <section class="f-panel" id="added" style="margin-top:14px">

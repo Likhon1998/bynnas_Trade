@@ -57,6 +57,11 @@ return new class extends Migration
             $table->string('email')->nullable();
             $table->text('address')->nullable();
             $table->string('city', 100)->nullable();
+            $table->string('division', 80)->nullable();
+            $table->string('district', 80)->nullable();
+            $table->string('thana', 80)->nullable();
+            $table->string('post_office', 120)->nullable();
+            $table->string('location', 160)->nullable();
             $table->foreignId('territory_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('price_group_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('assigned_salesman_id')->nullable()->constrained('users')->nullOnDelete();

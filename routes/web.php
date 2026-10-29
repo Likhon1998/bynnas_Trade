@@ -98,12 +98,18 @@ Route::prefix('field')->name('field.')->group(function () {
         Route::get('/dashboard', [FieldPortalController::class, 'dashboard'])->name('dashboard');
         Route::get('/shops', [FieldPortalController::class, 'shops'])->name('shops');
         Route::get('/shops/new', [FieldPortalController::class, 'createShop'])->name('shops.create');
+        Route::get('/geo/divisions', [FieldPortalController::class, 'geoDivisions'])->name('geo.divisions');
+        Route::get('/geo/districts', [FieldPortalController::class, 'geoDistricts'])->name('geo.districts');
+        Route::get('/geo/thanas', [FieldPortalController::class, 'geoThanas'])->name('geo.thanas');
+        Route::get('/geo/post-offices', [FieldPortalController::class, 'geoPostOffices'])->name('geo.post-offices');
+        Route::get('/geo/locations', [FieldPortalController::class, 'geoLocations'])->name('geo.locations');
         Route::post('/shops', [FieldPortalController::class, 'storeShop'])->middleware('throttle:30,1')->name('shops.store');
         Route::get('/shops/{shop}/login', [FieldPortalController::class, 'shopLogin'])->name('shops.login');
         Route::post('/shops/{shop}/login', [FieldPortalController::class, 'storeShopLogin'])->middleware('throttle:20,1')->name('shops.login.store');
         Route::post('/shops/{shop}/approve', [FieldPortalController::class, 'approveShop'])->name('shops.approve');
         Route::post('/shops/{shop}/check-in', [FieldPortalController::class, 'checkIn'])->name('shops.check-in');
         Route::post('/shops/{shop}/order', [FieldPortalController::class, 'placeOrder'])->name('shops.order');
+        Route::get('/visits', [FieldPortalController::class, 'visitsLog'])->name('visits');
         Route::get('/visits/{visit}', [FieldPortalController::class, 'showVisit'])->name('visit.show');
         Route::post('/visits/{visit}/order', [FieldPortalController::class, 'submitOrder'])->name('visit.order');
         Route::post('/visits/{visit}/check-out', [FieldPortalController::class, 'checkOut'])->name('visit.checkout');

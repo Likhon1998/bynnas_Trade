@@ -7,9 +7,11 @@
     $pending = $shop->status === \App\Models\Shop::STATUS_PENDING;
 @endphp
 <tr @if ($filterable ?? false) x-show="ok($el)" @endif
-    data-search="{{ strtolower($shop->name.' '.$shop->code.' '.$shop->owner_name.' '.$shop->city.' '.$shop->territory?->name) }}"
-    data-state="{{ $shop->visited_today ? 'done' : 'todo' }}">
-    <td>
+    data-search="{{ strtolower($shop->name.' '.$shop->code.' '.$shop->owner_name.' '.$shop->city.' '.$shop->territory?->name.' '.($shop->area_label ?? '')) }}"
+    data-state="{{ $shop->visited_today ? 'done' : 'todo' }}"
+    data-owner="{{ ! empty($shop->is_mine) ? 'mine' : 'other' }}"
+    data-area="{{ $shop->area_label ?? ($shop->city ?: $shop->territory?->name ?: 'No area') }}">
+    <td class="shop">
         <div class="who">
             <span class="f-av tone-{{ $tone }} {{ $shop->visited_today ? 'done' : '' }}">
                 @if ($shop->visited_today)<i data-lucide="check"></i>@else{{ strtoupper(mb_substr($shop->name, 0, 1)) }}@endif
@@ -20,23 +22,35 @@
             </span>
         </div>
     </td>
-    <td>{{ $shop->city ?: $shop->territory?->name ?: '—' }}</td>
-    <td>
-        @if ($isOpenHere)
-            <span class="f-status amber">Ordering</span>
-        @elseif ($shop->visited_today)
-            <span class="f-status green">Visited today</span>
-        @elseif ($shop->last_visit_at)
-            <span class="f-muted">{{ $shop->last_visit_at->diffForHumans(null, true) }} ago</span>
-        @else
-            <span class="f-status gray">Never</span>
-        @endif
-    </td>
+    @unless ($hideArea ?? false)
+        <td class="area">{{ $shop->city ?: $shop->territory?->name ?: '—' }}</td>
+    @endunless
+    @unless ($hideVisit ?? false)
+        <td class="visit">
+            @if ($isOpenHere)
+                <span class="f-status amber">I'm here</span>
+            @elseif ($shop->visited_today)
+                <span class="f-status green">Visited today</span>
+            @elseif ($shop->last_visit_at)
+                <span class="f-muted">{{ $shop->last_visit_at->diffForHumans(null, true) }} ago</span>
+            @else
+                <span class="f-status gray">Never</span>
+            @endif
+        </td>
+    @endunless
     <td class="num" style="{{ $outstanding > 0 ? 'color:var(--f-red);font-weight:700' : '' }}">{{ \App\Support\DemoData::taka($outstanding) }}</td>
     @if ($showGroup ?? false)
-        <td>@if ($shop->priceGroup)<span class="f-chip violet">{{ $shop->priceGroup->name }}</span>@else<span class="f-muted">—</span>@endif</td>
+        <td class="owner">
+            @if (! empty($shop->is_mine))
+                <span class="f-chip green">My shop</span>
+            @elseif ($shop->assignedSalesman)
+                <span class="f-chip">{{ $shop->assignedSalesman->name }}</span>
+            @else
+                <span class="f-chip amber">Unassigned</span>
+            @endif
+        </td>
     @endif
-    <td>
+    <td class="act">
         <div class="actions">
             @if ($phone)
                 <a class="f-btn f-btn-ghost f-btn-sm f-btn-icon" href="tel:{{ $phone }}" title="Call {{ $shop->phone }}" aria-label="Call {{ $shop->name }}"><i data-lucide="phone"></i></a>
@@ -48,7 +62,27 @@
                     <button class="f-btn f-btn-primary f-btn-sm" type="submit" title="Approve this shop to take orders"><i data-lucide="check"></i> Approve</button>
                 </form>
             @elseif ($isOpenHere)
-                <a class="f-btn f-btn-warn f-btn-sm" href="{{ route('field.visit.show', $openVisit) }}"><i data-lucide="shopping-cart"></i> Continue</a>
+                <a class="f-btn f-btn-warn f-btn-sm" href="{{ route('field.visit.show', $openVisit) }}"><i data-lucide="store"></i> Continue visit</a>
+                @include('field.partials.leave-shop', [
+                    'leaveVisit' => $openVisit,
+                    'leaveRedirect' => 'shops',
+                    'leaveClass' => 'f-btn f-btn-ghost f-btn-sm',
+                ])
+            @elseif ($openVisit)
+                @include('field.partials.leave-shop', [
+                    'leaveVisit' => $openVisit,
+                    'leaveRedirect' => 'shops',
+                    'leaveClass' => 'f-btn f-btn-ghost f-btn-sm',
+                    'leaveLabel' => 'Leave '.$openVisit->shop?->name.' first',
+                ])
+            @elseif (! empty($shop->is_mine))
+                <form method="post" action="{{ route('field.shops.check-in', $shop) }}" data-checkin>
+                    @csrf
+                    <input type="hidden" name="purpose" value="Shop visit">
+                    <input type="hidden" name="latitude">
+                    <input type="hidden" name="longitude">
+                    <button class="f-btn f-btn-primary f-btn-sm" type="submit"><i data-lucide="map-pin"></i> Visit</button>
+                </form>
             @else
                 <form method="post" action="{{ route('field.shops.order', $shop) }}" data-checkin>
                     @csrf
