@@ -138,25 +138,43 @@
                         </div>
                     </div>
                 </section>
-
-                <section class="f-panel f-home-orders">
-                    <div class="f-panel-head">
-                        <h2><span class="f-ico tone-amber"><i data-lucide="receipt-text"></i></span>Recent orders</h2>
-                        <a href="{{ route('field.orders') }}">See all ›</a>
-                    </div>
-                    <div class="f-panel-body f-home-orders-body">
-                        @forelse ($recentOrders as $order)
-                            @include('field.partials.order-row', ['order' => $order])
-                        @empty
-                            <div class="f-empty compact">
-                                <i data-lucide="receipt-text"></i>
-                                <strong>No orders yet</strong>
-                                <a href="{{ route('field.orders.create') }}">Take your first order</a>
-                            </div>
-                        @endforelse
-                    </div>
-                </section>
             </div>
         </div>
+
+        <section class="f-panel f-home-orders">
+            <div class="f-panel-head">
+                <h2><span class="f-ico tone-amber"><i data-lucide="receipt-text"></i></span>Recent orders</h2>
+                <a href="{{ route('field.orders') }}">See all ›</a>
+            </div>
+            @if ($recentOrders->isEmpty())
+                <div class="f-panel-body f-home-orders-body">
+                    <div class="f-empty compact">
+                        <i data-lucide="receipt-text"></i>
+                        <strong>No orders yet</strong>
+                        <a href="{{ route('field.orders.create') }}">Take your first order</a>
+                    </div>
+                </div>
+            @else
+                <div class="f-table-wrap">
+                    <table class="f-table f-table-orders">
+                        <thead>
+                            <tr>
+                                <th>Shop</th>
+                                <th class="f-table-orders-wide">Order</th>
+                                <th class="f-table-orders-wide">Date</th>
+                                        <th class="num">Total</th>
+                                        <th class="num">Baki</th>
+                                        <th class="status">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($recentOrders as $order)
+                                @include('field.partials.order-table-row', ['order' => $order])
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </section>
     </div>
 @endsection

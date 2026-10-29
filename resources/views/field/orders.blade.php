@@ -39,34 +39,25 @@
         @endforeach
     </div>
 
-    <section class="f-panel f-desktop-only">
+    <section class="f-panel">
         <div class="f-table-wrap">
-            <table class="f-table">
-                <thead><tr><th>Order</th><th>Shop</th><th>Sent</th><th class="num">Items</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
+            <table class="f-table f-table-orders">
+                <thead>
+                    <tr>
+                        <th>Shop</th>
+                        <th class="f-table-orders-wide">Order</th>
+                        <th class="f-table-orders-wide">Date</th>
+                        <th class="num">Total</th>
+                        <th class="num">Baki</th>
+                        <th class="status">Status</th>
+                    </tr>
+                </thead>
                 <tbody>
                     @forelse ($orders as $order)
-                        @php
-                            $s = $order->simpleStatus();
-                            $due = (float) $order->collectibleBalance();
-                            $href = route('field.orders.show', $order).($due > 0.009 ? '#collect-bill' : '');
-                        @endphp
-                        <tr class="is-link" onclick="window.location='{{ $href }}'">
-                            <td><a class="strong" href="{{ $href }}">{{ $order->number }}</a></td>
-                            <td><span class="strong">{{ $order->shop?->name }}</span><span class="sub">{{ $order->shop?->city }}</span></td>
-                            <td>{{ $order->submitted_at?->format('d M Y') }}<span class="sub">{{ $order->submitted_at?->format('g:i A') }}</span></td>
-                            <td class="num">{{ $order->item_count }}</td>
-                            <td class="num strong">{{ \App\Support\DemoData::taka($order->total) }}</td>
-                            <td>
-                                <span class="f-status {{ $s['tone'] }}">{{ $s['label'] }}</span>
-                                @if ($due > 0.009)
-                                    <span class="f-collect-pill">Baki {{ \App\Support\DemoData::taka($due) }}</span>
-                                @endif
-                            </td>
-                            <td class="num"><i data-lucide="chevron-right" class="f-chev"></i></td>
-                        </tr>
+                        @include('field.partials.order-table-row', ['order' => $order])
                     @empty
                         <tr>
-                            <td colspan="7" class="empty">
+                            <td colspan="6" class="empty">
                                 @if ($filter)
                                     No orders in this list.
                                 @else
@@ -82,21 +73,6 @@
             </table>
         </div>
     </section>
-
-    <div class="f-mobile-only">
-        @forelse ($orders as $order)
-            @include('field.partials.order-row', ['order' => $order])
-        @empty
-            <div class="f-empty">
-                <i data-lucide="receipt-text"></i>
-                <strong>{{ $filter ? 'No orders here' : 'No orders yet' }}</strong>
-                {{ $filter ? 'Try another filter.' : 'Select a shop and place an order on its behalf.' }}
-                @unless ($filter)
-                    <a class="f-btn f-btn-primary" style="margin-top:12px" href="{{ route('field.orders.create') }}"><i data-lucide="plus"></i> New order</a>
-                @endunless
-            </div>
-        @endforelse
-    </div>
 
     @if ($orders->hasPages())
         <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:14px">

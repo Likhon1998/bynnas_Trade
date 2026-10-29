@@ -132,7 +132,8 @@ a.f-kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -14px var(-
 .f-home-stats .f-kpi-value { font-size: 18px; margin-top: 6px; }
 .f-home-grid { display: flex; flex-direction: column; gap: 12px; }
 .f-home-grid > .f-panel,
-.f-home-side > .f-panel { margin-bottom: 0; }
+.f-home-side > .f-panel,
+.f-home > .f-home-orders { margin-bottom: 0; }
 .f-home-side { display: flex; flex-direction: column; gap: 12px; }
 .f-home-links { display: flex; gap: 12px; align-items: center; }
 .f-home-links a { color: var(--f-brand); font-weight: 600; font-size: 12.5px; }
@@ -146,6 +147,28 @@ a.f-kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -14px var(-
 .f-home-note .lucide { width: 14px; height: 14px; }
 .f-home-orders-body { padding-top: 10px; padding-bottom: 8px; }
 .f-home-orders-body .f-order:last-child { margin-bottom: 0; }
+.f-table-orders { font-size: 12.5px; }
+.f-table-orders th,
+.f-table-orders td { padding: 10px 12px; vertical-align: middle; }
+.f-table-orders th:first-child,
+.f-table-orders td:first-child { padding-left: 14px; }
+.f-table-orders th:last-child,
+.f-table-orders td:last-child { padding-right: 14px; }
+.f-table-orders .shop { min-width: 120px; }
+.f-table-orders .shop .strong {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.f-table-orders .nowrap { white-space: nowrap; }
+.f-table-orders .num { width: 1%; white-space: nowrap; }
+.f-table-orders th.status,
+.f-table-orders td.status { width: 1%; white-space: nowrap; }
+.f-table-orders-wide { display: none; white-space: nowrap; }
+.f-table-orders .f-status { padding: 3px 8px; font-size: 11px; }
+.f-table-orders .f-collect-pill { display: none; }
+.f-baki-amt { color: #6D28D9; font-weight: 800; white-space: nowrap; }
 .f-trend-wrap { position: relative; min-height: 148px; }
 .f-empty.compact { padding: 16px 12px; }
 
@@ -910,6 +933,14 @@ a.f-kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -14px var(-
     .f-home-grid.f-grid-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); gap: 16px; align-items: start; }
     .f-home-side { gap: 16px; }
     .f-home-route .f-table td.empty { padding: 22px 14px; }
+    .f-home > .f-home-orders { width: 100%; }
+    .f-table-orders { table-layout: auto; font-size: 13px; }
+    .f-table-orders th,
+    .f-table-orders td { padding: 12px 16px; }
+    .f-table-orders-wide { display: table-cell; }
+    .f-table-orders-compact { display: none; }
+    .f-table-orders .shop { width: 26%; min-width: 180px; }
+    .f-table-orders .f-status { font-size: 11.5px; padding: 3px 9px; }
 
     /* Layout grids */
     .f-grid-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
