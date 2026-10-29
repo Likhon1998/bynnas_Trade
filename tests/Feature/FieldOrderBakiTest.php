@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Shop;
 use App\Models\ShopVisit;
 use App\Models\User;
+use App\Models\WarehouseStock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -58,7 +59,57 @@ class FieldOrderBakiTest extends TestCase
             ->assertSee('Previous baki', false)
             ->assertSee('Discount', false)
             ->assertSee('+50', false)
-            ->assertSee('+100', false);
+            ->assertSee('+100', false)
+            ->assertSee('Unavailable', false)
+            ->assertSee(':disabled="p.stock <= 0"', false);
+    }
+
+    public function test_out_of_stock_product_cannot_be_ordered(): void
+    {
+        $salesman = User::where('email', 'karim@field.local')->firstOrFail();
+        $shop = Shop::query()->where('status', Shop::STATUS_ACTIVE)->firstOrFail();
+        $shop->update(['assigned_salesman_id' => $salesman->id]);
+        $product = Product::query()
+            ->where('status', Product::STATUS_ACTIVE)
+            ->where('is_published', true)
+            ->firstOrFail();
+
+        $product->forceFill(['stock_on_hand' => 0, 'reserved_stock' => 0])->save();
+        WarehouseStock::query()->where('product_id', $product->id)->update([
+            'qty_on_hand' => 0,
+            'qty_reserved' => 0,
+        ]);
+
+        ShopVisit::query()
+            ->where('salesman_id', $salesman->id)
+            ->whereNull('checked_out_at')
+            ->update(['checked_out_at' => now()]);
+
+        $visit = ShopVisit::query()->create([
+            'shop_id' => $shop->id,
+            'salesman_id' => $salesman->id,
+            'checked_in_at' => now(),
+        ]);
+
+        $this->actingAs($salesman)
+            ->get(route('field.visit.show', $visit))
+            ->assertOk()
+            ->assertSee('\u0022stock\u0022:0', false)
+            ->assertSee($product->name);
+
+        $this->actingAs($salesman)
+            ->post(route('field.visit.order', $visit), [
+                'items' => [[
+                    'product_id' => $product->id,
+                    'quantity' => 1,
+                    'unit_price' => (float) $product->priceForGroup($shop->priceGroup),
+                ]],
+                'notes' => 'Tried to take a sold-out item.',
+            ])
+            ->assertSessionHasErrors('stock');
+
+        $this->assertTrue($visit->fresh()->isOpen());
+        $this->assertNull(Order::query()->where('visit_id', $visit->id)->first());
     }
 
     public function test_send_order_requires_talk_notes(): void

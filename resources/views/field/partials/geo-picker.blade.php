@@ -1,4 +1,5 @@
 <div class="as-two as-geo" @keydown.escape.window="closeGeo()">
+    <div class="f-combo-backdrop" x-show="geoOpen" x-cloak @click="closeGeo()"></div>
     <p class="as-geo-status" x-show="geo.busy" x-cloak>Loading divisions…</p>
     <p class="as-geo-status is-err" x-show="geo.error" x-cloak>
         <span x-text="geo.error"></span>

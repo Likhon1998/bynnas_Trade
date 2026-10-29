@@ -115,10 +115,16 @@
                             <td>{{ number_format($product->availableStock()) }}</td>
                             <td style="font-weight:700" x-text="formatMoney(priceFor({{ $product->id }}))"></td>
                             <td>
-                                <input class="input" style="width:90px" type="number" min="0"
-                                       name="items[{{ $index }}][quantity]"
-                                       x-model.number="qty[{{ $product->id }}]"
-                                       value="{{ old('items.'.$index.'.quantity', 0) }}">
+                                @if ($product->availableStock() <= 0)
+                                    <span class="muted">Out of stock</span>
+                                    <input type="hidden" name="items[{{ $index }}][quantity]" value="0">
+                                @else
+                                    <input class="input" style="width:90px" type="number" min="0"
+                                           max="{{ $product->availableStock() }}"
+                                           name="items[{{ $index }}][quantity]"
+                                           x-model.number="qty[{{ $product->id }}]"
+                                           value="{{ old('items.'.$index.'.quantity', 0) }}">
+                                @endif
                             </td>
                             <td style="font-weight:700" x-text="formatMoney(lineTotal({{ $product->id }}))"></td>
                         </tr>

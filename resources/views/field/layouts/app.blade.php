@@ -172,6 +172,9 @@
                 hi: 0,
                 value: '',
                 items,
+                init() {
+                    this.$watch('open', (on) => this.lock(on));
+                },
                 get filtered() {
                     const q = String(this.query || '').trim().toLowerCase();
                     if (!q) return this.items;
@@ -181,23 +184,34 @@
                     const hit = this.items.find((item) => String(item.value) === String(this.value));
                     return hit ? hit.label : placeholder;
                 },
+                isPhone() {
+                    return window.matchMedia('(max-width: 1023.98px)').matches;
+                },
+                lock(on) {
+                    document.body.classList.toggle('f-combo-lock', !!on && this.isPhone());
+                },
                 toggle() {
                     this.open = !this.open;
                     this.query = '';
                     this.hi = 0;
-                    if (this.open) this.$nextTick(() => { this.$refs.query?.focus(); if (window.lucide) lucide.createIcons(); });
+                    this.lock(this.open);
+                    if (this.open) this.$nextTick(() => {
+                        if (! this.isPhone()) this.$refs.query?.focus();
+                        if (window.lucide) lucide.createIcons();
+                    });
                 },
                 pick(value) {
                     this.value = value;
                     this.open = false;
                     this.query = '';
+                    this.lock(false);
                 },
                 onKey(event) {
                     const rows = this.filtered;
                     if (event.key === 'ArrowDown') { event.preventDefault(); this.hi = rows.length ? (this.hi + 1) % rows.length : 0; }
                     else if (event.key === 'ArrowUp') { event.preventDefault(); this.hi = rows.length ? (this.hi - 1 + rows.length) % rows.length : 0; }
                     else if (event.key === 'Enter') { event.preventDefault(); if (rows[this.hi]) this.pick(rows[this.hi].value); }
-                    else if (event.key === 'Escape') { event.preventDefault(); this.open = false; }
+                    else if (event.key === 'Escape') { event.preventDefault(); this.open = false; this.lock(false); }
                     else { this.hi = 0; }
                 },
             };

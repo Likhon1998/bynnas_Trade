@@ -56,14 +56,21 @@ function geoCascade() {
             if (!q) return items;
             return items.filter((item) => this.fold(item.label).includes(q) || this.fold(item.value).includes(q));
         },
+        isPhoneGeo() {
+            return window.matchMedia('(max-width: 1023.98px)').matches;
+        },
+        lockGeo(on) {
+            document.body.classList.toggle('f-combo-lock', !!on && this.isPhoneGeo());
+        },
         toggleGeo(key) {
             if (this.geoOpen === key) { this.closeGeo(); return; }
             this.geoOpen = key;
             this.geoQuery = '';
             this.geoHi = 0;
+            this.lockGeo(true);
             this.$nextTick(() => {
                 const el = this.$refs['geoSearch' + key];
-                if (el) { el.focus(); el.select?.(); }
+                if (el && ! this.isPhoneGeo()) { el.focus(); el.select?.(); }
                 if (window.lucide) lucide.createIcons();
             });
         },
@@ -71,6 +78,7 @@ function geoCascade() {
             this.geoOpen = '';
             this.geoQuery = '';
             this.geoHi = 0;
+            this.lockGeo(false);
         },
         pickGeo(key, value) {
             if (key === 'division') { this.f.division = value; this.onDivision(); }

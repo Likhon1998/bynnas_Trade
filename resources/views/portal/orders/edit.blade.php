@@ -44,7 +44,15 @@
                             </td>
                             <td style="font-weight:700">{{ \App\Support\DemoData::taka($product->priceForGroup($shop->priceGroup)) }}</td>
                             <td>{{ number_format($product->availableStock()) }}</td>
-                            <td><input class="input" style="width:90px" type="number" min="0" name="items[{{ $loop->index }}][quantity]" value="{{ $qty }}"></td>
+                            <td>
+                                @php $stock = $product->availableStock(); $max = max($stock, (int) $qty); @endphp
+                                @if ($stock <= 0 && (int) $qty <= 0)
+                                    <span class="muted">Out of stock</span>
+                                    <input type="hidden" name="items[{{ $loop->index }}][quantity]" value="0">
+                                @else
+                                    <input class="input" style="width:90px" type="number" min="0" max="{{ $max }}" name="items[{{ $loop->index }}][quantity]" value="{{ $qty }}">
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

@@ -161,7 +161,7 @@
                 <div class="f-muted f-small" style="padding:8px 0 4px" x-show="!q && cat && cat !== '__picked'" x-text="'Showing ' + cat"></div>
                 <div class="f-muted f-small" style="padding:8px 0 4px" x-show="cat === '__picked'">Products in this order — tap price to change</div>
                 <template x-for="p in filtered()" :key="p.id">
-                    <div class="f-product" :class="qty[p.id] > 0 && 'picked'">
+                    <div class="f-product" :class="{ picked: qty[p.id] > 0, oos: p.stock <= 0 }">
                         <template x-if="p.image"><img class="f-thumb" :src="p.image" alt="" loading="lazy"></template>
                         <template x-if="!p.image"><div class="f-thumb"><i data-lucide="package"></i></div></template>
                         <div class="f-product-info">
@@ -178,13 +178,13 @@
                                  x-text="p.stock <= 0 ? 'Out of stock' : (p.stock <= 10 ? 'Only ' + p.stock + ' left' : p.stock + ' in stock')"></div>
                         </div>
                         <template x-if="!qty[p.id]">
-                            <button type="button" class="f-add" @click="inc(p.id)" :aria-label="'Add ' + p.name">Add</button>
+                            <button type="button" class="f-add" :disabled="p.stock <= 0" @click="inc(p.id)" :aria-label="p.stock <= 0 ? p.name + ' is out of stock' : 'Add ' + p.name" x-text="p.stock <= 0 ? 'Unavailable' : 'Add'"></button>
                         </template>
                         <template x-if="qty[p.id] > 0">
                             <div class="f-stepper">
                                 <button type="button" @click="dec(p.id)" :aria-label="'Less ' + p.name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
-                                <input type="number" inputmode="numeric" min="0" :value="qty[p.id]" @change="set(p.id, $event.target.value)" @focus="$event.target.select()" :aria-label="'Quantity of ' + p.name">
-                                <button type="button" @click="inc(p.id)" :aria-label="'More ' + p.name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                                <input type="number" inputmode="numeric" min="0" :max="p.stock" :value="qty[p.id]" @change="set(p.id, $event.target.value)" @focus="$event.target.select()" :aria-label="'Quantity of ' + p.name">
+                                <button type="button" @click="inc(p.id)" :disabled="!canAdd(p.id)" :aria-label="'More ' + p.name"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
                             </div>
                         </template>
                     </div>
@@ -214,7 +214,8 @@
                 </div>
                 <div class="f-total-row"><span>Total</span><strong x-text="taka(total())"></strong></div>
                 <div class="f-warn" x-show="hasBelowMin()">A selling price is below the product minimum. Raise it before sending.</div>
-                <button type="button" class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" :disabled="count() === 0 || hasBelowMin()" @click="reviewSheet = true">Review &amp; send order</button>
+                <div class="f-warn" x-show="hasOverStock()">A product is over available stock. Reduce the quantity.</div>
+                <button type="button" class="f-btn f-btn-primary f-btn-lg f-btn-block" style="margin-top:14px" :disabled="count() === 0 || hasBelowMin() || hasOverStock()" @click="reviewSheet = true">Review &amp; send order</button>
                 <button type="button" class="f-btn f-btn-ghost f-btn-block" style="margin-top:8px" @click="window.dispatchEvent(new CustomEvent('open-leave', { detail: 'shops' }))"><i data-lucide="log-out"></i> I'm leaving</button>
             </div>
           </aside>
@@ -226,7 +227,7 @@
                     <small x-text="count() ? lines().length + ' products · ' + count() + ' pcs' : 'No products added yet'"></small>
                     <strong x-text="taka(total())"></strong>
                 </div>
-                <button type="button" class="f-btn f-btn-primary" :disabled="count() === 0" @click="reviewSheet = true">Review order</button>
+                <button type="button" class="f-btn f-btn-primary" :disabled="count() === 0 || hasOverStock()" @click="reviewSheet = true">Review order</button>
             </div>
 
             {{-- Review & submit --}}
@@ -300,7 +301,7 @@
                 <label class="f-label" for="order-notes">What did you talk about with the owner? <em class="as-req">*</em></label>
                 <textarea id="order-notes" class="f-textarea f-review-note" name="notes" rows="2" maxlength="1000" required placeholder="e.g. restock of chargers, owner will pay on delivery">{{ old('notes') }}</textarea>
                 <div class="f-review-foot">
-                    <button class="f-btn f-btn-success f-btn-lg f-btn-block" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || discountAmount() > total() + 0.01">
+                    <button class="f-btn f-btn-success f-btn-lg f-btn-block" type="submit" :disabled="submitting || count() === 0 || hasBelowMin() || hasOverStock() || discountAmount() > total() + 0.01">
                         <span x-text="submitting ? 'Sending…' : sendLabel()"></span>
                     </button>
                     <button class="f-review-back" type="button" @click="reviewSheet = false">Keep adding products</button>
@@ -379,6 +380,16 @@ function fieldOrder(catalog) {
         hasBelowMin() {
             return this.lines().some((line) => this.belowMin(line));
         },
+        stockOf(id) {
+            const p = this.catalog.find((item) => item.id === id);
+            return Math.max(0, Number(p?.stock || 0));
+        },
+        canAdd(id) {
+            return (this.qty[id] || 0) < this.stockOf(id);
+        },
+        hasOverStock() {
+            return this.lines().some((line) => line.qty > Number(line.stock || 0));
+        },
         categoryCards() {
             const map = {};
             this.catalog.forEach((p) => {
@@ -422,9 +433,15 @@ function fieldOrder(catalog) {
                 return !q || p.name.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q);
             });
         },
-        inc(id) { this.qty[id] = (this.qty[id] || 0) + 1; },
+        inc(id) {
+            if (! this.canAdd(id)) return;
+            this.qty[id] = (this.qty[id] || 0) + 1;
+        },
         dec(id) { this.qty[id] = Math.max(0, (this.qty[id] || 0) - 1); },
-        set(id, v) { this.qty[id] = Math.max(0, Math.min(100000, parseInt(v, 10) || 0)); },
+        set(id, v) {
+            const max = this.stockOf(id);
+            this.qty[id] = Math.max(0, Math.min(max, parseInt(v, 10) || 0));
+        },
         lines() {
             return this.catalog.filter((p) => this.qty[p.id] > 0).map((p) => {
                 const sell = this.sellPrice(p);

@@ -56,7 +56,9 @@ class ShopApprovalTest extends TestCase
             ->assertSee('Thana', false)
             ->assertSee('Post office', false)
             ->assertSee('Location', false)
-            ->assertSee('Add a new location', false);
+            ->assertSee('Add a new location', false)
+            ->assertSee('f-combo-sheet-head', false)
+            ->assertSee('Search division', false);
 
         $this->actingAs($salesman)->post(route('field.shops.store'), [
             'name' => 'Mirpur New Shop',

@@ -25,7 +25,14 @@
             </button>
             <i data-lucide="chevron-down"></i>
         </div>
-        <div class="f-combo-pop" x-show="geoOpen === '{{ $key }}'" x-cloak @click.stop>
+        <div class="f-combo-pop" x-show="geoOpen === '{{ $key }}'" x-cloak @click.stop role="dialog" aria-label="{{ $label }}">
+            <div class="f-combo-sheet-head">
+                <span class="f-sheet-grip" aria-hidden="true"></span>
+                <div class="f-combo-sheet-bar">
+                    <strong>{{ $label }}</strong>
+                    <button type="button" class="f-combo-done" @click="closeGeo()">Done</button>
+                </div>
+            </div>
             <div class="f-combo-search">
                 <i data-lucide="search"></i>
                 <input

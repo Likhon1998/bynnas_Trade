@@ -24,10 +24,18 @@
             </button>
             <i data-lucide="chevron-down"></i>
         </div>
-        <div class="f-combo-pop" x-show="open" x-cloak @click.stop>
+        <div class="f-combo-backdrop" x-show="open" x-cloak @click="open = false"></div>
+        <div class="f-combo-pop" x-show="open" x-cloak @click.stop role="dialog" aria-label="Filter by area">
+            <div class="f-combo-sheet-head">
+                <span class="f-sheet-grip" aria-hidden="true"></span>
+                <div class="f-combo-sheet-bar">
+                    <strong>Area</strong>
+                    <button type="button" class="f-combo-done" @click="open = false">Done</button>
+                </div>
+            </div>
             <div class="f-combo-search">
                 <i data-lucide="search"></i>
-                <input type="search" x-ref="query" x-model="query" placeholder="Search area" autocomplete="off" @keydown="onKey($event)">
+                <input type="search" x-ref="query" x-model="query" placeholder="Search area" autocomplete="off" inputmode="search" enterkeyhint="search" @keydown="onKey($event)">
             </div>
             <ul class="f-combo-list" role="listbox">
                 <template x-for="(item, i) in filtered" :key="item.value || 'all'">
